@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>API Test</title>
+    <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect } = React;
+
+        const ApiService = class {
+          constructor() {
+            this.API_BASE_URL = 'http://localhost:5004/api';
+          }
+
+          async request(endpoint, options = {}) {
+            const url = `${this.API_BASE_URL}${endpoint}`;
+            const config = {
+              headers: {
+                'Content-Type': 'application/json',
+                ...options.headers,
+              },
+              ...options,
+            };
+
+            if (config.body && typeof config.body === 'object') {
+              config.body = JSON.stringify(config.body);
+            }
+
+            try {
+              const response = await fetch(url, config);
+              
+              if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+              }
+              
+              const contentType = response.headers.get('content-type');
+              if (contentType && contentType.includes('application/json')) {
+                return await response.json();
+              }
+              
+              return await response.text();
+            } catch (error) {
+              console.error('API request failed:', error);
+              throw error;
+            }
+          }
+
+          async getProjects(userId = null) {
+            const query = userId ? `?user_id=${userId}` : '';
+            return this.request(`/projects${query}`);
+          }
+
+          async getTasks(projectId = null) {
+            const query = projectId ? `?project_id=${projectId}` : '';
+            return this.request(`/tasks${query}`);
+          }
+        };
+
+        const api = new ApiService();
+
+        const TestComponent = () => {
+          const [data, setData] = useState(null);
+          const [loading, setLoading] = useState(true);
+          const [error, setError] = useState(null);
+
+          useEffect(() => {
+            const fetchData = async () => {
+              try {
+                setLoading(true);
+                console.log('Fetching data from API...');
+                const [projects, tasks] = await Promise.all([
+                  api.getProjects(),
+                  api.getTasks()
+                ]);
+                
+                console.log('Projects data:', projects);
+                console.log('Tasks data:', tasks);
+                
+                setData({ projects, tasks });
+              } catch (err) {
+                console.error('Failed to fetch data:', err);
+                setError(err.message);
+              } finally {
+                setLoading(false);
+              }
+            };
+
+            fetchData();
+          }, []);
+
+          if (loading) return <div>Loading...</div>;
+          if (error) return <div>Error: {error}</div>;
+          if (!data) return <div>No data</div>;
+
+          return (
+            <div>
+              <h2>Projects</h2>
+              <pre>{JSON.stringify(data.projects, null, 2)}</pre>
+              <h2>Tasks</h2>
+              <pre>{JSON.stringify(data.tasks, null, 2)}</pre>
+            </div>
+          );
+        };
+
+        const App = () => {
+          return (
+            <div>
+              <h1>API Test</h1>
+              <TestComponent />
+            </div>
+          );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>

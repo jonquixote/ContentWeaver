@@ -1,0 +1,47 @@
+# Dependencies
+node_modules/
+
+# Builds
+dist/
+build/
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+venv312/
+video_env/
+*.egg-info/
+
+# Environment / secrets
+.env
+.env.local
+*.pem
+litellm_simple.log
+
+# Data / runtime
+*.db
+*.db-journal
+*.rdb
+dump.rdb
+*.log
+work/
+uploads/
+final/
+generated_videos/
+
+# macOS junk
+.DS_Store
+._*
+.AppleDouble
+
+# Editor
+.idea/
+.vscode/
+*.swp
+
+# Test artifacts
+.pytest_cache/
+htmlcov/
+.coverage
