@@ -7,7 +7,6 @@ import SettingsPage from './components/SettingsPage'
 import ProfilePage from './components/ProfilePage'
 import LoginPage from './components/LoginPage'
 import RegisterPage from './components/RegisterPage'
-import SimpleVideoTest from './components/SimpleVideoTest'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
 import './App.css'
 
@@ -103,14 +102,6 @@ function AppContent() {
         element={
           <ProtectedRoute>
             <ProfilePage />
-          </ProtectedRoute>
-        } 
-      />
-      <Route 
-        path="/simple-video-test" 
-        element={
-          <ProtectedRoute>
-            <SimpleVideoTest />
           </ProtectedRoute>
         } 
       />
