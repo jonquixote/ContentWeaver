@@ -46,6 +46,10 @@ def update_project(project_id):
     if project.user_id != g.current_user['id']:
         return jsonify({'error': 'Forbidden'}), 403
     data = request.json
+    try:
+        require_fields(data, [])
+    except ValueError as e:
+        return jsonify({'error': str(e)}), 400
     
     project.title = data.get('title', project.title)
     project.description = data.get('description', project.description)

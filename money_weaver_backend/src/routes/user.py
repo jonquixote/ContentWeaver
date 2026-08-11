@@ -43,6 +43,10 @@ def update_user(user_id):
         return jsonify({'error': 'Forbidden'}), 403
     user = User.query.get_or_404(user_id)
     data = request.json
+    try:
+        require_fields(data, [])
+    except ValueError as e:
+        return jsonify({'error': str(e)}), 400
     user.username = data.get('username', user.username)
     user.email = data.get('email', user.email)
     if 'password' in data:

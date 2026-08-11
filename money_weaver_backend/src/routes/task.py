@@ -62,6 +62,10 @@ def update_task(task_id):
     if project.user_id != g.current_user['id']:
         return jsonify({'error': 'Forbidden'}), 403
     data = request.json
+    try:
+        require_fields(data, [])
+    except ValueError as e:
+        return jsonify({'error': str(e)}), 400
     
     task.status = data.get('status', task.status)
     task.progress = data.get('progress', task.progress)

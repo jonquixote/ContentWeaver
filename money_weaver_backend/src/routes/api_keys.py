@@ -80,8 +80,10 @@ def test_api_key():
     data = request.json
     
     # Validate required fields
-    if not data.get('provider') or not data.get('key'):
-        return jsonify({'error': 'provider and key are required'}), 400
+    try:
+        require_fields(data, ['provider', 'key'])
+    except ValueError as e:
+        return jsonify({'error': str(e)}), 400
     
     try:
         # For testing through the proxy, we'll add the key to the proxy's configuration
