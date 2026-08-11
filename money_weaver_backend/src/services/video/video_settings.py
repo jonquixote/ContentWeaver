@@ -1,4 +1,10 @@
 from typing import Dict, List, Optional, Tuple
+import os
+
+CAPTION_FONT = os.getenv('CAPTION_FONT', 'Arial')
+CAPTION_FONT_SIZE = int(os.getenv('CAPTION_FONT_SIZE', '28'))
+CAPTION_COLOR = os.getenv('CAPTION_COLOR', 'white')
+CAPTION_BORDER = int(os.getenv('CAPTION_BORDER', '2'))
 
 class VideoSettings:
     """Configuration class for video generation settings"""

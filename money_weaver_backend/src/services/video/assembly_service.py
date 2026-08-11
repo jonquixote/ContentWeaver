@@ -2,9 +2,115 @@ import subprocess
 import os
 import time
 import random
+import re
 from typing import List, Optional, Tuple, Dict
 import sys
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+
+_CAPTION_COLORS = {
+    'white': (255, 255, 255, 255),
+    'black': (0, 0, 0, 255),
+    'yellow': (255, 255, 0, 255),
+    'red': (255, 0, 0, 255),
+    'green': (0, 255, 0, 255),
+    'blue': (0, 0, 255, 255),
+    'cyan': (0, 255, 255, 255),
+    'magenta': (255, 0, 255, 255),
+}
+
+
+def _font_path_for(name: str, bold: bool) -> str:
+    name = str(name or 'Arial')
+    base = '/System/Library/Fonts/Supplemental'
+    candidates = []
+    if bold:
+        candidates.append(os.path.join(base, f"{name} Bold.ttf"))
+        candidates.append(os.path.join(base, f"{name} Bold Italic.ttf"))
+    else:
+        candidates.append(os.path.join(base, f"{name}.ttf"))
+        candidates.append(os.path.join(base, f"{name} Italic.ttf"))
+    candidates.append(os.path.join(base, 'Arial Bold.ttf' if bold else 'Arial.ttf'))
+    for candidate in candidates:
+        if os.path.exists(candidate):
+            return candidate
+    return candidates[-1]
+
+
+def _render_caption_png(text: str, font_size: int, color, border: int,
+                        regular_path: str, bold_path: str, width: int, height: int) -> Optional[str]:
+    from PIL import Image, ImageDraw, ImageFont
+    regular_font = ImageFont.truetype(regular_path, font_size)
+    bold_font = ImageFont.truetype(bold_path, font_size)
+    runs = []
+    index = 0
+    for match in re.finditer(r'\*\*(.+?)\*\*', text):
+        if match.start() > index:
+            runs.append((text[index:match.start()], False))
+        runs.append((match.group(1), True))
+        index = match.end()
+    if index < len(text):
+        runs.append((text[index:], False))
+    if not runs:
+        runs = [('', False)]
+    margin = max(20, border * 2 + 8)
+    max_text_width = max(200, width - 2 * margin)
+    lines = []
+    current_line = []
+    current_width = 0
+    for run_text, is_bold in runs:
+        if not run_text:
+            continue
+        font = bold_font if is_bold else regular_font
+        for char in run_text:
+            char_width = font.getbbox(char)[2] - font.getbbox(char)[0]
+            if current_line and current_width + char_width > max_text_width:
+                lines.append((current_line, current_width))
+                current_line = []
+                current_width = 0
+            current_line.append((char, is_bold))
+            current_width += char_width
+    if current_line:
+        lines.append((current_line, current_width))
+    if not lines:
+        return None
+    line_height = font_size + max(8, border * 2)
+    img_height = line_height * len(lines)
+    img = Image.new('RGBA', (width, img_height), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(img)
+    color_rgba = _CAPTION_COLORS.get(str(color).lower(), _CAPTION_COLORS['white'])
+    y = 0
+    for line, line_width in lines:
+        x = (width - line_width) // 2
+        for char, is_bold in line:
+            font = bold_font if is_bold else regular_font
+            draw.text((x, y), char, font=font, fill=color_rgba, stroke_width=border, stroke_fill=(0, 0, 0, 255))
+            x += font.getbbox(char)[2] - font.getbbox(char)[0]
+        y += line_height
+    working_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))), 'work')
+    os.makedirs(working_dir, exist_ok=True)
+    path = os.path.join(working_dir, f"caption_{int(time.time() * 1000)}.png")
+    img.save(path)
+    return path
+
+
+def build_caption_pngs(segments: List[Dict], width: int, height: int) -> List[Dict]:
+    """Segments: list of {text, start, end}. Return list of {path, start, end} overlay images."""
+    from src.services.video.video_settings import CAPTION_FONT, CAPTION_FONT_SIZE, CAPTION_COLOR, CAPTION_BORDER
+    font_size = max(16, int(round(int(CAPTION_FONT_SIZE) * height / 1080)))
+    border = max(1, int(round(max(1, int(CAPTION_BORDER)) * height / 1080)))
+    regular_path = _font_path_for(CAPTION_FONT, bold=False)
+    bold_path = _font_path_for(CAPTION_FONT, bold=True)
+    overlays = []
+    for segment in segments or []:
+        text = str(segment.get('text') or '').strip()
+        start = float(segment.get('start') or 0)
+        end = float(segment.get('end') or start)
+        if not text or end <= start:
+            continue
+        path = _render_caption_png(text, font_size, CAPTION_COLOR, border, regular_path, bold_path, width, height)
+        if path and os.path.exists(path):
+            overlays.append({'path': path, 'start': start, 'end': end})
+    return overlays
 
 class VideoAssemblyService:
     def __init__(self):
@@ -273,6 +379,18 @@ class VideoAssemblyService:
                         # If video is too short, try to extend by using it as-is (will be padded)
                         cut_videos.append(video_file)
             
+            # Build caption segments from scene timings (text = voiceover)
+            caption_segments = []
+            for scene in scene_timings or []:
+                text = str(scene.get('voiceover') or '').strip()
+                if not text:
+                    continue
+                start = max(0.0, float(scene.get('start_time') or 0))
+                end = min(float(total_duration), float(scene.get('end_time') or start))
+                if end <= start:
+                    continue
+                caption_segments.append({'text': text, 'start': start, 'end': end})
+            
             # Create a temporary file list for FFmpeg
             file_list_path = os.path.join(self.working_dir, f"file_list_{int(time.time())}.txt")
             with open(file_list_path, 'w') as f:
@@ -347,6 +465,9 @@ class VideoAssemblyService:
                 if os.path.exists(output_path):
                     file_size = os.path.getsize(output_path)
                     print(f"Successfully created video at: {output_path} (Size: {file_size} bytes)")
+                    captions = build_caption_pngs(caption_segments, width, height)
+                    if captions:
+                        self._burn_captions(output_path, captions, total_duration)
                     return output_path
                 else:
                     print(f"FFmpeg reported success but output file does not exist: {output_path}")
@@ -368,6 +489,58 @@ class VideoAssemblyService:
             traceback.print_exc()
             return None
     
+    def _burn_captions(self, video_path: str, captions: List[Dict], total_duration: float) -> str:
+        try:
+            temp_path = os.path.join(self.output_dir, f"{os.path.basename(video_path)}.captions_{int(time.time())}.tmp.mp4")
+            inputs = ['ffmpeg', '-i', video_path]
+            for caption in captions:
+                inputs.extend(['-i', caption['path']])
+            filter_parts = []
+            previous_label = '0:v'
+            for index, caption in enumerate(captions):
+                label = f'c{index + 1}'
+                start = max(0.0, float(caption['start']))
+                end = min(float(total_duration), float(caption['end']))
+                if end <= start:
+                    continue
+                filter_parts.append(
+                    f"[{previous_label}][{index + 1}:v]overlay=0:0:enable='between(t,{start},{end})'[{label}]"
+                )
+                previous_label = label
+            if not filter_parts:
+                return video_path
+            cmd = inputs + [
+                '-filter_complex', ';'.join(filter_parts),
+                '-map', f'[{previous_label}]',
+                '-map', '0:a?',
+                '-c:v', 'libx264',
+                '-c:a', 'copy',
+                '-movflags', '+faststart',
+                '-y',
+                temp_path
+            ]
+            print(f"Burning captions: {' '.join(cmd)}")
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
+            if result.returncode == 0 and os.path.exists(temp_path):
+                os.replace(temp_path, video_path)
+                print(f"Captions burned into: {video_path}")
+            else:
+                print(f"Caption burn failed, keeping plain video: {result.stderr[-300:]}")
+                if os.path.exists(temp_path):
+                    os.remove(temp_path)
+            return video_path
+        except Exception as e:
+            print(f"Error burning captions: {e}")
+            return video_path
+        finally:
+            for caption in captions:
+                path = caption.get('path')
+                if path and os.path.exists(path):
+                    try:
+                        os.remove(path)
+                    except:
+                        pass
+
     def add_subtitles(self, 
                      video_file: str, 
                      subtitle_text: str, 
