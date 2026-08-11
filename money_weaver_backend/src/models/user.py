@@ -4,6 +4,7 @@ from argon2.exceptions import VerifyMismatchError, VerificationError, InvalidHas
 from datetime import datetime, timedelta
 import jwt
 import os
+import uuid
 
 # Import db inside functions to avoid circular imports
 def get_db():
@@ -56,6 +57,8 @@ class User(get_db().Model):
     def generate_token(self):
         payload = {
             'user_id': self.id,
+            'username': self.username,
+            'jti': str(uuid.uuid4()),
             'exp': datetime.utcnow() + timedelta(hours=24)
         }
         return jwt.encode(payload, os.environ['SECRET_KEY'], algorithm='HS256')

@@ -64,9 +64,15 @@ def login():
 @auth_bp.route('/auth/logout', methods=['POST'])
 @auth_required
 def logout():
-    # In a real app, you might want to invalidate the token
-    # For now, we'll just return a success message
-    return jsonify({'message': 'Logged out successfully'})
+    import jwt
+    import os
+    from src.models.token_blocklist import TokenBlocklist
+    token = request.headers.get('Authorization')[7:]
+    payload = jwt.decode(token, os.environ['SECRET_KEY'], algorithms=['HS256'])
+    if payload.get('jti'):
+        db.session.add(TokenBlocklist(jti=payload['jti']))
+        db.session.commit()
+    return jsonify({'message': 'Logged out'}), 200
 
 @auth_bp.route('/auth/me', methods=['GET'])
 @auth_required
