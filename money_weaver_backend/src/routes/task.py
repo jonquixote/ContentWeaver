@@ -12,7 +12,12 @@ task_bp = Blueprint('task', __name__)
 def get_tasks():
     project_id = request.args.get('project_id')
     if not project_id:
-        return jsonify({'error': 'project_id is required'}), 400
+        projects = Project.query.filter_by(user_id=g.current_user['id']).all()
+        project_ids = [p.id for p in projects]
+        if not project_ids:
+            return jsonify([])
+        tasks = Task.query.filter(Task.project_id.in_(project_ids)).all()
+        return jsonify([task.to_dict() for task in tasks])
     project = Project.query.get(project_id)
     if not project or project.user_id != g.current_user['id']:
         return jsonify({'error': 'Forbidden'}), 403
@@ -50,6 +55,8 @@ def create_task():
 def get_task(task_id):
     task = Task.query.get_or_404(task_id)
     project = Project.query.get(task.project_id)
+    if not project:
+        return jsonify({'error': 'Not found'}), 404
     if project.user_id != g.current_user['id']:
         return jsonify({'error': 'Forbidden'}), 403
     return jsonify(task.to_dict())
@@ -59,6 +66,8 @@ def get_task(task_id):
 def update_task(task_id):
     task = Task.query.get_or_404(task_id)
     project = Project.query.get(task.project_id)
+    if not project:
+        return jsonify({'error': 'Not found'}), 404
     if project.user_id != g.current_user['id']:
         return jsonify({'error': 'Forbidden'}), 403
     data = request.json
@@ -81,6 +90,8 @@ def update_task(task_id):
 def delete_task(task_id):
     task = Task.query.get_or_404(task_id)
     project = Project.query.get(task.project_id)
+    if not project:
+        return jsonify({'error': 'Not found'}), 404
     if project.user_id != g.current_user['id']:
         return jsonify({'error': 'Forbidden'}), 403
     db.session.delete(task)
@@ -92,6 +103,8 @@ def delete_task(task_id):
 def get_task_status(task_id):
     task = Task.query.get_or_404(task_id)
     project = Project.query.get(task.project_id)
+    if not project:
+        return jsonify({'error': 'Not found'}), 404
     if project.user_id != g.current_user['id']:
         return jsonify({'error': 'Forbidden'}), 403
     return jsonify({
