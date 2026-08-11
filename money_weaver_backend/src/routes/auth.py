@@ -24,7 +24,7 @@ def register():
         username=data['username'],
         email=data['email']
     )
-    user.set_password(data['password'])
+    user.hash_password(data['password'])
     
     db.session.add(user)
     db.session.commit()
@@ -47,8 +47,10 @@ def login():
     
     # Find user
     user = User.query.filter_by(email=data['email']).first()
-    if not user or not user.check_password(data['password']):
+    if not user or not user.verify_password(data['password']):
         return jsonify({'error': 'Invalid email or password'}), 401
+    
+    db.session.commit()
     
     # Generate token
     token = user.generate_token()

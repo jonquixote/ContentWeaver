@@ -1,4 +1,6 @@
-from werkzeug.security import generate_password_hash, check_password_hash
+from werkzeug.security import check_password_hash
+from argon2 import PasswordHasher
+from argon2.exceptions import VerifyMismatchError, VerificationError, InvalidHashError
 from datetime import datetime, timedelta
 import jwt
 import os
@@ -21,11 +23,26 @@ class User(get_db().Model):
     # Simple relationship with projects (no back_populates to avoid circular imports)
     # projects = get_db().relationship('Project', back_populates='user')
 
-    def set_password(self, password):
-        self.password_hash = generate_password_hash(password)
+    _ph = PasswordHasher()
 
-    def check_password(self, password):
-        return check_password_hash(self.password_hash, password)
+    def hash_password(self, password):
+        self.password_hash = self._ph.hash(password)
+
+    def verify_password(self, password):
+        try:
+            return self._ph.verify(self.password_hash, password)
+        except VerifyMismatchError:
+            return False
+        except (InvalidHashError, VerificationError, AttributeError):
+            return self._legacy_verify(password)
+
+    def _legacy_verify(self, password):
+        if not self.password_hash:
+            return False
+        ok = check_password_hash(self.password_hash, password)
+        if ok and not self.password_hash.startswith('$argon2'):
+            self.password_hash = self._ph.hash(password)
+        return ok
 
     def to_dict(self):
         return {

@@ -15,7 +15,7 @@ def create_user():
     data = request.json
     user = User(username=data['username'], email=data['email'])
     # Set a default password hash to avoid integrity constraint error
-    user.set_password(data.get('password', 'default_password'))
+    user.hash_password(data.get('password', 'default_password'))
     db.session.add(user)
     db.session.commit()
     return jsonify(user.to_dict()), 201
@@ -32,7 +32,7 @@ def update_user(user_id):
     user.username = data.get('username', user.username)
     user.email = data.get('email', user.email)
     if 'password' in data:
-        user.set_password(data['password'])
+        user.hash_password(data['password'])
     db.session.commit()
     return jsonify(user.to_dict())
 
