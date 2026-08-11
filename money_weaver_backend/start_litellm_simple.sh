@@ -20,15 +20,19 @@ fi
 
 # Set environment variables to disable database completely
 export LITELLM_DISABLE_DATABASE=true
-export LITELLM_DISABLE_AUTH=true
 export NO_DOCS="True"
 export NO_REDOC="True"
 export DATABASE_URL=""
 export LITELLM_DATABASE_URL=""
 
+if [ -f .env ]; then
+    export GROQ_API_KEY="$(grep -E '^GROQ_API_KEY=' .env | cut -d= -f2- || true)"
+    export LITELLM_MASTER_KEY="$(grep -E '^LITELLM_MASTER_KEY=' .env | cut -d= -f2- || true)"
+fi
+
 # Try starting LiteLLM with just a model parameter instead of a config file
 echo "Starting LiteLLM proxy with direct model parameter..."
-litellm --model groq/llama-3.1-8b-instant --add_key REDACTED_GROQ_API_KEY --port 8000 > litellm_simple.log 2>&1 &
+litellm --model groq/llama-3.1-8b-instant --add_key ${GROQ_API_KEY} --port 8000 > litellm_simple.log 2>&1 &
 LITELLM_PID=$!
 
 # Wait a moment for LiteLLM proxy to start

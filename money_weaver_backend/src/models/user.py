@@ -41,12 +41,12 @@ class User(get_db().Model):
             'user_id': self.id,
             'exp': datetime.utcnow() + timedelta(hours=24)
         }
-        return jwt.encode(payload, os.getenv('SECRET_KEY', 'fallback_secret'), algorithm='HS256')
+        return jwt.encode(payload, os.environ['SECRET_KEY'], algorithm='HS256')
 
     @staticmethod
     def verify_token(token):
         try:
-            payload = jwt.decode(token, os.getenv('SECRET_KEY', 'fallback_secret'), algorithms=['HS256'])
+            payload = jwt.decode(token, os.environ['SECRET_KEY'], algorithms=['HS256'])
             db = get_db()
             return db.session.get(User, payload['user_id'])
         except jwt.ExpiredSignatureError:

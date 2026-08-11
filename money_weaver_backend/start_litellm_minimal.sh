@@ -20,11 +20,15 @@ fi
 
 # Set environment variables to disable database completely
 export LITELLM_DISABLE_DATABASE=true
-export LITELLM_DISABLE_AUTH=true
 export NO_DOCS="True"
 export NO_REDOC="True"
 export DATABASE_URL=""
 export LITELLM_DATABASE_URL=""
+
+if [ -f .env ]; then
+    export GROQ_API_KEY="$(grep -E '^GROQ_API_KEY=' .env | cut -d= -f2- || true)"
+    export LITELLM_MASTER_KEY="$(grep -E '^LITELLM_MASTER_KEY=' .env | cut -d= -f2- || true)"
+fi
 
 # Create a minimal config file
 cat > minimal_config.yaml << 'EOF'
@@ -32,14 +36,13 @@ model_list:
   - model_name: llama-3.1-8b-instant
     litellm_params:
       model: groq/llama-3.1-8b-instant
-      api_key: REDACTED_GROQ_API_KEY
+      api_key: os.environ/GROQ_API_KEY
 
 litellm_settings:
   drop_params: True
 
 general_settings: 
-  master_key: sk-master-key-change-me
-  disable_auth: true
+  master_key: os.environ/LITELLM_MASTER_KEY
   store_model_in_db: false
 EOF
 

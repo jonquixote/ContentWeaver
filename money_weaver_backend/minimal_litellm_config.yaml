@@ -2,11 +2,10 @@ model_list:
   - model_name: llama-3.1-8b-instant
     litellm_params:
       model: groq/llama-3.1-8b-instant
-      api_key: REDACTED_GROQ_API_KEY
+      api_key: os.environ/GROQ_API_KEY
 
 litellm_settings:
   drop_params: True
 
 general_settings: 
-  master_key: sk-master-key-change-me
-  disable_auth: true
+  master_key: os.environ/LITELLM_MASTER_KEY

@@ -19,7 +19,7 @@ else
 fi
 
 # Set environment variables for PostgreSQL database
-export DATABASE_URL="postgresql://money_weaver:money_weaver_password@localhost:5432/money_weaver"
+export DATABASE_URL="${DATABASE_URL:-postgresql://money_weaver:money_weaver_password@localhost:5432/money_weaver}"
 
 # Check if PostgreSQL is running
 if ! lsof -i :5432 > /dev/null 2>&1; then

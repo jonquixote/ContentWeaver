@@ -2,33 +2,32 @@ model_list:
   - model_name: llama-3.1-8b-instant
     litellm_params:
       model: groq/llama-3.1-8b-instant
-      api_key: REDACTED_GROQ_API_KEY
+      api_key: os.environ/GROQ_API_KEY
   - model_name: llama-3.1-70b-versatile
     litellm_params:
       model: groq/llama-3.1-70b-versatile
-      api_key: REDACTED_GROQ_API_KEY
+      api_key: os.environ/GROQ_API_KEY
   - model_name: llama-3.1-405b-reasoning
     litellm_params:
       model: groq/llama-3.1-405b-reasoning
-      api_key: REDACTED_GROQ_API_KEY
+      api_key: os.environ/GROQ_API_KEY
   - model_name: mixtral-8x7b-32768
     litellm_params:
       model: groq/mixtral-8x7b-32768
-      api_key: REDACTED_GROQ_API_KEY
+      api_key: os.environ/GROQ_API_KEY
   - model_name: gemma-7b-it
     litellm_params:
       model: groq/gemma-7b-it
-      api_key: REDACTED_GROQ_API_KEY
+      api_key: os.environ/GROQ_API_KEY
   - model_name: mistral-7b-32768
     litellm_params:
       model: groq/mistral-7b-32768
-      api_key: REDACTED_GROQ_API_KEY
+      api_key: os.environ/GROQ_API_KEY
 
 litellm_settings:
   drop_params: True
   cache: False
 
 general_settings: 
-  master_key: sk-master-key-change-me
-  disable_auth: true
+  master_key: os.environ/LITELLM_MASTER_KEY
   store_model_in_db: false

@@ -1,5 +1,8 @@
 from celery import Celery
 import os
+from dotenv import load_dotenv
+
+load_dotenv()
 
 # Create Celery instance
 celery_app = Celery('money_weaver')
