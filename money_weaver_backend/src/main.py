@@ -24,8 +24,8 @@ app.config['SECRET_KEY'] = os.environ['SECRET_KEY']
 
 # Enable CORS for all routes
 CORS(app, resources={
-    r"/api/*": {"origins": "*"},
-    r"/final/*": {"origins": "*"}
+    r"/api/*": {"origins": [os.getenv('FRONTEND_ORIGIN', 'http://localhost:5173')]},
+    r"/final/*": {"origins": [os.getenv('FRONTEND_ORIGIN', 'http://localhost:5173')]}
 })
 
 # Database configuration

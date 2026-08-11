@@ -34,7 +34,7 @@ pycparser==2.22
 PyJWT==2.10.1
 pycryptodome==3.23.0
 python-dateutil==2.9.0.post0
-python-dotenv==1.0.1
+python-dotenv==1.1.0
 python-multipart==0.0.20
 redis==6.4.0
 requests==2.32.5
