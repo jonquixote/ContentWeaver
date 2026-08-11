@@ -172,6 +172,13 @@ def get_task_status(task_id):
     """Get the status of a Celery task"""
     from src.services.celery_app import celery_app
     
+    task = Task.query.filter_by(celery_task_id=task_id).first()
+    if not task:
+        return jsonify({'error': 'Task not found'}), 404
+    project = Project.query.get(task.project_id)
+    if not project or project.user_id != g.current_user['id']:
+        return jsonify({'error': 'Forbidden'}), 403
+    
     try:
         task_result = celery_app.AsyncResult(task_id)
         
