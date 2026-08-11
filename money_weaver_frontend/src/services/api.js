@@ -25,8 +25,12 @@ class ApiService {
       ...options,
     }
 
-    if (config.body && typeof config.body === 'object') {
+    if (config.body && typeof config.body === 'object' && !(config.body instanceof FormData)) {
       config.body = JSON.stringify(config.body)
+    }
+
+    if (config.body instanceof FormData) {
+      delete config.headers['Content-Type']
     }
 
     try {
@@ -186,9 +190,6 @@ class ApiService {
     return this.request('/clone-voice', {
       method: 'POST',
       body: formData,
-      headers: {
-        // Remove Content-Type to let browser set it with boundary for multipart/form-data
-      }
     })
   }
 

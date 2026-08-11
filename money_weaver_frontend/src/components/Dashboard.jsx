@@ -384,8 +384,17 @@ const Dashboard = ({ onCreateVideo }) => {
                           size="sm" 
                           className="border-slate-600 text-slate-300 hover:bg-slate-600"
                           onClick={() => {
-                            navigator.copyText(selectedProject.video_url);
-                            // Could add a toast notification here
+                            const url = selectedProject.video_url;
+                            if (navigator.clipboard?.writeText) {
+                              navigator.clipboard.writeText(url);
+                            } else {
+                              const textarea = document.createElement('textarea');
+                              textarea.value = url;
+                              document.body.appendChild(textarea);
+                              textarea.select();
+                              document.execCommand('copy');
+                              textarea.remove();
+                            }
                           }}
                         >
                           Copy URL
