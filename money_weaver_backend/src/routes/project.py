@@ -2,6 +2,7 @@ from flask import Blueprint, jsonify, request, g
 from src.models.project import Project
 from src.database import db
 from src.auth import auth_required
+from src.validation import require_fields
 
 project_bp = Blueprint('project', __name__)
 
@@ -15,8 +16,10 @@ def get_projects():
 @auth_required
 def create_project():
     data = request.json
-    if not data.get('title'):
-        return jsonify({'error': 'title is required'}), 400
+    try:
+        require_fields(data, ['title'])
+    except ValueError as e:
+        return jsonify({'error': str(e)}), 400
     
     project = Project(
         title=data['title'],

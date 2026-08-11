@@ -3,6 +3,7 @@ from src.models.api_key import ApiKey
 from src.services.llm_service import llm_service
 from src.database import db
 from src.auth import auth_required
+from src.validation import require_fields
 import litellm
 import os
 import requests
@@ -21,8 +22,10 @@ def add_api_key():
     data = request.json
     
     # Validate required fields
-    if not data.get('name') or not data.get('provider') or not data.get('key'):
-        return jsonify({'error': 'name, provider, and key are required'}), 400
+    try:
+        require_fields(data, ['name', 'provider', 'key'])
+    except ValueError as e:
+        return jsonify({'error': str(e)}), 400
     
     try:
         # Add API key using the service

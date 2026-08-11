@@ -1,6 +1,14 @@
 import re
 import json
+import html
 from typing import List, Dict, Tuple
+
+_TAG_RE = re.compile(r'<[^>]+>')
+
+def _sanitize(text):
+    text = html.unescape(text)
+    text = _TAG_RE.sub('', text)
+    return text
 
 class ScriptParsingService:
     def __init__(self):
@@ -18,11 +26,11 @@ class ScriptParsingService:
         """
         # Extract title with improved regex
         title_match = re.search(r'^\s*\**Title:\s*[""]?([^"\n\*]+)[""]?\**', script_text, re.MULTILINE | re.IGNORECASE)
-        title = title_match.group(1).strip() if title_match else "Untitled Video"
+        title = _sanitize(title_match.group(1).strip()) if title_match else "Untitled Video"
         
         # Extract full narrative if present
         full_narrative_match = re.search(r'\*\*Full Narrative:\*\*\s*(.*?)(?=\n\*\*Scene|\n\*\*$|$)', script_text, re.DOTALL | re.IGNORECASE)
-        full_narrative = full_narrative_match.group(1).strip() if full_narrative_match else ""
+        full_narrative = _sanitize(full_narrative_match.group(1).strip()) if full_narrative_match else ""
         
         # Extract scenes using a more robust pattern
         scenes = []
@@ -31,11 +39,11 @@ class ScriptParsingService:
         
         for match in scene_matches:
             scene_num = int(match.group(1))
-            description = match.group(2).strip()
+            description = _sanitize(match.group(2).strip())
             start_time = int(match.group(3))
             end_time = int(match.group(4))
-            visual_description = match.group(5).strip()
-            voiceover_text = match.group(6).strip()
+            visual_description = _sanitize(match.group(5).strip())
+            voiceover_text = _sanitize(match.group(6).strip())
             
             scenes.append({
                 'scene_number': scene_num,
@@ -79,7 +87,7 @@ class ScriptParsingService:
                 
                 current_scene = {
                     'scene_number': int(scene_match.group(1)),
-                    'description': scene_match.group(2).strip(),
+                    'description': _sanitize(scene_match.group(2).strip()),
                     'start_time': int(scene_match.group(3)),
                     'end_time': int(scene_match.group(4)),
                     'duration': int(scene_match.group(4)) - int(scene_match.group(3)),
@@ -91,12 +99,12 @@ class ScriptParsingService:
                 # Check if there's content after **) in the same line
                 same_line_content = scene_match.group(5).strip() if scene_match.group(5) else ''
                 if same_line_content.startswith('(') and same_line_content.endswith(')'):
-                    current_scene['visual_description'] = same_line_content[1:-1]
+                    current_scene['visual_description'] = _sanitize(same_line_content[1:-1])
                 elif i + 1 < len(lines):
                     # Check next line
                     next_line = lines[i + 1].strip()
                     if next_line.startswith('(') and next_line.endswith(')'):
-                        current_scene['visual_description'] = next_line[1:-1]
+                        current_scene['visual_description'] = _sanitize(next_line[1:-1])
                 
                 # Look for voiceover in subsequent lines
                 j = i + 1
@@ -106,7 +114,7 @@ class ScriptParsingService:
                         # Extract the voiceover text
                         voiceover_match = re.match(r'voiceover:\s*["]?([^"\n]*)["]?', voiceover_line, re.IGNORECASE)
                         if voiceover_match:
-                            current_scene['voiceover'] = voiceover_match.group(1).strip()
+                            current_scene['voiceover'] = _sanitize(voiceover_match.group(1).strip())
                         break
                     elif voiceover_line.startswith('**Scene') or voiceover_line.startswith('**Title'):
                         break
@@ -163,7 +171,7 @@ class ScriptParsingService:
                 'end_time': 30,
                 'duration': 30,
                 'visual_description': "General visuals for the narrative",
-                'voiceover': full_narrative.strip()
+                'voiceover': _sanitize(full_narrative.strip())
             }]
         
         # If we have multiple voiceover segments, try to create a coherent narrative
@@ -178,7 +186,7 @@ class ScriptParsingService:
                 'end_time': 30,
                 'duration': 30,
                 'visual_description': "General visuals for the narrative",
-                'voiceover': connected_narrative
+                'voiceover': _sanitize(connected_narrative)
             }]
         
         # Create simple scenes for each voiceover
@@ -198,7 +206,7 @@ class ScriptParsingService:
                 'end_time': end_time,
                 'duration': end_time - start_time,
                 'visual_description': "General visuals for this scene",
-                'voiceover': voiceover.strip()
+                'voiceover': _sanitize(voiceover.strip())
             })
         
         # If no scenes were created, create a single scene for the entire duration
@@ -210,7 +218,7 @@ class ScriptParsingService:
                 'end_time': total_duration,
                 'duration': total_duration,
                 'visual_description': "General visuals",
-                'voiceover': script_text.strip()
+                'voiceover': _sanitize(script_text.strip())
             }]
         
         return scenes
@@ -256,7 +264,7 @@ class ScriptParsingService:
         # Use full narrative if available (preferred approach)
         full_narrative = parsed_script.get('full_narrative', '')
         if full_narrative and full_narrative.strip():
-            return full_narrative.strip()
+            return _sanitize(full_narrative.strip())
         
         # Fallback to concatenating scene voiceovers with proper sentence handling
         voiceover_parts = []
@@ -272,7 +280,7 @@ class ScriptParsingService:
         # Clean up any extra spaces
         import re
         result = re.sub(r'\s+', ' ', result)
-        return result.strip()
+        return _sanitize(result.strip())
     
     def extract_shot_descriptions(self, parsed_script: Dict) -> List[str]:
         """
@@ -287,10 +295,10 @@ class ScriptParsingService:
         shot_descriptions = []
         for scene in parsed_script.get('scenes', []):
             if scene.get('visual_description'):
-                shot_descriptions.append(scene['visual_description'])
+                shot_descriptions.append(_sanitize(scene['visual_description']))
             # Fallback to general description if no specific visual description
             elif scene.get('description'):
-                shot_descriptions.append(scene['description'])
+                shot_descriptions.append(_sanitize(scene['description']))
         
         return shot_descriptions
 

@@ -2,6 +2,7 @@ from flask import Blueprint, jsonify, request, g
 from src.models.user import User
 from src.database import db
 from src.auth import auth_required
+from src.validation import require_fields
 
 user_bp = Blueprint('user', __name__)
 
@@ -15,8 +16,12 @@ def get_users():
 @auth_required
 def create_user():
     data = request.json
-    if not data.get('username') or not data.get('email') or not data.get('password'):
-        return jsonify({'error': 'username, email, and password are required'}), 400
+    try:
+        require_fields(data, ['username', 'email', 'password'])
+    except ValueError as e:
+        return jsonify({'error': str(e)}), 400
+    if not isinstance(data.get('password'), str):
+        return jsonify({'error': 'Password must be a string'}), 400
     user = User(username=data['username'], email=data['email'])
     user.hash_password(data['password'])
     db.session.add(user)
@@ -41,6 +46,8 @@ def update_user(user_id):
     user.username = data.get('username', user.username)
     user.email = data.get('email', user.email)
     if 'password' in data:
+        if not isinstance(data['password'], str):
+            return jsonify({'error': 'Password must be a string'}), 400
         user.hash_password(data['password'])
     db.session.commit()
     return jsonify(user.to_dict())

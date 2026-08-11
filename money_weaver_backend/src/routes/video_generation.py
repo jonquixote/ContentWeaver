@@ -4,6 +4,7 @@ from src.models.task import Task
 from src.database import db
 from src.tasks.video_tasks import generate_assembler_video_task, generate_generative_video_task, batch_mix_videos_task
 from src.auth import auth_required
+from src.validation import require_fields
 
 video_bp = Blueprint('video', __name__)
 
@@ -14,8 +15,10 @@ def generate_assembler_video():
     data = request.json
     
     # Validate required fields
-    if not data.get('project_id') or not data.get('prompt'):
-        return jsonify({'error': 'project_id and prompt are required'}), 400
+    try:
+        require_fields(data, ['project_id', 'prompt'])
+    except ValueError as e:
+        return jsonify({'error': str(e)}), 400
     
     project = Project.query.get(data['project_id'])
     if not project:
@@ -91,8 +94,10 @@ def generate_generative_video():
     data = request.json
     
     # Validate required fields
-    if not data.get('project_id') or not data.get('prompt'):
-        return jsonify({'error': 'project_id and prompt are required'}), 400
+    try:
+        require_fields(data, ['project_id', 'prompt'])
+    except ValueError as e:
+        return jsonify({'error': str(e)}), 400
     
     project = Project.query.get(data['project_id'])
     if not project:
@@ -132,8 +137,10 @@ def batch_mix_videos():
     data = request.json
     
     # Validate required fields
-    if not data.get('project_id') or not data.get('variations'):
-        return jsonify({'error': 'project_id and variations are required'}), 400
+    try:
+        require_fields(data, ['project_id', 'variations'])
+    except ValueError as e:
+        return jsonify({'error': str(e)}), 400
     
     project = Project.query.get(data['project_id'])
     if not project:

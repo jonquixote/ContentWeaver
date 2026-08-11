@@ -3,6 +3,7 @@ from src.models.task import Task
 from src.models.project import Project
 from src.database import db
 from src.auth import auth_required
+from src.validation import require_fields
 
 task_bp = Blueprint('task', __name__)
 
@@ -22,10 +23,10 @@ def get_tasks():
 @auth_required
 def create_task():
     data = request.json
-    if not data.get('project_id'):
-        return jsonify({'error': 'project_id is required'}), 400
-    if not data.get('task_type'):
-        return jsonify({'error': 'task_type is required'}), 400
+    try:
+        require_fields(data, ['project_id', 'task_type'])
+    except ValueError as e:
+        return jsonify({'error': str(e)}), 400
     
     # Validate project exists and belongs to user
     project = Project.query.get(data['project_id'])

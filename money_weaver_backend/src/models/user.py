@@ -40,7 +40,10 @@ class User(get_db().Model):
     def _legacy_verify(self, password):
         if not self.password_hash:
             return False
-        ok = check_password_hash(self.password_hash, password)
+        try:
+            ok = check_password_hash(self.password_hash, password)
+        except ValueError:
+            return False
         if ok and not self.password_hash.startswith('$argon2'):
             self.password_hash = self._ph.hash(password)
         return ok

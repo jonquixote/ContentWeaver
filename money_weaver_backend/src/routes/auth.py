@@ -2,6 +2,8 @@ from flask import Blueprint, jsonify, request
 from src.models.user import User
 from src.database import db
 from src.auth import auth_required
+from src.validation import require_fields
+from sqlalchemy.exc import IntegrityError
 
 auth_bp = Blueprint('auth', __name__)
 
@@ -10,8 +12,12 @@ def register():
     data = request.json
     
     # Validate required fields
-    if not data.get('email') or not data.get('password') or not data.get('username'):
-        return jsonify({'error': 'Email, username, and password are required'}), 400
+    try:
+        require_fields(data, ['email', 'password', 'username'])
+    except ValueError as e:
+        return jsonify({'error': str(e)}), 400
+    if not isinstance(data.get('password'), str):
+        return jsonify({'error': 'Password must be a string'}), 400
     
     # Check if user already exists
     if User.query.filter_by(email=data['email']).first():
@@ -43,8 +49,12 @@ def login():
     data = request.json
     
     # Validate required fields
-    if not data.get('email') or not data.get('password'):
-        return jsonify({'error': 'Email and password are required'}), 400
+    try:
+        require_fields(data, ['email', 'password'])
+    except ValueError as e:
+        return jsonify({'error': str(e)}), 400
+    if not isinstance(data.get('password'), str):
+        return jsonify({'error': 'Password must be a string'}), 400
     
     # Find user
     user = User.query.filter_by(email=data['email']).first()
@@ -70,8 +80,11 @@ def logout():
     token = request.headers.get('Authorization')[7:]
     payload = jwt.decode(token, os.environ['SECRET_KEY'], algorithms=['HS256'])
     if payload.get('jti'):
-        db.session.add(TokenBlocklist(jti=payload['jti']))
-        db.session.commit()
+        try:
+            db.session.add(TokenBlocklist(jti=payload['jti']))
+            db.session.commit()
+        except IntegrityError:
+            db.session.rollback()
     return jsonify({'message': 'Logged out'}), 200
 
 @auth_bp.route('/auth/me', methods=['GET'])
