@@ -9,7 +9,7 @@ import requests
 # Configure LiteLLM to use the proxy for testing
 litellm_proxy_url = os.getenv('LITELLM_PROXY_URL', 'http://localhost:8000')
 litellm.api_base = f"{litellm_proxy_url}/v1"
-litellm.master_key = "sk-master-key-change-me"  # This should match the master key in config.yaml
+litellm.master_key = os.getenv('LITELLM_MASTER_KEY', '')
 
 api_keys_bp = Blueprint('api_keys', __name__)
 

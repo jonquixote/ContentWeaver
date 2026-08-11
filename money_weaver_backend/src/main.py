@@ -20,7 +20,7 @@ from src.routes.api_keys import api_keys_bp
 from src.routes.voice_cloning import voice_cloning_bp
 
 app = Flask(__name__, static_folder=os.path.join(os.path.dirname(__file__), 'static'))
-app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'asdf#FGSgvasgf$5$WGT')
+app.config['SECRET_KEY'] = os.environ['SECRET_KEY']
 
 # Enable CORS for all routes
 CORS(app, resources={
