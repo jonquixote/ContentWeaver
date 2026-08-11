@@ -1,4 +1,4 @@
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, jsonify, request, g
 from src.models.project import Project
 from src.models.task import Task
 from src.database import db
@@ -40,7 +40,7 @@ def clone_voice():
         project = Project(
             title=f"Voice Clone - {filename}",
             description="Voice cloned from reference audio",
-            user_id=1,  # Default user for now
+            user_id=g.current_user['id'],
             workflow_type='voice_cloning'
         )
         db.session.add(project)

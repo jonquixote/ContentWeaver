@@ -1,6 +1,5 @@
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, jsonify, request, g
 from src.models.project import Project
-from src.models.user import User
 from src.database import db
 from src.auth import auth_required
 
@@ -9,27 +8,20 @@ project_bp = Blueprint('project', __name__)
 @project_bp.route('/projects', methods=['GET'])
 @auth_required
 def get_projects():
-    user_id = request.args.get('user_id')
-    if user_id:
-        projects = Project.query.filter_by(user_id=user_id).all()
-    else:
-        projects = Project.query.all()
+    projects = Project.query.filter_by(user_id=g.current_user['id']).all()
     return jsonify([project.to_dict() for project in projects])
 
 @project_bp.route('/projects', methods=['POST'])
 @auth_required
 def create_project():
     data = request.json
-    
-    # Validate user exists
-    user = User.query.get(data['user_id'])
-    if not user:
-        return jsonify({'error': 'User not found'}), 404
+    if not data.get('title'):
+        return jsonify({'error': 'title is required'}), 400
     
     project = Project(
         title=data['title'],
         description=data.get('description', ''),
-        user_id=data['user_id'],
+        user_id=g.current_user['id'],
         workflow_type=data.get('workflow_type', 'assembler')
     )
     db.session.add(project)
@@ -40,12 +32,16 @@ def create_project():
 @auth_required
 def get_project(project_id):
     project = Project.query.get_or_404(project_id)
+    if project.user_id != g.current_user['id']:
+        return jsonify({'error': 'Forbidden'}), 403
     return jsonify(project.to_dict())
 
 @project_bp.route('/projects/<int:project_id>', methods=['PUT'])
 @auth_required
 def update_project(project_id):
     project = Project.query.get_or_404(project_id)
+    if project.user_id != g.current_user['id']:
+        return jsonify({'error': 'Forbidden'}), 403
     data = request.json
     
     project.title = data.get('title', project.title)
@@ -62,6 +58,8 @@ def update_project(project_id):
 @auth_required
 def delete_project(project_id):
     project = Project.query.get_or_404(project_id)
+    if project.user_id != g.current_user['id']:
+        return jsonify({'error': 'Forbidden'}), 403
     db.session.delete(project)
     db.session.commit()
     return '', 204

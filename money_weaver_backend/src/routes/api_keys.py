@@ -1,4 +1,4 @@
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, jsonify, request, g
 from src.models.api_key import ApiKey
 from src.services.llm_service import llm_service
 from src.database import db
@@ -21,13 +21,13 @@ def add_api_key():
     data = request.json
     
     # Validate required fields
-    if not data.get('user_id') or not data.get('name') or not data.get('provider') or not data.get('key'):
-        return jsonify({'error': 'user_id, name, provider, and key are required'}), 400
+    if not data.get('name') or not data.get('provider') or not data.get('key'):
+        return jsonify({'error': 'name, provider, and key are required'}), 400
     
     try:
         # Add API key using the service
         api_key = llm_service.add_api_key(
-            user_id=data['user_id'],
+            user_id=g.current_user['id'],
             name=data['name'],
             provider=data['provider'],
             key=data['key']
@@ -45,8 +45,10 @@ def add_api_key():
 @auth_required
 def get_user_api_keys(user_id):
     """Get all API keys for a user"""
+    if user_id != g.current_user['id']:
+        return jsonify({'error': 'Forbidden'}), 403
     try:
-        api_keys = llm_service.get_user_api_keys(user_id)
+        api_keys = llm_service.get_user_api_keys(g.current_user['id'])
         return jsonify({
             'api_keys': [key.to_dict() for key in api_keys]
         }), 200
@@ -58,14 +60,8 @@ def get_user_api_keys(user_id):
 @auth_required
 def delete_api_key(api_key_id):
     """Delete an API key"""
-    data = request.json
-    
-    # Validate required fields
-    if not data.get('user_id'):
-        return jsonify({'error': 'user_id is required'}), 400
-    
     try:
-        success = llm_service.delete_api_key(api_key_id, data['user_id'])
+        success = llm_service.delete_api_key(api_key_id, g.current_user['id'])
         if success:
             return jsonify({'message': 'API key deleted successfully'}), 200
         else:

@@ -1,4 +1,4 @@
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, jsonify, request, g
 from src.models.task import Task
 from src.models.project import Project
 from src.database import db
@@ -10,21 +10,29 @@ task_bp = Blueprint('task', __name__)
 @auth_required
 def get_tasks():
     project_id = request.args.get('project_id')
-    if project_id:
-        tasks = Task.query.filter_by(project_id=project_id).all()
-    else:
-        tasks = Task.query.all()
+    if not project_id:
+        return jsonify({'error': 'project_id is required'}), 400
+    project = Project.query.get(project_id)
+    if not project or project.user_id != g.current_user['id']:
+        return jsonify({'error': 'Forbidden'}), 403
+    tasks = Task.query.filter_by(project_id=project_id).all()
     return jsonify([task.to_dict() for task in tasks])
 
 @task_bp.route('/tasks', methods=['POST'])
 @auth_required
 def create_task():
     data = request.json
+    if not data.get('project_id'):
+        return jsonify({'error': 'project_id is required'}), 400
+    if not data.get('task_type'):
+        return jsonify({'error': 'task_type is required'}), 400
     
-    # Validate project exists
+    # Validate project exists and belongs to user
     project = Project.query.get(data['project_id'])
     if not project:
         return jsonify({'error': 'Project not found'}), 404
+    if project.user_id != g.current_user['id']:
+        return jsonify({'error': 'Forbidden'}), 403
     
     task = Task(
         project_id=data['project_id'],
@@ -40,12 +48,18 @@ def create_task():
 @auth_required
 def get_task(task_id):
     task = Task.query.get_or_404(task_id)
+    project = Project.query.get(task.project_id)
+    if project.user_id != g.current_user['id']:
+        return jsonify({'error': 'Forbidden'}), 403
     return jsonify(task.to_dict())
 
 @task_bp.route('/tasks/<int:task_id>', methods=['PUT'])
 @auth_required
 def update_task(task_id):
     task = Task.query.get_or_404(task_id)
+    project = Project.query.get(task.project_id)
+    if project.user_id != g.current_user['id']:
+        return jsonify({'error': 'Forbidden'}), 403
     data = request.json
     
     task.status = data.get('status', task.status)
@@ -61,6 +75,9 @@ def update_task(task_id):
 @auth_required
 def delete_task(task_id):
     task = Task.query.get_or_404(task_id)
+    project = Project.query.get(task.project_id)
+    if project.user_id != g.current_user['id']:
+        return jsonify({'error': 'Forbidden'}), 403
     db.session.delete(task)
     db.session.commit()
     return '', 204
@@ -69,6 +86,9 @@ def delete_task(task_id):
 @auth_required
 def get_task_status(task_id):
     task = Task.query.get_or_404(task_id)
+    project = Project.query.get(task.project_id)
+    if project.user_id != g.current_user['id']:
+        return jsonify({'error': 'Forbidden'}), 403
     return jsonify({
         'id': task.id,
         'status': task.status,

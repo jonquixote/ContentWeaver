@@ -1,4 +1,4 @@
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, jsonify, request, g
 from src.models.project import Project
 from src.models.task import Task
 from src.database import db
@@ -20,6 +20,8 @@ def generate_assembler_video():
     project = Project.query.get(data['project_id'])
     if not project:
         return jsonify({'error': 'Project not found'}), 404
+    if project.user_id != g.current_user['id']:
+        return jsonify({'error': 'Forbidden'}), 403
     
     # Extract video settings from request data
     duration = data.get('duration', 30)  # Default to 30 seconds
@@ -95,6 +97,8 @@ def generate_generative_video():
     project = Project.query.get(data['project_id'])
     if not project:
         return jsonify({'error': 'Project not found'}), 404
+    if project.user_id != g.current_user['id']:
+        return jsonify({'error': 'Forbidden'}), 403
     
     # Update project status
     project.status = 'processing'
@@ -134,6 +138,8 @@ def batch_mix_videos():
     project = Project.query.get(data['project_id'])
     if not project:
         return jsonify({'error': 'Project not found'}), 404
+    if project.user_id != g.current_user['id']:
+        return jsonify({'error': 'Forbidden'}), 403
     
     # Update project status
     project.status = 'processing'
