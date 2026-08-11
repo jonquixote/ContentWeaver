@@ -2,10 +2,12 @@ from flask import Blueprint, jsonify, request
 from src.models.project import Project
 from src.models.user import User
 from src.database import db
+from src.auth import auth_required
 
 project_bp = Blueprint('project', __name__)
 
 @project_bp.route('/projects', methods=['GET'])
+@auth_required
 def get_projects():
     user_id = request.args.get('user_id')
     if user_id:
@@ -15,6 +17,7 @@ def get_projects():
     return jsonify([project.to_dict() for project in projects])
 
 @project_bp.route('/projects', methods=['POST'])
+@auth_required
 def create_project():
     data = request.json
     
@@ -34,11 +37,13 @@ def create_project():
     return jsonify(project.to_dict()), 201
 
 @project_bp.route('/projects/<int:project_id>', methods=['GET'])
+@auth_required
 def get_project(project_id):
     project = Project.query.get_or_404(project_id)
     return jsonify(project.to_dict())
 
 @project_bp.route('/projects/<int:project_id>', methods=['PUT'])
+@auth_required
 def update_project(project_id):
     project = Project.query.get_or_404(project_id)
     data = request.json
@@ -54,6 +59,7 @@ def update_project(project_id):
     return jsonify(project.to_dict())
 
 @project_bp.route('/projects/<int:project_id>', methods=['DELETE'])
+@auth_required
 def delete_project(project_id):
     project = Project.query.get_or_404(project_id)
     db.session.delete(project)

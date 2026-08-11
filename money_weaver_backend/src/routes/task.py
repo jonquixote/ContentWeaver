@@ -2,10 +2,12 @@ from flask import Blueprint, jsonify, request
 from src.models.task import Task
 from src.models.project import Project
 from src.database import db
+from src.auth import auth_required
 
 task_bp = Blueprint('task', __name__)
 
 @task_bp.route('/tasks', methods=['GET'])
+@auth_required
 def get_tasks():
     project_id = request.args.get('project_id')
     if project_id:
@@ -15,6 +17,7 @@ def get_tasks():
     return jsonify([task.to_dict() for task in tasks])
 
 @task_bp.route('/tasks', methods=['POST'])
+@auth_required
 def create_task():
     data = request.json
     
@@ -34,11 +37,13 @@ def create_task():
     return jsonify(task.to_dict()), 201
 
 @task_bp.route('/tasks/<int:task_id>', methods=['GET'])
+@auth_required
 def get_task(task_id):
     task = Task.query.get_or_404(task_id)
     return jsonify(task.to_dict())
 
 @task_bp.route('/tasks/<int:task_id>', methods=['PUT'])
+@auth_required
 def update_task(task_id):
     task = Task.query.get_or_404(task_id)
     data = request.json
@@ -53,6 +58,7 @@ def update_task(task_id):
     return jsonify(task.to_dict())
 
 @task_bp.route('/tasks/<int:task_id>', methods=['DELETE'])
+@auth_required
 def delete_task(task_id):
     task = Task.query.get_or_404(task_id)
     db.session.delete(task)
@@ -60,6 +66,7 @@ def delete_task(task_id):
     return '', 204
 
 @task_bp.route('/tasks/<int:task_id>/status', methods=['GET'])
+@auth_required
 def get_task_status(task_id):
     task = Task.query.get_or_404(task_id)
     return jsonify({

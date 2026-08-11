@@ -1,6 +1,7 @@
 from flask import Blueprint, jsonify, request
 from src.models.user import User
 from src.database import db
+from src.auth import auth_required
 
 auth_bp = Blueprint('auth', __name__)
 
@@ -61,12 +62,14 @@ def login():
     })
 
 @auth_bp.route('/auth/logout', methods=['POST'])
+@auth_required
 def logout():
     # In a real app, you might want to invalidate the token
     # For now, we'll just return a success message
     return jsonify({'message': 'Logged out successfully'})
 
 @auth_bp.route('/auth/me', methods=['GET'])
+@auth_required
 def get_current_user():
     # This would typically verify a token from the Authorization header
     # For now, we'll return a mock user

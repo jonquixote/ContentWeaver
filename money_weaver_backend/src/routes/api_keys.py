@@ -2,6 +2,7 @@ from flask import Blueprint, jsonify, request
 from src.models.api_key import ApiKey
 from src.services.llm_service import llm_service
 from src.database import db
+from src.auth import auth_required
 import litellm
 import os
 import requests
@@ -14,6 +15,7 @@ litellm.master_key = os.getenv('LITELLM_MASTER_KEY', '')
 api_keys_bp = Blueprint('api_keys', __name__)
 
 @api_keys_bp.route('/api-keys', methods=['POST'])
+@auth_required
 def add_api_key():
     """Add a new API key"""
     data = request.json
@@ -40,6 +42,7 @@ def add_api_key():
         return jsonify({'error': str(e)}), 500
 
 @api_keys_bp.route('/api-keys/user/<int:user_id>', methods=['GET'])
+@auth_required
 def get_user_api_keys(user_id):
     """Get all API keys for a user"""
     try:
@@ -52,6 +55,7 @@ def get_user_api_keys(user_id):
         return jsonify({'error': str(e)}), 500
 
 @api_keys_bp.route('/api-keys/<int:api_key_id>', methods=['DELETE'])
+@auth_required
 def delete_api_key(api_key_id):
     """Delete an API key"""
     data = request.json
@@ -71,6 +75,7 @@ def delete_api_key(api_key_id):
         return jsonify({'error': str(e)}), 500
 
 @api_keys_bp.route('/api-keys/test', methods=['POST'])
+@auth_required
 def test_api_key():
     """Test an API key through the LiteLLM proxy"""
     data = request.json
@@ -142,6 +147,7 @@ def test_api_key():
         }), 400
 
 @api_keys_bp.route('/models', methods=['GET'])
+@auth_required
 def get_available_models():
     """Get available models from the LiteLLM proxy"""
     try:
@@ -205,6 +211,7 @@ def get_available_models():
         }), 200  # Still return 200 but with error info
 
 @api_keys_bp.route('/models/default', methods=['GET'])
+@auth_required
 def get_default_model():
     """Get the default model for script generation"""
     # Return a reasonable default model

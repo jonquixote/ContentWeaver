@@ -3,6 +3,7 @@ from src.models.project import Project
 from src.models.task import Task
 from src.database import db
 from src.tasks.video_tasks import clone_voice_task
+from src.auth import auth_required
 import os
 from werkzeug.utils import secure_filename
 
@@ -13,6 +14,7 @@ UPLOAD_FOLDER = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'upload
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
 @voice_cloning_bp.route('/clone-voice', methods=['POST'])
+@auth_required
 def clone_voice():
     """Clone a voice from reference audio"""
     try:

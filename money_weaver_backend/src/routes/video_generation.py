@@ -3,10 +3,12 @@ from src.models.project import Project
 from src.models.task import Task
 from src.database import db
 from src.tasks.video_tasks import generate_assembler_video_task, generate_generative_video_task, batch_mix_videos_task
+from src.auth import auth_required
 
 video_bp = Blueprint('video', __name__)
 
 @video_bp.route('/generate/assembler', methods=['POST'])
+@auth_required
 def generate_assembler_video():
     """Generate video using the assembler workflow (stock footage + TTS)"""
     data = request.json
@@ -81,6 +83,7 @@ def generate_assembler_video():
     }), 202
 
 @video_bp.route('/generate/generative', methods=['POST'])
+@auth_required
 def generate_generative_video():
     """Generate video using the generative workflow (ComfyUI)"""
     data = request.json
@@ -119,6 +122,7 @@ def generate_generative_video():
     }), 202
 
 @video_bp.route('/batch-mix', methods=['POST'])
+@auth_required
 def batch_mix_videos():
     """Generate multiple video variations using batch mixing"""
     data = request.json
@@ -157,6 +161,7 @@ def batch_mix_videos():
     }), 202
 
 @video_bp.route('/task-status/<task_id>', methods=['GET'])
+@auth_required
 def get_task_status(task_id):
     """Get the status of a Celery task"""
     from src.services.celery_app import celery_app
@@ -275,6 +280,7 @@ def get_task_status(task_id):
 
 
 @video_bp.route('/voices', methods=['GET'])
+@auth_required
 def get_available_voices():
     """Get list of available voices"""
     try:
