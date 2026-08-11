@@ -4,8 +4,9 @@ import time
 import random
 import re
 from typing import List, Optional, Tuple, Dict
-import sys
-sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+
+# No sys.path hack needed; relative import works when module is used properly
+# (same package directory)
 
 _CAPTION_COLORS = {
     'white': (255, 255, 255, 255),
@@ -20,33 +21,63 @@ _CAPTION_COLORS = {
 
 
 def _font_path_for(name: str, bold: bool) -> str:
+    """Find a TTF font file for the given name and weight, cross-platform."""
     name = str(name or 'Arial')
-    base = '/System/Library/Fonts/Supplemental'
     candidates = []
+    # Common font directories across platforms
+    font_dirs = [
+        '/System/Library/Fonts/Supplemental',          # macOS
+        '/System/Library/Fonts',                       # macOS
+        '/Library/Fonts',                              # macOS
+        '/usr/share/fonts/truetype',                   # Linux
+        '/usr/share/fonts',                            # Linux
+        '/usr/local/share/fonts',                      # Linux
+        os.path.join(os.environ.get('WINDIR', ''), 'Fonts') if os.name == 'nt' else None,  # Windows
+    ]
+    font_dirs = [d for d in font_dirs if d and os.path.isdir(d)]
+    # Build candidate paths
     if bold:
-        candidates.append(os.path.join(base, f"{name} Bold.ttf"))
-        candidates.append(os.path.join(base, f"{name} Bold Italic.ttf"))
+        for base in ['', 'Bold ', 'Bold Italic ', ' Italic ']:
+            for d in font_dirs:
+                candidates.append(os.path.join(d, f"{name}{base}.ttf"))
+                candidates.append(os.path.join(d, f"{name}{base}.ttc"))
     else:
-        candidates.append(os.path.join(base, f"{name}.ttf"))
-        candidates.append(os.path.join(base, f"{name} Italic.ttf"))
-    candidates.append(os.path.join(base, 'Arial Bold.ttf' if bold else 'Arial.ttf'))
+        for base in ['', ' Italic ', ' Bold ']:
+            for d in font_dirs:
+                candidates.append(os.path.join(d, f"{name}{base}.ttf"))
+                candidates.append(os.path.join(d, f"{name}{base}.ttc"))
+    # Fallback common font files
+    for d in font_dirs:
+        candidates.append(os.path.join(d, 'DejaVuSans-Bold.ttf' if bold else 'DejaVuSans.ttf'))
+        candidates.append(os.path.join(d, 'Arial Bold.ttf' if bold else 'Arial.ttf'))
     for candidate in candidates:
         if os.path.exists(candidate):
             return candidate
-    return candidates[-1]
+    # Last resort: use PIL's default (no bold)
+    return ''  # will raise in truetype(), caller handles fallback
 
 
 def _render_caption_png(text: str, font_size: int, color, border: int,
                         regular_path: str, bold_path: str, width: int, height: int) -> Optional[str]:
     from PIL import Image, ImageDraw, ImageFont
-    regular_font = ImageFont.truetype(regular_path, font_size)
-    bold_font = ImageFont.truetype(bold_path, font_size)
+    # Load fonts with fallback
+    try:
+        regular_font = ImageFont.truetype(regular_path, font_size) if regular_path else ImageFont.load_default()
+    except Exception:
+        regular_font = ImageFont.load_default()
+    try:
+        bold_font = ImageFont.truetype(bold_path, font_size) if bold_path else regular_font
+    except Exception:
+        bold_font = regular_font
     runs = []
     index = 0
+    # Handle **bold** with non-greedy match; ignore empty matches
     for match in re.finditer(r'\*\*(.+?)\*\*', text):
         if match.start() > index:
             runs.append((text[index:match.start()], False))
-        runs.append((match.group(1), True))
+        inner = match.group(1)
+        if inner:
+            runs.append((inner, True))
         index = match.end()
     if index < len(text):
         runs.append((text[index:], False))
@@ -75,10 +106,13 @@ def _render_caption_png(text: str, font_size: int, color, border: int,
         return None
     line_height = font_size + max(8, border * 2)
     img_height = line_height * len(lines)
-    img = Image.new('RGBA', (width, img_height), (0, 0, 0, 0))
+    # Create full-resolution transparent image so overlay at 0,0 puts caption at bottom
+    img = Image.new('RGBA', (width, height), (0, 0, 0, 0))
     draw = ImageDraw.Draw(img)
     color_rgba = _CAPTION_COLORS.get(str(color).lower(), _CAPTION_COLORS['white'])
-    y = 0
+    # Draw from bottom up
+    total_text_height = line_height * len(lines)
+    y = height - total_text_height - margin
     for line, line_width in lines:
         x = (width - line_width) // 2
         for char, is_bold in line:
@@ -95,9 +129,9 @@ def _render_caption_png(text: str, font_size: int, color, border: int,
 
 def build_caption_pngs(segments: List[Dict], width: int, height: int) -> List[Dict]:
     """Segments: list of {text, start, end}. Return list of {path, start, end} overlay images."""
-    from src.services.video.video_settings import CAPTION_FONT, CAPTION_FONT_SIZE, CAPTION_COLOR, CAPTION_BORDER
+    from .video_settings import CAPTION_FONT, CAPTION_FONT_SIZE, CAPTION_COLOR, CAPTION_BORDER
     font_size = max(16, int(round(int(CAPTION_FONT_SIZE) * height / 1080)))
-    border = max(1, int(round(max(1, int(CAPTION_BORDER)) * height / 1080)))
+    border = max(1, int(round(int(CAPTION_BORDER) * height / 1080)))
     regular_path = _font_path_for(CAPTION_FONT, bold=False)
     bold_path = _font_path_for(CAPTION_FONT, bold=True)
     overlays = []
