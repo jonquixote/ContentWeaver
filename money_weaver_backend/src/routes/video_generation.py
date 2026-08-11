@@ -48,21 +48,25 @@ def generate_assembler_video():
     if not isinstance(height, int) or height <= 0:
         height = 1080
     
+    # Queue Celery task for assembler workflow with video settings
+    try:
+        celery_task = generate_assembler_video_task.delay(
+            project.id, 
+            data['prompt'],
+            duration=duration,
+            orientation=orientation,
+            width=width,
+            height=height
+        )
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': 'Task queue unavailable', 'details': str(e)}), 503
+
     # Update project status and voice type
     project.status = 'processing'
     project.workflow_type = 'assembler'
     project.voice_type = voice_type
     db.session.commit()
-    
-    # Queue Celery task for assembler workflow with video settings
-    celery_task = generate_assembler_video_task.delay(
-        project.id, 
-        data['prompt'],
-        duration=duration,
-        orientation=orientation,
-        width=width,
-        height=height
-    )
     
     # Create a task for tracking
     task = Task(
@@ -105,13 +109,17 @@ def generate_generative_video():
     if project.user_id != g.current_user['id']:
         return jsonify({'error': 'Forbidden'}), 403
     
+    # Queue Celery task for generative workflow
+    try:
+        celery_task = generate_generative_video_task.delay(project.id, data['prompt'])
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': 'Task queue unavailable', 'details': str(e)}), 503
+
     # Update project status
     project.status = 'processing'
     project.workflow_type = 'generative'
     db.session.commit()
-    
-    # Queue Celery task for generative workflow
-    celery_task = generate_generative_video_task.delay(project.id, data['prompt'])
     
     # Create a task for tracking
     task = Task(
@@ -148,12 +156,16 @@ def batch_mix_videos():
     if project.user_id != g.current_user['id']:
         return jsonify({'error': 'Forbidden'}), 403
     
+    # Queue Celery task for batch mixing
+    try:
+        celery_task = batch_mix_videos_task.delay(project.id, data['variations'])
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': 'Task queue unavailable', 'details': str(e)}), 503
+
     # Update project status
     project.status = 'processing'
     db.session.commit()
-    
-    # Queue Celery task for batch mixing
-    celery_task = batch_mix_videos_task.delay(project.id, data['variations'])
     
     # Create a task for tracking
     task = Task(
