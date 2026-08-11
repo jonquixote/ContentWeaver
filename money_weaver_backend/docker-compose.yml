@@ -57,6 +57,7 @@ services:
       - REDIS_URL=redis://redis:6379/0
       - DATABASE_URL=${DATABASE_URL:-postgresql://money_weaver:money_weaver_password_change_me@postgres:5432/money_weaver}
       - SECRET_KEY=${SECRET_KEY:?}
+      - LITELLM_MASTER_KEY=${LITELLM_MASTER_KEY:-sk-master-key-change-me}
       - MINIO_ENDPOINT=minio:9000
       - MINIO_ACCESS_KEY=${MINIO_ACCESS_KEY:-minioadmin-change-me}
       - MINIO_SECRET_KEY=${MINIO_SECRET_KEY:-minioadmin-change-me}
@@ -77,6 +78,7 @@ services:
       - REDIS_URL=redis://redis:6379/0
       - DATABASE_URL=${DATABASE_URL:-postgresql://money_weaver:money_weaver_password_change_me@postgres:5432/money_weaver}
       - SECRET_KEY=${SECRET_KEY:?}
+      - LITELLM_MASTER_KEY=${LITELLM_MASTER_KEY:-sk-master-key-change-me}
       - MINIO_ENDPOINT=minio:9000
       - MINIO_ACCESS_KEY=${MINIO_ACCESS_KEY:-minioadmin-change-me}
       - MINIO_SECRET_KEY=${MINIO_SECRET_KEY:-minioadmin-change-me}

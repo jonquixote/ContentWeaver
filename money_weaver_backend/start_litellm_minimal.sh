@@ -18,18 +18,18 @@ else
     exit 1
 fi
 
-# Set environment variables to disable database completely
-export LITELLM_DISABLE_DATABASE=true
-export NO_DOCS="True"
-export NO_REDOC="True"
-export DATABASE_URL=""
-export LITELLM_DATABASE_URL=""
-
 if [ -f .env ]; then
     set -a
     source .env
     set +a
 fi
+
+# Set environment variables to disable database completely (overrides .env)
+export LITELLM_DISABLE_DATABASE=true
+export NO_DOCS="True"
+export NO_REDOC="True"
+export DATABASE_URL=""
+export LITELLM_DATABASE_URL=""
 
 # Create a minimal config file
 cat > minimal_config.yaml << 'EOF'
