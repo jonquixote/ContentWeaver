@@ -5,6 +5,12 @@
 
 set -e  # Exit on any error
 
+if [ -f .env ]; then
+    set -a
+    source .env
+    set +a
+fi
+
 echo "Starting MoneyWeaver application..."
 
 # Function to check if a service is running

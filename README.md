@@ -52,7 +52,7 @@ Create a `.env` file in `money_weaver_backend/` with:
 ```
 DATABASE_URL=sqlite:///src/database/app.db
 REDIS_URL=redis://localhost:6379/0
-SECRET_KEY=your-secret-key
+SECRET_KEY=change-me-to-a-long-random-string
 GROQ_API_KEY=your-groq-api-key
 PEXELS_API_KEY=your-pexels-api-key
 PIXABAY_API_KEY=your-pixabay-api-key
