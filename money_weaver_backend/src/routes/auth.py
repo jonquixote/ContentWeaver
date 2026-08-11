@@ -71,10 +71,6 @@ def logout():
 @auth_bp.route('/auth/me', methods=['GET'])
 @auth_required
 def get_current_user():
-    # This would typically verify a token from the Authorization header
-    # For now, we'll return a mock user
-    return jsonify({
-        'id': 1,
-        'username': 'johndoe',
-        'email': 'john@example.com'
-    })
+    from flask import g
+    user = User.query.get_or_404(g.current_user['id'])
+    return jsonify(user.to_dict())
