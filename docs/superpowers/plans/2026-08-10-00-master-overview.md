@@ -49,7 +49,7 @@
 ## Key Findings Driving This Plan
 
 - **No auth on most endpoints** — IDOR on `/users/<id>`, `/projects/<id>`, `/api-keys/user/<id>`; `/auth/me` returns hardcoded user
-- **Hardcoded secrets** — `sk-master-key-change-me`, fallback SECRET_KEY in `src/main.py:23`
+- **Hardcoded secrets** — `<redacted>`, fallback SECRET_KEY in `src/main.py:23`
 - **Voice cloning is simulated** — `advanced_tts_service.clone_voice()` ignores reference audio, uses `af_heart`
 - **Frontend FormData bug** — `api.js:28-30` stringifies any object body, breaking `cloneVoice` multipart
 - **XSS** — `dangerouslySetInnerHTML` renders LLM script text unescaped (Dashboard.jsx:222-227)

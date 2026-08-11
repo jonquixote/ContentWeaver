@@ -20,7 +20,6 @@ fi
 
 # Set environment variables to disable database
 export LITELLM_DISABLE_DATABASE=true
-export LITELLM_DISABLE_AUTH=true
 export NO_DOCS="True"
 export NO_REDOC="True"
 export DATABASE_URL=""

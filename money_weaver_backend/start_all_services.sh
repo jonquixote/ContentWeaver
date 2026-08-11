@@ -25,9 +25,15 @@ pkill -f "celery" 2>/dev/null || true
 pkill -f "python.*main.py" 2>/dev/null || true
 sleep 3
 
+if [ -f .env ]; then
+    set -a
+    source .env
+    set +a
+fi
+
 # Start LiteLLM proxy in background with simplified config (no database)
 echo "Starting LiteLLM proxy..."
-LITELLM_DISABLE_DATABASE=true LITELLM_DISABLE_AUTH=true NO_DOCS="True" NO_REDOC="True" DATABASE_URL="" litellm --config litellm_config.yaml --port 8000 > litellm_proxy.log 2>&1 &
+LITELLM_DISABLE_DATABASE=true NO_DOCS="True" NO_REDOC="True" DATABASE_URL="" litellm --config litellm_config.yaml --port 8000 > litellm_proxy.log 2>&1 &
 LITELLM_PID=$!
 
 # Wait a moment for LiteLLM proxy to start

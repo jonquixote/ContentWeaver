@@ -298,7 +298,7 @@ git commit -m "fix: FormData upload, clipboard copy, add 404 route and toaster m
 Replace line 23:
 
 ```python
-app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'asdf#FGSgvasgf$5$WGT')
+app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', '<redacted-fallback>')
 ```
 
 with:
@@ -311,7 +311,7 @@ app.config['SECRET_KEY'] = os.environ['SECRET_KEY']
 
 - [ ] **Step 2: Update llm_service.py and api_keys.py**
 
-Replace `litellm.master_key = "sk-master-key-change-me"` with:
+Replace `litellm.master_key = "<redacted>"` with:
 
 ```python
 litellm.master_key = os.getenv('LITELLM_MASTER_KEY', '')
@@ -326,7 +326,7 @@ DATABASE_URL=sqlite:////Volumes/JOHNNY DISK/MoneyWeaver/money_weaver_backend/src
 REDIS_URL=redis://localhost:6379/0
 SECRET_KEY=change-me-to-a-long-random-string
 LITELLM_PROXY_URL=http://localhost:8000
-LITELLM_MASTER_KEY=sk-master-key-change-me
+LITELLM_MASTER_KEY=<redacted>
 GROQ_API_KEY=
 PEXELS_API_KEY=
 PIXABAY_API_KEY=
@@ -334,7 +334,7 @@ PIXABAY_API_KEY=
 
 - [ ] **Step 4: Verify**
 
-Run: `grep -rn "sk-master-key-change-me" money_weaver_backend/src/`
+Run: `grep -rn "<redacted>" money_weaver_backend/src/`
 Expected: only `.env.example` reference (the dev value), no hardcoded secrets in `.py` files.
 
 - [ ] **Step 5: Commit**

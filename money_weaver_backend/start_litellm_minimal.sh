@@ -26,8 +26,9 @@ export DATABASE_URL=""
 export LITELLM_DATABASE_URL=""
 
 if [ -f .env ]; then
-    export GROQ_API_KEY="$(grep -E '^GROQ_API_KEY=' .env | cut -d= -f2- || true)"
-    export LITELLM_MASTER_KEY="$(grep -E '^LITELLM_MASTER_KEY=' .env | cut -d= -f2- || true)"
+    set -a
+    source .env
+    set +a
 fi
 
 # Create a minimal config file
