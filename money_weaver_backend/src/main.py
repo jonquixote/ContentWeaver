@@ -18,6 +18,7 @@ from src.routes.video_generation import video_bp
 from src.routes.auth import auth_bp
 from src.routes.api_keys import api_keys_bp
 from src.routes.voice_cloning import voice_cloning_bp
+from src.routes.presets import presets_bp
 
 app = Flask(__name__, static_folder=os.path.join(os.path.dirname(__file__), 'static'))
 app.config['SECRET_KEY'] = os.environ['SECRET_KEY']
@@ -57,9 +58,25 @@ with app.app_context():
     from src.models.task import Task
     from src.models.media_asset import MediaAsset
     from src.models.api_key import ApiKey
+    from src.models.preset import FormatPreset
     
     # Create tables
     db.create_all()
+    
+    # Seed default format presets
+    SEED_PRESETS = [
+        ('YouTube Landscape', 'youtube', 1920, 1080, 30, 60, 600, True),
+        ('YouTube Shorts', 'shorts', 1080, 1920, 30, 15, 60, False),
+        ('TikTok', 'tiktok', 1080, 1920, 30, 15, 60, False),
+        ('Instagram Reels', 'reels', 1080, 1920, 30, 15, 60, False),
+        ('Instagram Square', 'instagram', 1080, 1080, 30, 15, 60, False),
+        ('Twitter/X', 'twitter', 1280, 720, 30, 15, 60, False),
+    ]
+    if FormatPreset.query.count() == 0:
+        for name, platform, w, h, fps, dmin, dmax, is_def in SEED_PRESETS:
+            db.session.add(FormatPreset(name=name, platform=platform, width=w, height=h,
+                                        fps=fps, duration_min=dmin, duration_max=dmax, is_default=is_def))
+        db.session.commit()
     
     # Debug: Print out what tables were created
     from sqlalchemy import inspect
@@ -75,6 +92,7 @@ app.register_blueprint(video_bp, url_prefix='/api')
 app.register_blueprint(auth_bp, url_prefix='/api')
 app.register_blueprint(api_keys_bp, url_prefix='/api')
 app.register_blueprint(voice_cloning_bp, url_prefix='/api')
+app.register_blueprint(presets_bp, url_prefix='/api')
 
 # Serve static files
 @app.route('/', defaults={'path': ''})
