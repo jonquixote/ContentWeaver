@@ -1,12 +1,34 @@
 from flask import Blueprint, jsonify, request, g
 from src.models.project import Project
 from src.models.task import Task
+from src.models.voice import Voice
 from src.database import db
 from src.tasks.video_tasks import generate_assembler_video_task, generate_generative_video_task, batch_mix_videos_task
 from src.auth import auth_required
 from src.validation import require_fields
 
 video_bp = Blueprint('video', __name__)
+
+
+def _resolve_owned_voice(voice_id, user_id):
+    """Coerce a payload voice_id and verify the caller owns that Voice.
+
+    Returns (voice_or_None, error_response_or_None). The task re-checks
+    ownership at run time; this gives the caller fast feedback (400/404/403)
+    before anything is queued.
+    """
+    if voice_id is None:
+        return None, None
+    try:
+        voice_id = int(voice_id)
+    except (TypeError, ValueError):
+        return None, (jsonify({'error': 'voice_id must be an integer'}), 400)
+    voice = Voice.query.get(voice_id)
+    if not voice:
+        return None, (jsonify({'error': 'Voice not found'}), 404)
+    if voice.user_id != user_id:
+        return None, (jsonify({'error': 'Forbidden'}), 403)
+    return voice, None
 
 @video_bp.route('/generate/assembler', methods=['POST'])
 @auth_required
@@ -47,7 +69,13 @@ def generate_assembler_video():
     
     if not isinstance(height, int) or height <= 0:
         height = 1080
-    
+
+    # Optional cloned voice owned by the caller
+    voice_id = data.get('voice_id')
+    voice, error = _resolve_owned_voice(voice_id, g.current_user['id'])
+    if error:
+        return error[0], error[1]
+
     # Create a task for tracking before queueing the Celery task
     task = Task(
         project_id=project.id,
@@ -60,12 +88,13 @@ def generate_assembler_video():
     # Queue Celery task for assembler workflow with video settings
     try:
         celery_task = generate_assembler_video_task.delay(
-            project.id, 
+            project.id,
             data['prompt'],
             duration=duration,
             orientation=orientation,
             width=width,
-            height=height
+            height=height,
+            voice_id=voice.id if voice else None
         )
     except Exception as e:
         db.session.delete(task)
@@ -91,7 +120,8 @@ def generate_assembler_video():
             'duration': duration,
             'orientation': orientation,
             'width': width,
-            'height': height
+            'height': height,
+            'voice_id': voice.id if voice else None
         }
     }), 202
 
@@ -112,7 +142,13 @@ def generate_generative_video():
         return jsonify({'error': 'Project not found'}), 404
     if project.user_id != g.current_user['id']:
         return jsonify({'error': 'Forbidden'}), 403
-    
+
+    # Optional cloned voice owned by the caller
+    voice_id = data.get('voice_id')
+    voice, error = _resolve_owned_voice(voice_id, g.current_user['id'])
+    if error:
+        return error[0], error[1]
+
     # Create a task for tracking before queueing the Celery task
     task = Task(
         project_id=project.id,
@@ -124,7 +160,9 @@ def generate_generative_video():
 
     # Queue Celery task for generative workflow
     try:
-        celery_task = generate_generative_video_task.delay(project.id, data['prompt'])
+        celery_task = generate_generative_video_task.delay(
+            project.id, data['prompt'], voice_id=voice.id if voice else None
+        )
     except Exception as e:
         db.session.delete(task)
         db.session.commit()

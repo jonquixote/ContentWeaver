@@ -11,10 +11,28 @@ from src.services.script_parsing_service import script_parsing_service
 import time
 import json
 import os
+import uuid
 from flask import Flask
 
 # Directory where final output videos are stored (served by main.py /final route)
 FINAL_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))), 'final')
+
+
+def write_voice_wav(wav_bytes, prefix='voice', work_dir=None):
+    """Persist synthesized WAV bytes into the shared work/ dir.
+
+    Returns the file path. Location matches where advanced_tts_service writes
+    Kokoro output (money_weaver_backend/work), so the MOSS 24kHz WAV slots into
+    the assembly pipeline interchangeably with Kokoro.
+    """
+    if not wav_bytes:
+        return None
+    work_dir = work_dir or advanced_tts_service.working_dir
+    os.makedirs(work_dir, exist_ok=True)
+    path = os.path.join(work_dir, f'{prefix}_{uuid.uuid4().hex}.wav')
+    with open(path, 'wb') as fh:
+        fh.write(wav_bytes)
+    return path
 
 def find_task_record(task_id, project_id, task_type):
     """Find the DB task record for a Celery task, tolerating the dispatch race.
@@ -104,9 +122,14 @@ def get_default_model():
     return "groq/llama-3.3-70b-versatile"
 
 @celery_app.task(bind=True, name='src.tasks.video_tasks.generate_assembler_video_task')
-def generate_assembler_video_task(self, project_id, prompt, duration=30, orientation="landscape", width=1920, height=1080):
+def generate_assembler_video_task(self, project_id, prompt, duration=30, orientation="landscape", width=1920, height=1080, voice_id=None):
     """
-    Generate video using the assembler workflow (stock footage + TTS)
+    Generate video using the assembler workflow (stock footage + TTS).
+
+    When voice_id is provided and names a Voice the project owner owns, the
+    narration is synthesized through the MOSS-TTS real voice-cloning service.
+    On ANY failure (service down, voice missing, bad reference) we fall back to
+    the Kokoro voice so video generation never hard-fails because TTS is down.
     """
     print(f"Starting generate_assembler_video_task with project_id: {project_id}")
     
@@ -187,11 +210,33 @@ def generate_assembler_video_task(self, project_id, prompt, duration=30, orienta
                     # If it's already a specific voice name, use it directly
                     voice = voice_type
             
-            # Try advanced TTS first, fallback to basic TTS
-            audio_file = advanced_tts_service.generate_tts(voiceover_text, model_type="kokoro", voice=voice)
+            # Try voice cloning first when the owner supplied a Voice id.
+            # Real cloning only runs for a Voice the project owner owns.
+            audio_file = None
+            if voice_id:
+                try:
+                    from src.models.voice import Voice
+                    from src.services.tts_client import synthesize
+                    voice_model = Voice.query.filter_by(id=voice_id, user_id=user_id).first()
+                    if voice_model and os.path.isfile(voice_model.reference_audio_url):
+                        wav_bytes = synthesize(
+                            voiceover_text,
+                            voice_model.reference_audio_url,
+                            voice_id=str(voice_model.id),
+                        )
+                        audio_file = write_voice_wav(wav_bytes, prefix=f'voice_{voice_model.id}')
+                    else:
+                        print(f"Voice {voice_id} not found / not owned by user {user_id} / reference missing; falling back to Kokoro")
+                except Exception as e:
+                    print(f"MOSS-TTS unavailable, falling back to Kokoro for voice_id={voice_id}: {e}")
+                    audio_file = None
+
+            # Fallback: Kokoro (or basic TTS) keeps video generation working
             if not audio_file:
-                # Fallback to original TTS service
-                audio_file = tts_service.generate_tts(voiceover_text)
+                audio_file = advanced_tts_service.generate_tts(voiceover_text, model_type="kokoro", voice=voice)
+                if not audio_file:
+                    # Fallback to original TTS service
+                    audio_file = tts_service.generate_tts(voiceover_text)
             
             if not audio_file:
                 raise Exception("Failed to generate voiceover")
@@ -309,9 +354,13 @@ def generate_assembler_video_task(self, project_id, prompt, duration=30, orienta
             raise exc
 
 @celery_app.task(bind=True, name='src.tasks.video_tasks.generate_generative_video_task')
-def generate_generative_video_task(self, project_id, prompt):
+def generate_generative_video_task(self, project_id, prompt, voice_id=None):
     """
-    Generate video using the generative workflow (ComfyUI)
+    Generate video using the generative workflow (ComfyUI).
+
+    voice_id is accepted for parity with the assembler task. This workflow has
+    no narration/audio stage (ComfyUI image/video generation only), so the id
+    is validated for ownership and recorded, but no speech is synthesized here.
     """
     # Create application context
     app = create_app_context()
@@ -332,7 +381,19 @@ def generate_generative_video_task(self, project_id, prompt):
                 task_record.status = 'running'
                 task_record.progress = 10
                 db.session.commit()
-                
+
+            # Validate an optional owner-scoped voice id (no audio stage here)
+            if voice_id is not None:
+                try:
+                    from src.models.voice import Voice
+                    voice_model = Voice.query.filter_by(id=voice_id, user_id=project.user_id).first()
+                    if voice_model:
+                        print(f"Generative task using voice {voice_model.id} ({voice_model.name})")
+                    else:
+                        print(f"Voice {voice_id} not found / not owned by user {project.user_id}; generative workflow has no narration stage, ignoring")
+                except Exception as e:
+                    print(f"Could not resolve voice {voice_id}: {e}")
+
             # Get default model
             default_model = get_default_model()
                 
@@ -530,11 +591,17 @@ def clone_voice_task(self, reference_audio_path, text, project_id):
                 
             # Update task status
             self.update_state(state='PROGRESS', meta={'current': 30, 'total': 100, 'status': 'Cloning voice...'})
-            
-            # Use advanced TTS service to clone voice and generate audio
-            from src.services.video.advanced_tts_service import advanced_tts_service
-            audio_file = advanced_tts_service.clone_voice(reference_audio_path, text)
-            
+
+            # Real zero-shot cloning via MOSS-TTS; fall back to the Kokoro
+            # default when the service is down so this never hard-fails.
+            from src.services.tts_client import synthesize
+            try:
+                wav_bytes = synthesize(text, reference_audio_path)
+                audio_file = write_voice_wav(wav_bytes, prefix='clone')
+            except Exception as e:
+                print(f"MOSS-TTS unavailable, falling back to Kokoro default for clone: {e}")
+                audio_file = advanced_tts_service.generate_tts(text, model_type="kokoro", voice='af_heart')
+
             if not audio_file:
                 raise Exception("Failed to clone voice and generate audio")
 
