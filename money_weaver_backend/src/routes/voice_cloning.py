@@ -46,7 +46,17 @@ def clone_voice():
             workflow_type='voice_cloning'
         )
         db.session.add(project)
-        
+        db.session.commit()
+
+        # Create a task for tracking before queueing the Celery task
+        task = Task(
+            project_id=project.id,
+            task_type='voice_cloning',
+            status='pending'
+        )
+        db.session.add(task)
+        db.session.commit()
+
         # Queue Celery task for voice cloning
         try:
             celery_task = clone_voice_task.delay(filepath, text, project.id)
@@ -55,17 +65,9 @@ def clone_voice():
             if os.path.exists(filepath):
                 os.remove(filepath)
             return jsonify({'error': 'Task queue unavailable', 'details': str(e)}), 503
-        
-        db.session.commit()
-        
-        # Create a task for tracking
-        task = Task(
-            project_id=project.id,
-            task_type='voice_cloning',
-            status='pending',
-            celery_task_id=celery_task.id
-        )
-        db.session.add(task)
+
+        # Associate the Celery task id with the tracking task
+        task.celery_task_id = celery_task.id
         db.session.commit()
         
         return jsonify({

@@ -48,6 +48,15 @@ def generate_assembler_video():
     if not isinstance(height, int) or height <= 0:
         height = 1080
     
+    # Create a task for tracking before queueing the Celery task
+    task = Task(
+        project_id=project.id,
+        task_type='assembler_video_generation',
+        status='pending'
+    )
+    db.session.add(task)
+    db.session.commit()
+
     # Queue Celery task for assembler workflow with video settings
     try:
         celery_task = generate_assembler_video_task.delay(
@@ -67,15 +76,9 @@ def generate_assembler_video():
     project.workflow_type = 'assembler'
     project.voice_type = voice_type
     db.session.commit()
-    
-    # Create a task for tracking
-    task = Task(
-        project_id=project.id,
-        task_type='assembler_video_generation',
-        status='pending',
-        celery_task_id=celery_task.id
-    )
-    db.session.add(task)
+
+    # Associate the Celery task id with the tracking task
+    task.celery_task_id = celery_task.id
     db.session.commit()
     
     return jsonify({
@@ -109,6 +112,15 @@ def generate_generative_video():
     if project.user_id != g.current_user['id']:
         return jsonify({'error': 'Forbidden'}), 403
     
+    # Create a task for tracking before queueing the Celery task
+    task = Task(
+        project_id=project.id,
+        task_type='generative_video_generation',
+        status='pending'
+    )
+    db.session.add(task)
+    db.session.commit()
+
     # Queue Celery task for generative workflow
     try:
         celery_task = generate_generative_video_task.delay(project.id, data['prompt'])
@@ -120,15 +132,9 @@ def generate_generative_video():
     project.status = 'processing'
     project.workflow_type = 'generative'
     db.session.commit()
-    
-    # Create a task for tracking
-    task = Task(
-        project_id=project.id,
-        task_type='generative_video_generation',
-        status='pending',
-        celery_task_id=celery_task.id
-    )
-    db.session.add(task)
+
+    # Associate the Celery task id with the tracking task
+    task.celery_task_id = celery_task.id
     db.session.commit()
     
     return jsonify({
@@ -156,6 +162,15 @@ def batch_mix_videos():
     if project.user_id != g.current_user['id']:
         return jsonify({'error': 'Forbidden'}), 403
     
+    # Create a task for tracking before queueing the Celery task
+    task = Task(
+        project_id=project.id,
+        task_type='batch_mix_generation',
+        status='pending'
+    )
+    db.session.add(task)
+    db.session.commit()
+
     # Queue Celery task for batch mixing
     try:
         celery_task = batch_mix_videos_task.delay(project.id, data['variations'])
@@ -166,15 +181,9 @@ def batch_mix_videos():
     # Update project status
     project.status = 'processing'
     db.session.commit()
-    
-    # Create a task for tracking
-    task = Task(
-        project_id=project.id,
-        task_type='batch_mix_generation',
-        status='pending',
-        celery_task_id=celery_task.id
-    )
-    db.session.add(task)
+
+    # Associate the Celery task id with the tracking task
+    task.celery_task_id = celery_task.id
     db.session.commit()
     
     return jsonify({
