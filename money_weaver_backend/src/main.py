@@ -7,7 +7,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 # Load environment variables
 load_dotenv()
 
-from flask import Flask, send_from_directory
+from flask import Flask, request, send_from_directory
 from flask_cors import CORS
 from src.database import db
 # Import models after db is defined to avoid circular imports
@@ -20,6 +20,7 @@ from src.routes.api_keys import api_keys_bp
 from src.routes.voice_cloning import voice_cloning_bp
 from src.routes.presets import presets_bp
 from src.routes.templates import templates_bp
+from src.models.token_blocklist import TokenBlocklist
 
 app = Flask(__name__, static_folder=os.path.join(os.path.dirname(__file__), 'static'))
 app.config['SECRET_KEY'] = os.environ['SECRET_KEY']
@@ -128,9 +129,26 @@ def serve_final_video(filename):
     # Use consolidated directory at the project root level
     final_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'final')
     file_path = os.path.join(final_dir, filename)
+
+    token = None
+    auth = request.headers.get('Authorization', '')
+    if auth.startswith('Bearer '):
+        token = auth[7:]
+    elif request.args.get('token'):
+        token = request.args.get('token')
+    if not token:
+        return "Authentication required", 401
+    try:
+        payload = jwt.decode(token, os.environ['SECRET_KEY'], algorithms=['HS256'])
+    except jwt.ExpiredSignatureError:
+        return "Token expired", 401
+    except jwt.InvalidTokenError:
+        return "Invalid token", 401
+    if payload.get('jti') and TokenBlocklist.query.filter_by(jti=payload['jti']).first():
+        return "Token revoked", 401
+
     if os.path.exists(file_path):
         response = send_from_directory(final_dir, filename)
-        response.headers['Content-Type'] = 'video/mp4'
         response.headers['Accept-Ranges'] = 'bytes'
         return response
     else:
