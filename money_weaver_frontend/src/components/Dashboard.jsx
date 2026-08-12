@@ -114,7 +114,7 @@ const Dashboard = ({ onCreateVideo }) => {
       try {
         const updatedTasks = await Promise.all(
           tasks.map(async (task) => {
-            if (task.status !== 'completed' && task.id) {
+            if (task.status !== 'completed' && task.status !== 'failed' && task.id) {
               try {
                 const statusRes = await api.getTaskStatus(task.id)
                 return {
@@ -334,8 +334,7 @@ const Dashboard = ({ onCreateVideo }) => {
                               console.log("Video URL:", selectedProject.video_url);
                               console.log("Absolute URL:", selectedProject.video_url.startsWith('/') ? `http://localhost:5004${selectedProject.video_url}` : selectedProject.video_url);
                               // Try to fetch the URL to see what content is actually returned
-                              const absoluteUrl = selectedProject.video_url.startsWith('/') ? `http://localhost:5004${selectedProject.video_url}` : selectedProject.video_url;
-                              fetch(absoluteUrl)
+                              fetch(absMediaUrl(selectedProject.video_url))
                                 .then(response => {
                                   console.log("URL fetch response:", response.status);
                                   console.log("Content-Type:", response.headers.get('Content-Type'));
