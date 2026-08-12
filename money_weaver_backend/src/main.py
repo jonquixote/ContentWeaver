@@ -64,6 +64,14 @@ with app.app_context():
     
     # Create tables
     db.create_all()
+
+    # Lightweight migrations for columns added after initial creation
+    from sqlalchemy import inspect as _inspect, text as _text
+    _cols = [c['name'] for c in _inspect(db.engine).get_columns('task')]
+    if 'thumbnail_path' not in _cols:
+        with db.engine.connect() as _conn:
+            _conn.execute(_text("ALTER TABLE task ADD COLUMN thumbnail_path VARCHAR(500)"))
+            _conn.commit()
     
     # Seed default format presets
     SEED_PRESETS = [

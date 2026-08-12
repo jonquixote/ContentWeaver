@@ -1,4 +1,5 @@
 from flask import Blueprint, jsonify, request, g
+import json
 from src.models.task import Task
 from src.models.project import Project
 from src.database import db
@@ -107,10 +108,48 @@ def get_task_status(task_id):
         return jsonify({'error': 'Not found'}), 404
     if project.user_id != g.current_user['id']:
         return jsonify({'error': 'Forbidden'}), 403
+
+    result = None
+    if task.result:
+        try:
+            result = json.loads(task.result)
+        except (ValueError, TypeError):
+            result = None
+
+    video_url = (result or {}).get('video_url') if isinstance(result, dict) else None
+    thumbnail_url = (result or {}).get('thumbnail_url') if isinstance(result, dict) else None
+
+    if task.status == 'failed':
+        message = task.error_message or 'Task failed'
+    elif task.status == 'completed':
+        message = 'Completed'
+    else:
+        message = _progress_message(task.progress)
+
     return jsonify({
         'id': task.id,
         'status': task.status,
         'progress': task.progress,
-        'error_message': task.error_message
+        'message': message,
+        'video_url': video_url,
+        'thumbnail_url': thumbnail_url,
+        'error': task.error_message
     })
+
+
+def _progress_message(progress):
+    """Map a progress percentage to a human message, matching the plan's status shape."""
+    if progress < 10:
+        return 'Queued...'
+    if progress < 20:
+        return 'Generating script...'
+    if progress < 40:
+        return 'Generating voiceover...'
+    if progress < 80:
+        return 'Searching for stock footage...'
+    if progress < 90:
+        return 'Assembling video...'
+    if progress < 100:
+        return 'Generating thumbnail...'
+    return 'Completed'
 

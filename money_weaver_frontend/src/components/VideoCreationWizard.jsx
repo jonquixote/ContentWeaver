@@ -118,7 +118,7 @@ const VideoCreationWizard = ({ onBack }) => {
       }
 
       console.log('Video generation started:', response)
-      setTaskId(response.celery_task_id)
+      setTaskId(response.task_id)
       // Don't go back to dashboard immediately, show progress tracker instead
     } catch (error) {
       console.error('Failed to create video:', error)

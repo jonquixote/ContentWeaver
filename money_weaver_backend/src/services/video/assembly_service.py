@@ -157,6 +157,27 @@ def build_caption_pngs(segments: List[Dict], width: int, height: int) -> List[Di
         return []
     return overlays
 
+def generate_thumbnail(video_path, width=1280):
+    """Extract a thumbnail from a video, skipping the first 2s (likely black intro)."""
+    import subprocess
+    if not os.path.exists(video_path):
+        return None
+    out_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))), 'final')
+    os.makedirs(out_dir, exist_ok=True)
+    base = os.path.splitext(os.path.basename(video_path))[0]
+    out_path = os.path.join(out_dir, f"{base}_thumb.jpg")
+    cmd = ['ffmpeg', '-ss', '2', '-i', video_path, '-frames:v', '1', '-vf', f'scale={width}:-2', '-q:v', '2', '-y', out_path]
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+        if result.returncode == 0 and os.path.exists(out_path) and os.path.getsize(out_path) > 0:
+            print(f"Thumbnail created: {out_path}")
+            return out_path
+        print(f"Thumbnail generation failed: {result.stderr[-300:]}")
+    except Exception as e:
+        print(f"Error generating thumbnail: {e}")
+    return None
+
+
 class VideoAssemblyService:
     def __init__(self):
         # Use consolidated directories at the project root level

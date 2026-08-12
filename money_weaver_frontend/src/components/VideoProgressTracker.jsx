@@ -4,6 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Progress } from '@/components/ui/progress'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { useTaskStatus } from '@/hooks/useTaskStatus'
 import { 
   Settings, 
   FileText, 
@@ -35,107 +36,72 @@ const VideoProgressTracker = ({ taskId, onClose }) => {
 
   const [error, setError] = useState(null)
 
-  useEffect(() => {
-    if (!taskId) return
+  const { status } = useTaskStatus(taskId, true, 3000)
 
-    const fetchProgress = async () => {
-      try {
-        const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5004/api'}/task-status/${taskId}`)
-        
-        // Check if response is OK
-        if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`)
-        }
-        
-        // Check content type
-        const contentType = response.headers.get('content-type')
-        if (!contentType || !contentType.includes('application/json')) {
-          const text = await response.text()
-          console.error('Non-JSON response:', text)
-          throw new Error('Received non-JSON response from server')
-        }
-        
-        const data = await response.json()
-        
-        // Update overall progress
+  useEffect(() => {
+    if (!status) return
+
+    // Update overall progress
+    setProgress(prev => ({
+      ...prev,
+      state: status.status === 'completed' ? 'SUCCESS' : status.status === 'failed' ? 'FAILURE' : 'PROGRESS',
+      current: status.progress || 0,
+      total: 100,
+      status: status.message || (status.status === 'completed' ? 'Video generation completed successfully!' : 'Processing...')
+    }))
+
+    // Update step statuses based on progress
+    setProgress(prev => {
+      const steps = [...prev.steps]
+      const progressPercent = status.progress || 0
+      
+      // Update step statuses based on progress percentage
+      if (progressPercent >= 0) steps[0].status = 'completed' // Init
+      if (progressPercent >= 10) steps[1].status = 'completed' // Script
+      if (progressPercent >= 20) steps[1].status = 'completed'
+      if (progressPercent >= 30) steps[2].status = 'completed' // Voiceover
+      if (progressPercent >= 40) steps[2].status = 'completed'
+      if (progressPercent >= 50) steps[3].status = 'completed' // Stock footage
+      if (progressPercent >= 70) steps[3].status = 'completed'
+      if (progressPercent >= 80) steps[4].status = 'in-progress' // Assembly
+      if (progressPercent >= 90) steps[4].status = 'completed'
+      if (progressPercent >= 100) {
+        steps[4].status = 'completed'
+        steps[5].status = 'completed' // Complete
+      }
+      
+      // Mark current step as in-progress
+      if (progressPercent >= 10 && progressPercent < 30) steps[1].status = 'in-progress'
+      else if (progressPercent >= 30 && progressPercent < 50) steps[2].status = 'in-progress'
+      else if (progressPercent >= 50 && progressPercent < 80) steps[3].status = 'in-progress'
+      else if (progressPercent >= 80 && progressPercent < 100) steps[4].status = 'in-progress'
+      
+      return { ...prev, steps }
+    })
+
+    // Handle completion / failure
+    if (status.status === 'completed') {
+      setTimeout(() => {
         setProgress(prev => ({
           ...prev,
-          state: data.state,
-          current: data.current || 0,
-          total: data.total || 100,
-          status: data.status || 'Processing...'
+          state: 'SUCCESS',
+          current: 100,
+          status: 'Video generation completed successfully!'
         }))
-
-        // Update step statuses based on progress
-        setProgress(prev => {
-          const steps = [...prev.steps]
-          const progressPercent = data.current ? (data.current / data.total) * 100 : 0
-          
-          // Update step statuses based on progress percentage
-          if (progressPercent >= 0) steps[0].status = 'completed' // Init
-          if (progressPercent >= 10) steps[1].status = 'completed' // Script
-          if (progressPercent >= 20) steps[1].status = 'completed'
-          if (progressPercent >= 30) steps[2].status = 'completed' // Voiceover
-          if (progressPercent >= 40) steps[2].status = 'completed'
-          if (progressPercent >= 50) steps[3].status = 'completed' // Stock footage
-          if (progressPercent >= 70) steps[3].status = 'completed'
-          if (progressPercent >= 80) steps[4].status = 'in-progress' // Assembly
-          if (progressPercent >= 90) steps[4].status = 'completed'
-          if (progressPercent >= 100) {
-            steps[4].status = 'completed'
-            steps[5].status = 'completed' // Complete
-          }
-          
-          // Mark current step as in-progress
-          if (progressPercent >= 10 && progressPercent < 30) steps[1].status = 'in-progress'
-          else if (progressPercent >= 30 && progressPercent < 50) steps[2].status = 'in-progress'
-          else if (progressPercent >= 50 && progressPercent < 80) steps[3].status = 'in-progress'
-          else if (progressPercent >= 80 && progressPercent < 100) steps[4].status = 'in-progress'
-          
-          return { ...prev, steps }
-        })
-
-        // Handle completion
-        if (data.state === 'SUCCESS') {
-          setTimeout(() => {
-            setProgress(prev => ({
-              ...prev,
-              state: 'SUCCESS',
-              current: 100,
-              status: 'Video generation completed successfully!'
-            }))
-            // Update all steps to completed
-            setProgress(prev => ({
-              ...prev,
-              steps: prev.steps.map(step => ({ ...step, status: 'completed' }))
-            }))
-          }, 1000)
-        } else if (data.state === 'FAILURE') {
-          setError(data.status || 'Video generation failed')
-          setProgress(prev => ({
-            ...prev,
-            state: 'FAILURE',
-            status: data.status || 'Video generation failed'
-          }))
-        }
-      } catch (err) {
-        console.error('Error fetching progress:', err)
-        // Don't set error state for network errors, just log them
-        // This prevents the UI from breaking on temporary network issues
-        if (err.name !== 'TypeError') {
-          setError('Failed to fetch progress updates: ' + err.message)
-        }
-      }
+        setProgress(prev => ({
+          ...prev,
+          steps: prev.steps.map(step => ({ ...step, status: 'completed' }))
+        }))
+      }, 1000)
+    } else if (status.status === 'failed') {
+      setError(status.error || 'Video generation failed')
+      setProgress(prev => ({
+        ...prev,
+        state: 'FAILURE',
+        status: status.error || 'Video generation failed'
+      }))
     }
-
-    // Fetch progress immediately
-    fetchProgress()
-    
-    // Poll for updates every 3 seconds
-    const interval = setInterval(fetchProgress, 3000)
-    
-    return () => clearInterval(interval)
-  }, [taskId])
+  }, [status])
 
   const getStepIcon = (step) => {
     switch (step.id) {
@@ -268,7 +234,14 @@ const VideoProgressTracker = ({ taskId, onClose }) => {
             >
               <CheckCircle className="h-12 w-12 text-green-500 mx-auto mb-2" />
               <h3 className="text-lg font-medium text-white mb-1">Video Generation Complete!</h3>
-              <p className="text-green-200">Your video has been successfully created.</p>
+              <p className="text-green-200 mb-4">Your video has been successfully created.</p>
+              {status?.video_url && (
+                <video
+                  src={status.video_url}
+                  controls
+                  className="mx-auto max-w-full rounded-lg border border-green-700"
+                />
+              )}
             </motion.div>
           )}
         </AnimatePresence>

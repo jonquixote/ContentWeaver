@@ -6,7 +6,7 @@ from src.services.llm_service import llm_service
 from src.services.video.stock_footage_service import stock_service
 from src.services.video.tts_service import tts_service
 from src.services.video.advanced_tts_service import advanced_tts_service
-from src.services.video.assembly_service import assembly_service
+from src.services.video.assembly_service import assembly_service, generate_thumbnail
 from src.services.script_parsing_service import script_parsing_service
 import time
 import json
@@ -56,6 +56,14 @@ def create_app_context():
         print("Creating tables...")
         # Create tables if they don't exist
         db.create_all()
+
+        # Lightweight migrations for columns added after initial creation
+        from sqlalchemy import inspect as _inspect, text as _text
+        _cols = [c['name'] for c in _inspect(db.engine).get_columns('task')]
+        if 'thumbnail_path' not in _cols:
+            with db.engine.connect() as _conn:
+                _conn.execute(_text("ALTER TABLE task ADD COLUMN thumbnail_path VARCHAR(500)"))
+                _conn.commit()
         
         # Debug: Print out what tables were created
         from sqlalchemy import inspect
@@ -219,10 +227,19 @@ def generate_assembler_video_task(self, project_id, prompt, duration=30, orienta
             # Check if the video file actually exists
             if not os.path.exists(final_video_path):
                 raise Exception(f"Video file was not created at {final_video_path}")
-            
+
+            # Generate thumbnail from the assembled video
+            self.update_state(state='PROGRESS', meta={'current': 90, 'total': 100, 'status': 'Generating thumbnail...'})
+            thumbnail_path = generate_thumbnail(final_video_path)
+            if task_record:
+                task_record.progress = 90
+                task_record.thumbnail_path = thumbnail_path
+                db.session.commit()
+
             # Final result
             result = {
                 'video_url': f'/final/{output_filename}',
+                'thumbnail_url': f'/final/{os.path.basename(thumbnail_path)}' if thumbnail_path else None,
                 'script': script,
                 'duration': duration,
                 'resolution': f"{width}x{height}",

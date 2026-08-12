@@ -15,6 +15,7 @@ class Task(get_db().Model):
     progress = get_db().Column(get_db().Integer, default=0)  # 0-100
     result = get_db().Column(get_db().Text)  # JSON result data
     error_message = get_db().Column(get_db().Text)
+    thumbnail_path = get_db().Column(get_db().String(500))
     celery_task_id = get_db().Column(get_db().String(255))  # Celery task ID for tracking
     created_at = get_db().Column(get_db().DateTime, default=datetime.utcnow)
     updated_at = get_db().Column(get_db().DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
@@ -34,6 +35,7 @@ class Task(get_db().Model):
             'progress': self.progress,
             'result': self.result,
             'error_message': self.error_message,
+            'thumbnail_path': self.thumbnail_path,
             'celery_task_id': self.celery_task_id,
             'created_at': self.created_at.isoformat() if self.created_at else None,
             'updated_at': self.updated_at.isoformat() if self.updated_at else None
