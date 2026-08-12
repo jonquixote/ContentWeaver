@@ -1,0 +1,19 @@
+# Run in tts_service/.venv (python 3.12). NEVER install into main venv.
+fastapi==0.116.1
+uvicorn[standard]==0.35.0
+# torch capped at 2.2.2 for macOS Intel x86_64 (no wheels >= 2.3)
+torch==2.2.2
+torchaudio==2.2.2
+onnxruntime>=1.20.0
+soundfile>=0.12.1
+numpy>=1.26.0,<2.0
+requests>=2.31.0
+# MOSS-TTS-Nano runtime needs these (imported by onnx_tts_runtime / lazy download):
+sentencepiece>=0.1.99
+huggingface_hub>=0.30.0
+# python-multipart for uploads if serving ref directly
+python-multipart==0.0.20
+# MOSS-TTS-Nano source installed from the local clone (git-ignored):
+#   pip install --no-deps -e ./MOSS-TTS-Nano
+# Its pyproject pins torch==2.7.0 — install with --no-deps and keep the pins above.
+# ONNX weights (~728MB) lazy-download to <repo>/models on first /tts.

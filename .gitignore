@@ -47,3 +47,10 @@ generated_videos/
 htmlcov/
 .coverage
 test_work/
+
+# MOSS-TTS microservice: source clone + downloaded ONNX weights stay out of git
+# (weights ~728MB lazy-download at runtime; plan global constraint: never store
+# raw reference audio or model weights in git).
+money_weaver_backend/tts_service/MOSS-TTS-Nano/
+money_weaver_backend/tts_service/models/
+money_weaver_backend/tts_service/generated_audio/
