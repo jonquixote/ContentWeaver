@@ -68,7 +68,8 @@ def generate_assembler_video():
             height=height
         )
     except Exception as e:
-        db.session.rollback()
+        db.session.delete(task)
+        db.session.commit()
         return jsonify({'error': 'Task queue unavailable', 'details': str(e)}), 503
 
     # Update project status and voice type
@@ -125,7 +126,8 @@ def generate_generative_video():
     try:
         celery_task = generate_generative_video_task.delay(project.id, data['prompt'])
     except Exception as e:
-        db.session.rollback()
+        db.session.delete(task)
+        db.session.commit()
         return jsonify({'error': 'Task queue unavailable', 'details': str(e)}), 503
 
     # Update project status
@@ -175,7 +177,8 @@ def batch_mix_videos():
     try:
         celery_task = batch_mix_videos_task.delay(project.id, data['variations'])
     except Exception as e:
-        db.session.rollback()
+        db.session.delete(task)
+        db.session.commit()
         return jsonify({'error': 'Task queue unavailable', 'details': str(e)}), 503
 
     # Update project status

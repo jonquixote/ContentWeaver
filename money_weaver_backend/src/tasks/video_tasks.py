@@ -14,7 +14,7 @@ import os
 from flask import Flask
 
 # Directory where final output videos are stored (served by main.py /final route)
-FINAL_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'final')
+FINAL_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))), 'final')
 
 def create_app_context():
     """Create Flask app context for database operations"""

@@ -9,6 +9,7 @@ load_dotenv()
 
 from flask import Flask, request, send_from_directory
 from flask_cors import CORS
+import jwt
 from src.database import db
 # Import models after db is defined to avoid circular imports
 from src.routes.user import user_bp

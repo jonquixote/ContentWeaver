@@ -61,7 +61,9 @@ def clone_voice():
         try:
             celery_task = clone_voice_task.delay(filepath, text, project.id)
         except Exception as e:
-            db.session.rollback()
+            db.session.delete(task)
+            db.session.delete(project)
+            db.session.commit()
             if os.path.exists(filepath):
                 os.remove(filepath)
             return jsonify({'error': 'Task queue unavailable', 'details': str(e)}), 503
