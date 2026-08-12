@@ -16,6 +16,26 @@ from flask import Flask
 # Directory where final output videos are stored (served by main.py /final route)
 FINAL_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))), 'final')
 
+def find_task_record(task_id, project_id, task_type):
+    """Find the DB task record for a Celery task, tolerating the dispatch race.
+
+    Routes commit the Task row (pending) before .delay(), then update
+    celery_task_id after dispatch returns. A fast worker may start before that
+    second commit, so the celery_task_id lookup can miss; retry briefly, then
+    fall back to the newest pending task for the project.
+    """
+    for _ in range(10):
+        task_record = Task.query.filter_by(celery_task_id=task_id).first()
+        if task_record:
+            return task_record
+        time.sleep(0.1)
+    return (
+        Task.query
+        .filter_by(project_id=project_id, task_type=task_type, status='pending')
+        .order_by(Task.id.desc())
+        .first()
+    )
+
 def create_app_context():
     """Create Flask app context for database operations"""
     print("Creating app context...")
@@ -112,7 +132,7 @@ def generate_assembler_video_task(self, project_id, prompt, duration=30, orienta
             print(f"User ID: {user_id}")
             
             # Find the associated task record in the database
-            task_record = Task.query.filter_by(celery_task_id=task_id).first()
+            task_record = find_task_record(task_id, project_id, 'assembler_video_generation')
             
             # Get default model
             default_model = get_default_model()
@@ -273,7 +293,7 @@ def generate_assembler_video_task(self, project_id, prompt, duration=30, orienta
             # Update task record and project status to failed
             try:
                 db.session.rollback()
-                task_record = Task.query.filter_by(celery_task_id=self.request.id).first()
+                task_record = find_task_record(self.request.id, project_id, 'assembler_video_generation')
                 if task_record:
                     task_record.status = 'failed'
                     task_record.error_message = str(exc)
@@ -307,7 +327,7 @@ def generate_generative_video_task(self, project_id, prompt):
                 raise Exception("Project not found")
                 
             # Find the associated task record in the database
-            task_record = Task.query.filter_by(celery_task_id=self.request.id).first()
+            task_record = find_task_record(self.request.id, project_id, 'generative_video_generation')
             if task_record:
                 task_record.status = 'running'
                 task_record.progress = 10
@@ -388,7 +408,7 @@ def generate_generative_video_task(self, project_id, prompt):
             # Update task record and project status to failed
             try:
                 db.session.rollback()
-                task_record = Task.query.filter_by(celery_task_id=self.request.id).first()
+                task_record = find_task_record(self.request.id, project_id, 'generative_video_generation')
                 if task_record:
                     task_record.status = 'failed'
                     task_record.error_message = str(exc)
@@ -416,7 +436,7 @@ def batch_mix_videos_task(self, project_id, variations):
             total_variations = len(variations)
             
             # Find the associated task record in the database
-            task_record = Task.query.filter_by(celery_task_id=self.request.id).first()
+            task_record = find_task_record(self.request.id, project_id, 'batch_mix_generation')
             if task_record:
                 task_record.status = 'running'
                 task_record.progress = 10
@@ -474,7 +494,7 @@ def batch_mix_videos_task(self, project_id, variations):
             # Update task record status to failed
             try:
                 db.session.rollback()
-                task_record = Task.query.filter_by(celery_task_id=self.request.id).first()
+                task_record = find_task_record(self.request.id, project_id, 'batch_mix_generation')
                 if task_record:
                     task_record.status = 'failed'
                     task_record.error_message = str(exc)
@@ -541,7 +561,7 @@ def clone_voice_task(self, reference_audio_path, text, project_id):
             }
             
             # Update task record in database
-            task_record = Task.query.filter_by(celery_task_id=self.request.id).first()
+            task_record = find_task_record(self.request.id, project_id, 'voice_cloning')
             if task_record:
                 task_record.status = 'completed'
                 task_record.progress = 100
@@ -559,7 +579,7 @@ def clone_voice_task(self, reference_audio_path, text, project_id):
             # Update project and task record status to failed
             try:
                 db.session.rollback()
-                task_record = Task.query.filter_by(celery_task_id=self.request.id).first()
+                task_record = find_task_record(self.request.id, project_id, 'voice_cloning')
                 if task_record:
                     task_record.status = 'failed'
                     task_record.error_message = str(exc)
