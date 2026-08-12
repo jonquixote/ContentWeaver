@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -25,13 +25,29 @@ const VideoCreationWizard = ({ onBack }) => {
     duration: '30',
     style: 'professional',
     voiceType: 'female',
+    voiceId: null,
     language: 'en',
     orientation: 'landscape',
     width: '1920',
     height: '1080'
   })
+  const [voices, setVoices] = useState([])
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [taskId, setTaskId] = useState(null)
+
+  useEffect(() => {
+    let cancelled = false
+    ApiService.getVoices()
+      .then((data) => {
+        if (!cancelled && Array.isArray(data)) {
+          setVoices(data)
+        }
+      })
+      .catch((err) => console.error('Failed to load voices:', err))
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   const totalSteps = 4
   const progress = (currentStep / totalSteps) * 100
@@ -109,13 +125,16 @@ const VideoCreationWizard = ({ onBack }) => {
       if (formData.workflowType === 'assembler') {
         response = await ApiService.generateAssemblerVideo(project.id, formData.prompt, {
           voice_type: formData.voiceType,
+          voice_id: formData.voiceId,
           duration: parseInt(formData.duration),
           orientation: formData.orientation,
           width: parseInt(formData.width),
           height: parseInt(formData.height)
         })
       } else {
-        response = await ApiService.generateGenerativeVideo(project.id, formData.prompt)
+        response = await ApiService.generateGenerativeVideo(project.id, formData.prompt, {
+          voice_id: formData.voiceId
+        })
       }
 
       console.log('Video generation started:', response)
@@ -472,6 +491,26 @@ const VideoCreationWizard = ({ onBack }) => {
                         </Select>
                       </div>
                     </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="clonedVoice" className="text-white">Cloned Voice</Label>
+                      <Select
+                        value={formData.voiceId ? String(formData.voiceId) : 'default'}
+                        onValueChange={(value) => handleInputChange('voiceId', value === 'default' ? null : Number(value))}
+                      >
+                        <SelectTrigger className="bg-slate-700 border-slate-600 text-white">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="default">Default (Kokoro)</SelectItem>
+                          {voices.map((voice) => (
+                            <SelectItem key={voice.id} value={String(voice.id)}>
+                              {voice.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
                   </CardContent>
                 </Card>
               </motion.div>
@@ -528,6 +567,14 @@ const VideoCreationWizard = ({ onBack }) => {
                           <div>
                             <p className="text-slate-400">Voice:</p>
                             <p className="text-slate-300">{formData.voiceType}</p>
+                          </div>
+                          <div>
+                            <p className="text-slate-400">Cloned Voice:</p>
+                            <p className="text-slate-300">
+                              {formData.voiceId
+                                ? (voices.find((v) => v.id === formData.voiceId)?.name || `#${formData.voiceId}`)
+                                : 'Default (Kokoro)'}
+                            </p>
                           </div>
                           <div>
                             <p className="text-slate-400">Orientation:</p>

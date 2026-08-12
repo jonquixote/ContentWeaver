@@ -360,27 +360,3 @@ def get_task_status(task_id):
     
     return jsonify(response)
 
-
-@video_bp.route('/voices', methods=['GET'])
-@auth_required
-def get_available_voices():
-    """Get list of available voices"""
-    try:
-        from src.services.video.advanced_tts_service import advanced_tts_service
-        
-        voices = {
-            'female': advanced_tts_service.available_voices.get('female', []),
-            'male': advanced_tts_service.available_voices.get('male', []),
-            'default': advanced_tts_service.available_voices.get('default', 'af_heart')
-        }
-        
-        return jsonify({
-            'voices': voices,
-            'status': 'success'
-        })
-    except Exception as e:
-        return jsonify({
-            'error': str(e),
-            'status': 'error'
-        }), 500
-

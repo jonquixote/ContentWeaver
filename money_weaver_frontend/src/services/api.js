@@ -159,10 +159,14 @@ class ApiService {
     })
   }
 
-  async generateGenerativeVideo(projectId, prompt) {
+  async generateGenerativeVideo(projectId, prompt, options = {}) {
     return this.request('/generate/generative', {
       method: 'POST',
-      body: { project_id: projectId, prompt },
+      body: {
+        project_id: projectId,
+        prompt,
+        ...options,
+      },
     })
   }
 
@@ -178,19 +182,36 @@ class ApiService {
   }
 
   // Voice endpoints
-  async getAvailableVoices() {
+  async getVoices() {
     return this.request('/voices')
   }
 
-  async cloneVoice(audioFile, text) {
-    const formData = new FormData()
-    formData.append('audio', audioFile)
-    formData.append('text', text)
-    
-    return this.request('/clone-voice', {
+  async createVoice(formData) {
+    return this.request('/voices', {
       method: 'POST',
       body: formData,
     })
+  }
+
+  async previewVoice(voiceId, text) {
+    return this.request(`/voices/${voiceId}/preview`, {
+      method: 'POST',
+      body: { text },
+    })
+  }
+
+  async deleteVoice(voiceId) {
+    return this.request(`/voices/${voiceId}`, {
+      method: 'DELETE',
+    })
+  }
+
+  // Authed URL for server-asset routes (/final/...) that can't send a Bearer
+  // header (e.g. <audio src>). The backend accepts the token via ?token=.
+  getAuthedAssetUrl(path) {
+    const base = API_BASE_URL.replace(/\/api\/?$/, '')
+    const sep = path.includes('?') ? '&' : '?'
+    return `${base}${path}${this.token ? `${sep}token=${encodeURIComponent(this.token)}` : ''}`
   }
 
   // API Key endpoints
