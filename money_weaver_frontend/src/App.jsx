@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { BrowserRouter as Router, Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom'
 import Dashboard from './components/Dashboard'
+import ProjectDetail from './pages/ProjectDetail'
 import VideoCreationWizard from './components/VideoCreationWizard'
 import VoiceCloning from './components/VoiceCloning'
 import SettingsPage from './components/SettingsPage'
@@ -87,6 +88,14 @@ function AppContent() {
         element={
           <ProtectedRoute>
             <VideoCreationWizard onBack={() => navigate('/dashboard')} />
+          </ProtectedRoute>
+        } 
+      />
+      <Route 
+        path="/projects/:id" 
+        element={
+          <ProtectedRoute>
+            <ProjectDetail />
           </ProtectedRoute>
         } 
       />
