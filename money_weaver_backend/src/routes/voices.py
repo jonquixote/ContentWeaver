@@ -13,7 +13,7 @@ from src.auth import auth_required
 
 voices_bp = Blueprint('voices', __name__)
 
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 UPLOAD_DIR = os.environ.get('UPLOAD_DIR', os.path.join(BASE_DIR, 'uploads'))
 FINAL_DIR = os.environ.get('FINAL_DIR', os.path.join(BASE_DIR, 'final'))
 FFPROBE_PATH = os.environ.get('FFPROBE_PATH', '/usr/local/bin/ffprobe')

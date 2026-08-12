@@ -15,7 +15,7 @@ import uuid
 from flask import Flask
 
 # Directory where final output videos are stored (served by main.py /final route)
-FINAL_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))), 'final')
+FINAL_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), 'final')
 
 
 def write_voice_wav(wav_bytes, prefix='voice', work_dir=None):
