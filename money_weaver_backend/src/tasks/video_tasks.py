@@ -13,6 +13,9 @@ import json
 import os
 from flask import Flask
 
+# Directory where final output videos are stored (served by main.py /final route)
+FINAL_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'final')
+
 def create_app_context():
     """Create Flask app context for database operations"""
     print("Creating app context...")
@@ -269,6 +272,7 @@ def generate_assembler_video_task(self, project_id, prompt, duration=30, orienta
         except Exception as exc:
             # Update task record and project status to failed
             try:
+                db.session.rollback()
                 task_record = Task.query.filter_by(celery_task_id=self.request.id).first()
                 if task_record:
                     task_record.status = 'failed'
@@ -351,8 +355,10 @@ def generate_generative_video_task(self, project_id, prompt):
                 db.session.commit()
             
             # Final result
+            output_filename = f"project_{project_id}_generative.mp4"
+            video_url = f'/final/{output_filename}' if os.path.exists(os.path.join(FINAL_DIR, output_filename)) else None
             result = {
-                'video_url': f'/videos/project_{project_id}_generative.mp4',
+                'video_url': video_url,
                 'prompt': enhanced_prompt,
                 'duration': 15,
                 'model_used': 'Wan2.2',
@@ -381,6 +387,7 @@ def generate_generative_video_task(self, project_id, prompt):
         except Exception as exc:
             # Update task record and project status to failed
             try:
+                db.session.rollback()
                 task_record = Task.query.filter_by(celery_task_id=self.request.id).first()
                 if task_record:
                     task_record.status = 'failed'
@@ -431,9 +438,14 @@ def batch_mix_videos_task(self, project_id, variations):
                 time.sleep(2)  # Simulate processing each variation
             
             # Final result
+            video_urls = []
+            for i in range(total_variations):
+                variation_filename = f"project_{project_id}_variation_{i}.mp4"
+                if os.path.exists(os.path.join(FINAL_DIR, variation_filename)):
+                    video_urls.append(f'/final/{variation_filename}')
             result = {
                 'variations_generated': total_variations,
-                'video_urls': [f'/videos/project_{project_id}_variation_{i}.mp4' for i in range(total_variations)],
+                'video_urls': video_urls,
                 'status': 'completed'
             }
             
@@ -442,6 +454,13 @@ def batch_mix_videos_task(self, project_id, variations):
                 task_record.status = 'completed'
                 task_record.progress = 100
                 task_record.result = json.dumps(result)
+                db.session.commit()
+            
+            # Update project with completed status and video URL
+            project = db.session.get(Project, project_id)
+            if project:
+                project.status = 'completed'
+                project.video_url = result['video_urls'][0] if result['video_urls'] else None
                 db.session.commit()
             
             return {
@@ -454,12 +473,16 @@ def batch_mix_videos_task(self, project_id, variations):
         except Exception as exc:
             # Update task record status to failed
             try:
+                db.session.rollback()
                 task_record = Task.query.filter_by(celery_task_id=self.request.id).first()
                 if task_record:
                     task_record.status = 'failed'
                     task_record.error_message = str(exc)
                     task_record.result = json.dumps({'error': str(exc), 'status': 'failed'})
-                    db.session.commit()
+                project = db.session.get(Project, project_id)
+                if project:
+                    project.status = 'failed'
+                db.session.commit()
             except:
                 pass  # Ignore errors in error handling
 
@@ -494,6 +517,14 @@ def clone_voice_task(self, reference_audio_path, text, project_id):
             
             if not audio_file:
                 raise Exception("Failed to clone voice and generate audio")
+
+            # Copy the generated audio into the served final/ directory
+            import shutil
+            os.makedirs(FINAL_DIR, exist_ok=True)
+            final_audio_path = os.path.join(FINAL_DIR, os.path.basename(audio_file))
+            if os.path.abspath(audio_file) != os.path.abspath(final_audio_path):
+                shutil.copy2(audio_file, final_audio_path)
+            audio_file = final_audio_path
                 
             # Update task status
             self.update_state(state='PROGRESS', meta={'current': 80, 'total': 100, 'status': 'Saving cloned voice...'})
@@ -509,6 +540,14 @@ def clone_voice_task(self, reference_audio_path, text, project_id):
                 'status': 'completed'
             }
             
+            # Update task record in database
+            task_record = Task.query.filter_by(celery_task_id=self.request.id).first()
+            if task_record:
+                task_record.status = 'completed'
+                task_record.progress = 100
+                task_record.result = json.dumps(result)
+                db.session.commit()
+            
             return {
                 'current': 100,
                 'total': 100,
@@ -517,12 +556,18 @@ def clone_voice_task(self, reference_audio_path, text, project_id):
             }
             
         except Exception as exc:
-            # Update project status to failed
+            # Update project and task record status to failed
             try:
+                db.session.rollback()
+                task_record = Task.query.filter_by(celery_task_id=self.request.id).first()
+                if task_record:
+                    task_record.status = 'failed'
+                    task_record.error_message = str(exc)
+                    task_record.result = json.dumps({'error': str(exc), 'status': 'failed'})
                 project = db.session.get(Project, project_id)
                 if project:
                     project.status = 'failed'
-                    db.session.commit()
+                db.session.commit()
             except:
                 pass  # Ignore errors in error handling
 
