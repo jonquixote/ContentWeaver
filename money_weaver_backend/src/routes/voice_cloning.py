@@ -34,6 +34,8 @@ def clone_voice():
         # Get text from form data
         text = request.form.get('text', '')
         if not text:
+            if os.path.exists(filepath):
+                os.remove(filepath)
             return jsonify({'error': 'Text is required for voice cloning'}), 400
         
         # Create a project for the cloned voice
