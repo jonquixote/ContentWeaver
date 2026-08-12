@@ -2,7 +2,6 @@ from flask import Blueprint, jsonify, request, g
 from src.models.template import VideoTemplate
 from src.database import db
 from src.auth import auth_required
-from src.validation import require_fields
 
 templates_bp = Blueprint('templates', __name__)
 
@@ -21,10 +20,12 @@ def get_templates():
 @auth_required
 def create_template():
     data = request.json
-    try:
-        require_fields(data, ['name', 'config'])
-    except ValueError as e:
-        return jsonify({'error': str(e)}), 400
+    if not isinstance(data, dict):
+        return jsonify({'error': 'Request body must be a JSON object'}), 400
+    if not data.get('name'):
+        return jsonify({'error': 'Missing required fields: name'}), 400
+    if 'config' not in data:
+        return jsonify({'error': 'Missing required fields: config'}), 400
 
     template = VideoTemplate(
         name=data['name'],
@@ -54,10 +55,10 @@ def update_template(template_id):
     if template.user_id != g.current_user['id']:
         return jsonify({'error': 'Forbidden'}), 403
     data = request.json
-    try:
-        require_fields(data, [])
-    except ValueError as e:
-        return jsonify({'error': str(e)}), 400
+    if not isinstance(data, dict):
+        return jsonify({'error': 'Request body must be a JSON object'}), 400
+    if 'name' in data and not data['name']:
+        return jsonify({'error': 'name must be a non-empty string'}), 400
 
     template.name = data.get('name', template.name)
     template.description = data.get('description', template.description)
