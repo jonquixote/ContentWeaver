@@ -35,9 +35,11 @@ def _font_path_for(name: str, bold: bool) -> str:
         os.path.join(os.environ.get('WINDIR', ''), 'Fonts') if os.name == 'nt' else None,  # Windows
     ]
     font_dirs = [d for d in font_dirs if d and os.path.isdir(d)]
-    # Build candidate paths
+    # Build candidate paths. For bold, check bold variants first so a plain
+    # file like "Arial.ttf" never shadows "Arial Bold.ttf" (otherwise **bold**
+    # markers silently render regular).
     if bold:
-        for base in ['', 'Bold ', 'Bold Italic ', ' Italic ']:
+        for base in [' Bold', ' Bold Italic', 'Bold', 'Bold Italic', '']:
             for d in font_dirs:
                 candidates.append(os.path.join(d, f"{name}{base}.ttf"))
                 candidates.append(os.path.join(d, f"{name}{base}.ttc"))
@@ -105,7 +107,6 @@ def _render_caption_png(text: str, font_size: int, color, border: int,
     if not lines:
         return None
     line_height = font_size + max(8, border * 2)
-    img_height = line_height * len(lines)
     # Create full-resolution transparent image so overlay at 0,0 puts caption at bottom
     img = Image.new('RGBA', (width, height), (0, 0, 0, 0))
     draw = ImageDraw.Draw(img)
@@ -135,15 +136,25 @@ def build_caption_pngs(segments: List[Dict], width: int, height: int) -> List[Di
     regular_path = _font_path_for(CAPTION_FONT, bold=False)
     bold_path = _font_path_for(CAPTION_FONT, bold=True)
     overlays = []
-    for segment in segments or []:
-        text = str(segment.get('text') or '').strip()
-        start = float(segment.get('start') or 0)
-        end = float(segment.get('end') or start)
-        if not text or end <= start:
-            continue
-        path = _render_caption_png(text, font_size, CAPTION_COLOR, border, regular_path, bold_path, width, height)
-        if path and os.path.exists(path):
-            overlays.append({'path': path, 'start': start, 'end': end})
+    try:
+        for segment in segments or []:
+            text = str(segment.get('text') or '').strip()
+            start = float(segment.get('start') or 0)
+            end = float(segment.get('end') or start)
+            if not text or end <= start:
+                continue
+            path = _render_caption_png(text, font_size, CAPTION_COLOR, border, regular_path, bold_path, width, height)
+            if path and os.path.exists(path):
+                overlays.append({'path': path, 'start': start, 'end': end})
+    except Exception as e:
+        # Caption rendering must never fail generation; drop captions, clean partials.
+        print(f"Error building caption PNGs, skipping captions: {e}")
+        for overlay in overlays:
+            try:
+                os.remove(overlay['path'])
+            except Exception:
+                pass
+        return []
     return overlays
 
 class VideoAssemblyService:
@@ -560,13 +571,16 @@ class VideoAssemblyService:
                 print(f"Captions burned into: {video_path}")
             else:
                 print(f"Caption burn failed, keeping plain video: {result.stderr[-300:]}")
-                if os.path.exists(temp_path):
-                    os.remove(temp_path)
             return video_path
         except Exception as e:
             print(f"Error burning captions: {e}")
             return video_path
         finally:
+            if os.path.exists(temp_path):
+                try:
+                    os.remove(temp_path)
+                except Exception:
+                    pass
             for caption in captions:
                 path = caption.get('path')
                 if path and os.path.exists(path):

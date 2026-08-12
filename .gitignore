@@ -45,3 +45,4 @@ generated_videos/
 .pytest_cache/
 htmlcov/
 .coverage
+test_work/
