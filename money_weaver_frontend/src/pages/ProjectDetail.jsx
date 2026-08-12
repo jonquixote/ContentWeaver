@@ -13,7 +13,8 @@ import '../App.css'
 
 const resolveUrl = (url) => {
   if (!url) return null
-  return url.startsWith('/') ? `http://localhost:5004${url}` : url
+  const abs = url.startsWith('/') ? `http://localhost:5004${url}` : url
+  return `${abs}${abs.includes('?') ? '&' : '?'}token=${encodeURIComponent(localStorage.getItem('authToken') || '')}`
 }
 
 const getStatusColor = (status) => {
@@ -85,13 +86,17 @@ const ProjectDetail = () => {
           }
           return updated
         }))
+        if (status.status === 'completed' || status.status === 'failed') {
+          clearInterval(interval)
+        }
       } catch (err) {
         console.error('Failed to fetch task status:', err)
       }
     }, 5000)
 
     return () => clearInterval(interval)
-  }, [tasks])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTask?.id])
 
   if (loading) {
     return (

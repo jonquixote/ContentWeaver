@@ -7,6 +7,7 @@ export function useTaskStatus(taskId, enabled = false, intervalMs = 3000) {
   const [status, setStatus] = useState(null)
   const [error, setError] = useState(null)
   const doneRef = useRef(false)
+  const timerRef = useRef(null)
 
   const poll = useCallback(async () => {
     if (!taskId || !enabled || doneRef.current) return
@@ -16,6 +17,10 @@ export function useTaskStatus(taskId, enabled = false, intervalMs = 3000) {
       setError(null)
       if (TERMINAL.has(res.status)) {
         doneRef.current = true
+        if (timerRef.current) {
+          clearInterval(timerRef.current)
+          timerRef.current = null
+        }
       }
     } catch (err) {
       setError(err)
@@ -27,8 +32,10 @@ export function useTaskStatus(taskId, enabled = false, intervalMs = 3000) {
     doneRef.current = false
     poll()
     const timer = setInterval(poll, intervalMs)
+    timerRef.current = timer
     return () => {
       clearInterval(timer)
+      timerRef.current = null
       doneRef.current = true
     }
   }, [taskId, enabled, intervalMs, poll])

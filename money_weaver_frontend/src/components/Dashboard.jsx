@@ -27,6 +27,11 @@ const escapeHtml = (str) => String(str ?? '')
   .replace(/"/g, '&quot;')
   .replace(/'/g, '&#39;')
 
+// Backend /final/ media requires auth via query token
+const mediaUrl = (path) => path ? `${path}${path.includes('?') ? '&' : '?'}token=${encodeURIComponent(localStorage.getItem('authToken') || '')}` : path
+
+const absMediaUrl = (path) => path ? mediaUrl(path.startsWith('/') ? `http://localhost:5004${path}` : path) : path
+
 // Helper function to format markdown for audio transcripts
 const formatScriptMarkdown = (script) => {
   if (!script) return "No script generated yet";
@@ -109,13 +114,13 @@ const Dashboard = ({ onCreateVideo }) => {
       try {
         const updatedTasks = await Promise.all(
           tasks.map(async (task) => {
-            if (task.status !== 'completed' && task.celery_task_id) {
+            if (task.status !== 'completed' && task.id) {
               try {
-                const status = await api.getCeleryTaskStatus(task.celery_task_id)
+                const statusRes = await api.getTaskStatus(task.id)
                 return {
                   ...task,
-                  status: status.state.toLowerCase(),
-                  progress: status.current || 0
+                  status: statusRes.status,
+                  progress: statusRes.progress
                 }
               } catch (err) {
                 console.error('Failed to fetch task status:', err)
@@ -269,7 +274,7 @@ const Dashboard = ({ onCreateVideo }) => {
                               <Button 
                                 variant="default" 
                                 className="bg-purple-600 hover:bg-purple-700"
-                                onClick={() => window.open(selectedProject.video_url.startsWith('/') ? `http://localhost:5004${selectedProject.video_url}` : selectedProject.video_url, '_blank')}
+                                onClick={() => window.open(absMediaUrl(selectedProject.video_url), '_blank')}
                               >
                                 Open in New Tab
                               </Button>
@@ -278,7 +283,7 @@ const Dashboard = ({ onCreateVideo }) => {
                                 className="border-slate-600 text-slate-300 hover:bg-slate-700"
                                 onClick={() => {
                                   // Convert relative URL to absolute if needed
-                                  const absoluteUrl = selectedProject.video_url.startsWith('/') ? `http://localhost:5004${selectedProject.video_url}` : selectedProject.video_url;
+                                  const absoluteUrl = absMediaUrl(selectedProject.video_url);
                                   
                                   // Check if it's a blob or data URL
                                   if (absoluteUrl.startsWith('blob:') || absoluteUrl.startsWith('data:')) {
@@ -321,7 +326,7 @@ const Dashboard = ({ onCreateVideo }) => {
                           </div>
                         ) : (
                                                     <video 
-                            src={selectedProject.video_url.startsWith('/') ? `http://localhost:5004${selectedProject.video_url}` : selectedProject.video_url}
+                            src={absMediaUrl(selectedProject.video_url)}
                             controls 
                             className="absolute top-0 left-0 w-full h-full"
                             onError={(e) => {
@@ -413,7 +418,7 @@ const Dashboard = ({ onCreateVideo }) => {
                           className="border-slate-600 text-slate-300 hover:bg-slate-600"
                           onClick={() => {
                             const link = document.createElement('a');
-                            link.href = selectedProject.video_url;
+                            link.href = absMediaUrl(selectedProject.video_url);
                             link.download = `video-${selectedProject.id}.mp4`;
                             document.body.appendChild(link);
                             link.click();

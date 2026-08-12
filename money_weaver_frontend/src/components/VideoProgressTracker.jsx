@@ -6,6 +6,13 @@ import { Progress } from '@/components/ui/progress'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { useTaskStatus } from '@/hooks/useTaskStatus'
+
+// Backend /final/ media requires auth via query token
+const absMediaUrl = (path) => {
+  if (!path) return path
+  const abs = path.startsWith('/') ? `http://localhost:5004${path}` : path
+  return `${abs}${abs.includes('?') ? '&' : '?'}token=${encodeURIComponent(localStorage.getItem('authToken') || '')}`
+}
 import { 
   Settings, 
   FileText, 
@@ -238,7 +245,7 @@ const VideoProgressTracker = ({ taskId, onClose }) => {
               <p className="text-green-200 mb-4">Your video has been successfully created.</p>
               {status?.video_url && (
                 <video
-                  src={status.video_url}
+                  src={absMediaUrl(status.video_url)}
                   controls
                   className="mx-auto max-w-full rounded-lg border border-green-700"
                 />
