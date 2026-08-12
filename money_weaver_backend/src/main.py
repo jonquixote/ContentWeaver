@@ -21,6 +21,7 @@ from src.routes.api_keys import api_keys_bp
 from src.routes.voice_cloning import voice_cloning_bp
 from src.routes.presets import presets_bp
 from src.routes.templates import templates_bp
+from src.routes.voices import voices_bp
 from src.models.token_blocklist import TokenBlocklist
 
 app = Flask(__name__, static_folder=os.path.join(os.path.dirname(__file__), 'static'))
@@ -63,6 +64,7 @@ with app.app_context():
     from src.models.api_key import ApiKey
     from src.models.preset import FormatPreset
     from src.models.template import VideoTemplate
+    from src.models.voice import Voice
     
     # Create tables
     db.create_all()
@@ -106,6 +108,7 @@ app.register_blueprint(api_keys_bp, url_prefix='/api')
 app.register_blueprint(voice_cloning_bp, url_prefix='/api')
 app.register_blueprint(presets_bp, url_prefix='/api')
 app.register_blueprint(templates_bp, url_prefix='/api')
+app.register_blueprint(voices_bp, url_prefix='/api')
 
 # Serve static files
 @app.route('/', defaults={'path': ''})
