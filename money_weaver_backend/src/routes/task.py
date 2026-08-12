@@ -17,12 +17,12 @@ def get_tasks():
         project_ids = [p.id for p in projects]
         if not project_ids:
             return jsonify([])
-        tasks = Task.query.filter(Task.project_id.in_(project_ids)).all()
+        tasks = Task.query.filter(Task.project_id.in_(project_ids)).order_by(Task.id.desc()).all()
         return jsonify([task.to_dict() for task in tasks])
     project = Project.query.get(project_id)
     if not project or project.user_id != g.current_user['id']:
         return jsonify({'error': 'Forbidden'}), 403
-    tasks = Task.query.filter_by(project_id=project_id).all()
+    tasks = Task.query.filter_by(project_id=project_id).order_by(Task.id.desc()).all()
     return jsonify([task.to_dict() for task in tasks])
 
 @task_bp.route('/tasks', methods=['POST'])

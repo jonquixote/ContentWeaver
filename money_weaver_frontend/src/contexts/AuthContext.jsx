@@ -43,15 +43,11 @@ export const AuthProvider = ({ children }) => {
   }, [])
 
   const login = async (credentials) => {
-    try {
-      const response = await api.login(credentials)
-      const { user, token } = response
-      setUser(user)
-      api.setToken(token)
-      return user
-    } catch (error) {
-      throw error
-    }
+    const response = await api.login(credentials)
+    const { user, token } = response
+    setUser(user)
+    api.setToken(token)
+    return user
   }
 
   const logout = async () => {
@@ -66,19 +62,15 @@ export const AuthProvider = ({ children }) => {
   }
 
   const register = async (userData) => {
-    try {
-      const response = await api.register({
-        username: userData.name,
-        email: userData.email,
-        password: userData.password
-      })
-      const { user, token } = response
-      setUser(user)
-      api.setToken(token)
-      return user
-    } catch (error) {
-      throw error
-    }
+    const response = await api.register({
+      username: userData.name,
+      email: userData.email,
+      password: userData.password
+    })
+    const { user, token } = response
+    setUser(user)
+    api.setToken(token)
+    return user
   }
 
   const value = {

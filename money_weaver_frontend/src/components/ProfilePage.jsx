@@ -23,7 +23,7 @@ const ProfilePage = () => {
     confirm: '',
   })
 
-  const [billing, setBilling] = useState({
+  const [billing] = useState({
     plan: 'Pro',
     nextBilling: '2025-10-01',
     paymentMethod: 'Visa ending in 1234',

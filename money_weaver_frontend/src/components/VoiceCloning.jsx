@@ -11,7 +11,7 @@ const VoiceCloning = () => {
   const [clonedVoice, setClonedVoice] = useState(null)
   const [isCloning, setIsCloning] = useState(false)
   const [text, setText] = useState('')
-  const [clonedAudio, setClonedAudio] = useState(null)
+  const [clonedAudio] = useState(null)
 
   const handleFileUpload = (event) => {
     const file = event.target.files[0]

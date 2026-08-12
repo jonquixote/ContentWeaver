@@ -70,8 +70,8 @@ const ProjectDetail = () => {
   }, [id])
 
   // Poll task status for live progress
+  const activeTask = tasks.find(t => t.status !== 'completed' && t.status !== 'failed')
   useEffect(() => {
-    const activeTask = tasks.find(t => t.status !== 'completed' && t.status !== 'failed')
     if (!activeTask) return
 
     const interval = setInterval(async () => {
@@ -129,7 +129,7 @@ const ProjectDetail = () => {
 
   if (!project) return null
 
-  const latestTask = tasks.length > 0 ? tasks[tasks.length - 1] : null
+  const latestTask = tasks.length > 0 ? tasks[0] : null
   const taskResult = parseTaskResult(latestTask)
   const videoUrl = resolveUrl(taskResult.video_url || project.video_url)
   const thumbnailUrl = resolveUrl(taskResult.thumbnail_url)

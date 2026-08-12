@@ -26,6 +26,10 @@ def create_template():
         return jsonify({'error': 'Missing required fields: name'}), 400
     if 'config' not in data:
         return jsonify({'error': 'Missing required fields: config'}), 400
+    if not isinstance(data['name'], str) or not (1 <= len(data['name']) <= 100):
+        return jsonify({'error': 'name must be a string between 1 and 100 characters'}), 400
+    if not isinstance(data['config'], dict):
+        return jsonify({'error': 'config must be a JSON object'}), 400
 
     template = VideoTemplate(
         name=data['name'],
@@ -57,8 +61,10 @@ def update_template(template_id):
     data = request.json
     if not isinstance(data, dict):
         return jsonify({'error': 'Request body must be a JSON object'}), 400
-    if 'name' in data and not data['name']:
-        return jsonify({'error': 'name must be a non-empty string'}), 400
+    if 'name' in data and (not isinstance(data['name'], str) or not (1 <= len(data['name']) <= 100)):
+        return jsonify({'error': 'name must be a string between 1 and 100 characters'}), 400
+    if 'config' in data and not isinstance(data['config'], dict):
+        return jsonify({'error': 'config must be a JSON object'}), 400
 
     template.name = data.get('name', template.name)
     template.description = data.get('description', template.description)
