@@ -19,6 +19,13 @@ import {
 import { ScrollArea } from '@/components/ui/scroll-area'
 import '../App.css'
 
+const escapeHtml = (str) => String(str ?? '')
+  .replace(/&/g, '&amp;')
+  .replace(/</g, '&lt;')
+  .replace(/>/g, '&gt;')
+  .replace(/"/g, '&quot;')
+  .replace(/'/g, '&#39;')
+
 // Helper function to format markdown for audio transcripts
 const formatScriptMarkdown = (script) => {
   if (!script) return "No script generated yet";
@@ -30,23 +37,23 @@ const formatScriptMarkdown = (script) => {
   lines.forEach(line => {
     if (line.startsWith('## ') || line.startsWith('# ')) {
       // Format headers
-      formattedLines.push(`<strong class="block text-lg my-3 script-content scene">${line.replace(/^#+\s*/, '')}</strong>`);
+      formattedLines.push(`<strong class="block text-lg my-3 script-content scene">${escapeHtml(line.replace(/^#+\s*/, ''))}</strong>`);
     } else if (/^\d+\.\s/.test(line)) {
       // Format numbered scenes
-      formattedLines.push(`<div class="my-3 p-2 bg-slate-700 rounded"><strong class="script-content scene">${line}</strong></div>`);
+      formattedLines.push(`<div class="my-3 p-2 bg-slate-700 rounded"><strong class="script-content scene">${escapeHtml(line)}</strong></div>`);
     } else if (/^(\w+(?:\s+\w+)*):\s*(.*)/.test(line)) {
       // Format dialogue lines (Speaker: text)
       const match = line.match(/^(\w+(?:\s+\w+)*):\s*(.*)/);
-      formattedLines.push(`<div class="my-2"><span class="font-semibold script-content speaker">${match[1]}:</span> <span class="script-content">${match[2]}</span></div>`);
+      formattedLines.push(`<div class="my-2"><span class="font-semibold script-content speaker">${escapeHtml(match[1])}:</span> <span class="script-content">${escapeHtml(match[2])}</span></div>`);
     } else if (line.startsWith('[') && line.endsWith(']')) {
       // Format action descriptions in brackets
-      formattedLines.push(`<em class="script-content action">${line}</em>`);
+      formattedLines.push(`<em class="script-content action">${escapeHtml(line)}</em>`);
     } else if (line.trim() === '') {
       // Handle empty lines
       formattedLines.push('<br />');
     } else {
       // Regular text
-      formattedLines.push(`<span class="script-content">${line}</span>`);
+      formattedLines.push(`<span class="script-content">${escapeHtml(line)}</span>`);
     }
   });
   

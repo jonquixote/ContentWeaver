@@ -267,24 +267,22 @@ def generate_assembler_video_task(self, project_id, prompt, duration=30, orienta
             }
             
         except Exception as exc:
-            # Update project status to failed
+            # Update task record and project status to failed
             try:
+                task_record = Task.query.filter_by(celery_task_id=self.request.id).first()
+                if task_record:
+                    task_record.status = 'failed'
+                    task_record.error_message = str(exc)
+                    task_record.result = json.dumps({'error': str(exc), 'status': 'failed'})
                 project = db.session.get(Project, project_id)
                 if project:
                     project.status = 'failed'
-                    db.session.commit()
+                db.session.commit()
             except:
                 pass  # Ignore errors in error handling
                 
-            # Return a properly formatted result for Celery
-            # Don't use update_state with FAILURE state as it can cause issues
-            return {
-                'current': 0,
-                'total': 100,
-                'status': 'FAILED',
-                'error': str(exc),
-                'exc_type': type(exc).__name__
-            }
+            # Re-raise so Celery marks the task as FAILURE
+            raise exc
 
 @celery_app.task(bind=True, name='src.tasks.video_tasks.generate_generative_video_task')
 def generate_generative_video_task(self, project_id, prompt):
@@ -304,6 +302,13 @@ def generate_generative_video_task(self, project_id, prompt):
             if not project:
                 raise Exception("Project not found")
                 
+            # Find the associated task record in the database
+            task_record = Task.query.filter_by(celery_task_id=self.request.id).first()
+            if task_record:
+                task_record.status = 'running'
+                task_record.progress = 10
+                db.session.commit()
+                
             # Get default model
             default_model = get_default_model()
                 
@@ -318,6 +323,11 @@ def generate_generative_video_task(self, project_id, prompt):
             # Update project with enhanced prompt
             project.script = enhanced_prompt
             db.session.commit()
+
+            # Update task record in database
+            if task_record:
+                task_record.progress = 30
+                db.session.commit()
             
             # Simulate ComfyUI workflow construction
             self.update_state(state='PROGRESS', meta={'current': 20, 'total': 100, 'status': 'Constructing ComfyUI workflow...'})
@@ -335,6 +345,11 @@ def generate_generative_video_task(self, project_id, prompt):
             self.update_state(state='PROGRESS', meta={'current': 80, 'total': 100, 'status': 'Post-processing video...'})
             time.sleep(2)
             
+            # Update task record in database
+            if task_record:
+                task_record.progress = 80
+                db.session.commit()
+            
             # Final result
             result = {
                 'video_url': f'/videos/project_{project_id}_generative.mp4',
@@ -349,6 +364,13 @@ def generate_generative_video_task(self, project_id, prompt):
             project.status = 'completed'
             db.session.commit()
             
+            # Update task record in database
+            if task_record:
+                task_record.status = 'completed'
+                task_record.progress = 100
+                task_record.result = json.dumps(result)
+                db.session.commit()
+            
             return {
                 'current': 100,
                 'total': 100,
@@ -357,24 +379,22 @@ def generate_generative_video_task(self, project_id, prompt):
             }
             
         except Exception as exc:
-            # Update project status to failed
+            # Update task record and project status to failed
             try:
+                task_record = Task.query.filter_by(celery_task_id=self.request.id).first()
+                if task_record:
+                    task_record.status = 'failed'
+                    task_record.error_message = str(exc)
+                    task_record.result = json.dumps({'error': str(exc), 'status': 'failed'})
                 project = db.session.get(Project, project_id)
                 if project:
                     project.status = 'failed'
-                    db.session.commit()
+                db.session.commit()
             except:
                 pass  # Ignore errors in error handling
                 
-            # Return a properly formatted result for Celery
-            # Don't use update_state with FAILURE state as it can cause issues
-            return {
-                'current': 0,
-                'total': 100,
-                'status': 'FAILED',
-                'error': str(exc),
-                'exc_type': type(exc).__name__
-            }
+            # Re-raise so Celery marks the task as FAILURE
+            raise exc
 
 @celery_app.task(bind=True, name='src.tasks.video_tasks.batch_mix_videos_task')
 def batch_mix_videos_task(self, project_id, variations):
@@ -388,6 +408,13 @@ def batch_mix_videos_task(self, project_id, variations):
         try:
             total_variations = len(variations)
             
+            # Find the associated task record in the database
+            task_record = Task.query.filter_by(celery_task_id=self.request.id).first()
+            if task_record:
+                task_record.status = 'running'
+                task_record.progress = 10
+                db.session.commit()
+            
             for i, variation in enumerate(variations):
                 progress = int((i / total_variations) * 100)
                 self.update_state(
@@ -398,6 +425,9 @@ def batch_mix_videos_task(self, project_id, variations):
                         'status': f'Processing variation {i+1} of {total_variations}...'
                     }
                 )
+                if task_record:
+                    task_record.progress = progress
+                    db.session.commit()
                 time.sleep(2)  # Simulate processing each variation
             
             # Final result
@@ -407,6 +437,13 @@ def batch_mix_videos_task(self, project_id, variations):
                 'status': 'completed'
             }
             
+            # Update task record in database
+            if task_record:
+                task_record.status = 'completed'
+                task_record.progress = 100
+                task_record.result = json.dumps(result)
+                db.session.commit()
+            
             return {
                 'current': 100,
                 'total': 100,
@@ -415,15 +452,19 @@ def batch_mix_videos_task(self, project_id, variations):
             }
             
         except Exception as exc:
-            # Return a properly formatted result for Celery
-            # Don't use update_state with FAILURE state as it can cause issues
-            return {
-                'current': 0,
-                'total': 100,
-                'status': 'FAILED',
-                'error': str(exc),
-                'exc_type': type(exc).__name__
-            }
+            # Update task record status to failed
+            try:
+                task_record = Task.query.filter_by(celery_task_id=self.request.id).first()
+                if task_record:
+                    task_record.status = 'failed'
+                    task_record.error_message = str(exc)
+                    task_record.result = json.dumps({'error': str(exc), 'status': 'failed'})
+                    db.session.commit()
+            except:
+                pass  # Ignore errors in error handling
+
+            # Re-raise so Celery marks the task as FAILURE
+            raise exc
 
 
 @celery_app.task(bind=True, name='src.tasks.video_tasks.clone_voice_task')
@@ -484,12 +525,6 @@ def clone_voice_task(self, reference_audio_path, text, project_id):
                     db.session.commit()
             except:
                 pass  # Ignore errors in error handling
-                
-            # Return a properly formatted result for Celery
-            return {
-                'current': 0,
-                'total': 100,
-                'status': 'FAILED',
-                'error': str(exc),
-                'exc_type': type(exc).__name__
-            }
+
+            # Re-raise so Celery propagates a real FAILURE state
+            raise exc
