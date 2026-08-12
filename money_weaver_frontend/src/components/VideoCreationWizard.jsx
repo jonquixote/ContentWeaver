@@ -9,6 +9,7 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { Progress } from '@/components/ui/progress'
 import { Badge } from '@/components/ui/badge'
 import { ArrowLeft, ArrowRight, Video, Zap, Wand2, Play, Settings } from 'lucide-react'
+// eslint-disable-next-line no-unused-vars
 import { motion, AnimatePresence } from 'framer-motion'
 import ApiService from '../services/api'
 import VideoProgressTracker from './VideoProgressTracker'
@@ -87,7 +88,7 @@ const VideoCreationWizard = ({ onBack }) => {
       try {
         const users = await ApiService.getUsers()
         user = users.length > 0 ? users[0] : null
-      } catch (error) {
+      } catch {
         // Create a default user if none exists
         user = await ApiService.createUser({
           username: 'demo_user',

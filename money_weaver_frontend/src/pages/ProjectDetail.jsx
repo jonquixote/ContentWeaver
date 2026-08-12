@@ -6,6 +6,7 @@ import { Badge } from '@/components/ui/badge'
 import { Progress } from '@/components/ui/progress'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { ArrowLeft, Clock, Play, RefreshCw, Video } from 'lucide-react'
+// eslint-disable-next-line no-unused-vars
 import { motion } from 'framer-motion'
 import api from '@/services/api'
 import '../App.css'

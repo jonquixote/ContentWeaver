@@ -5,6 +5,7 @@ import { Badge } from '@/components/ui/badge'
 import { Progress } from '@/components/ui/progress'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Play, Plus, Clock, Video, Zap, Settings, User, Eye, Download, PlayCircle, Mic } from 'lucide-react'
+// eslint-disable-next-line no-unused-vars
 import { motion } from 'framer-motion'
 import { useNavigate } from 'react-router-dom'
 import api from '@/services/api'
@@ -362,7 +363,7 @@ const Dashboard = ({ onCreateVideo }) => {
                                     contentLength: contentLength
                                   }));
                                 })
-                                .then(({content, status, contentType, isHTML, isVideo, contentLength}) => {
+                                .then(({content, status, contentType, isHTML}) => {
                                   console.log("First 500 characters of content:", content.substring(0, 500));
                                   // Check if it looks like HTML (might be a 404 page)
                                   const looksLikeHTML = content.trim().startsWith('<!DOCTYPE html') || content.trim().startsWith('<html');
