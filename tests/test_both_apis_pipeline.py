@@ -12,9 +12,9 @@ def test_complete_pipeline_with_both_apis():
     """Test the complete assembler pipeline with both Pexels and Pixabay API keys"""
     print("Testing Complete Assembler Pipeline with Both Pexels and Pixabay APIs...")
     
-    # Set both API keys
-    stock_service.pexels_api_key = "YOUR_PEXELS_API_KEY"
-    stock_service.pixabay_api_key = "YOUR_PIXABAY_API_KEY"
+    # Set both API keys (from environment; never commit live keys)
+    stock_service.pexels_api_key = os.getenv('PEXELS_API_KEY')
+    stock_service.pixabay_api_key = os.getenv('PIXABAY_API_KEY')
     stock_service.use_sample_videos = False
     
     print("\n1. Generating TTS...")

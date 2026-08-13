@@ -16,8 +16,8 @@ def test_complete_pipeline_with_real_apis():
     # If you have a Pexels API key, uncomment the next line:
     # stock_service.pexels_api_key = "your_pexels_api_key_here"
     
-    # Using your Pixabay API key
-    stock_service.pixabay_api_key = "YOUR_PIXABAY_API_KEY"
+    # Using your Pixabay API key (from environment; never commit live keys)
+    stock_service.pixabay_api_key = os.getenv('PIXABAY_API_KEY')
     stock_service.use_sample_videos = False
     
     print("\n1. Generating TTS...")
