@@ -41,8 +41,18 @@ class S3StorageProvider(StorageProvider):
     def put_object(self, key, data, content_type):
         self.client.put_object(Bucket=self.bucket, Key=key, Body=data, ContentType=content_type)
 
+    def get_object(self, key):
+        return self.client.get_object(Bucket=self.bucket, Key=key)['Body'].read()
+
     def get_presigned_url(self, key, expires=3600):
         return self.client.generate_presigned_url('get_object', Params={'Bucket': self.bucket, 'Key': key}, ExpiresIn=expires)
+
+    def get_presigned_upload_url(self, key, expires=600, content_type='application/octet-stream'):
+        return self.client.generate_presigned_url(
+            'put_object',
+            Params={'Bucket': self.bucket, 'Key': key, 'ContentType': content_type},
+            ExpiresIn=expires,
+        )
 
     def delete_object(self, key):
         self.client.delete_object(Bucket=self.bucket, Key=key)

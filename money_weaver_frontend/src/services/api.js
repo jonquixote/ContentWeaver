@@ -186,10 +186,40 @@ class ApiService {
     return this.request('/voices')
   }
 
-  async createVoice(formData) {
+  async presignUpload(ext) {
+    return this.request(`/uploads/presign?ext=${encodeURIComponent(ext)}`)
+  }
+
+  // PUT audio bytes to a presigned upload URL. The backend PUT-proxy (local
+  // storage mode) needs the Bearer token; S3/R2 presigned URLs reject extra
+  // Authorization headers, so only attach it when the target is our own API.
+  async putUpload(uploadUrl, file, contentType) {
+    const headers = { 'Content-Type': contentType }
+    try {
+      const target = new URL(uploadUrl)
+      const base = new URL(API_BASE_URL)
+      if (target.host === base.host) {
+        headers['Authorization'] = `Bearer ${this.token}`
+      }
+    } catch {
+      /* not a parseable URL — leave headers as-is */
+    }
+    const response = await fetch(uploadUrl, {
+      method: 'PUT',
+      headers,
+      body: file,
+    })
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}))
+      throw new Error(errorData.error || `Upload failed! status: ${response.status}`)
+    }
+    return response.json()
+  }
+
+  async createVoice(payload) {
     return this.request('/voices', {
       method: 'POST',
-      body: formData,
+      body: payload,
     })
   }
 

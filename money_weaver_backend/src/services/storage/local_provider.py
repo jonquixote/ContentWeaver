@@ -26,8 +26,20 @@ class LocalStorageProvider(StorageProvider):
         with open(path, 'wb') as f:
             f.write(data)
 
+    def get_object(self, key):
+        with open(self._path(key), 'rb') as f:
+            return f.read()
+
     def get_presigned_url(self, key, expires=3600):
         return f'/media/{key}'
+
+    def get_presigned_upload_url(self, key, expires=600, content_type='application/octet-stream'):
+        # Local storage is a GET-only static server (/media/<key>), so an upload
+        # "presigned URL" is really the backend PUT-proxy route that streams the
+        # body into put_object. The base host defaults to the dev backend; point
+        # STORAGE_BACKEND_URL at the real API host in other environments.
+        base = os.getenv('STORAGE_BACKEND_URL', 'http://localhost:5004')
+        return f'{base.rstrip("/")}/api/uploads/{key}'
 
     def delete_object(self, key):
         path = self._path(key)

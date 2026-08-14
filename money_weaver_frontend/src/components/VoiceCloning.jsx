@@ -109,18 +109,25 @@ const VoiceCloning = () => {
       return
     }
 
-    const formData = new FormData()
-    formData.append('name', name.trim())
-    formData.append('reference_audio', referenceAudio)
-    if (description.trim()) {
-      formData.append('description', description.trim())
+    const fileName = referenceAudio.name || ''
+    const ext = fileName.includes('.') ? fileName.split('.').pop().toLowerCase() : ''
+    if (!['wav', 'mp3'].includes(ext)) {
+      alert('Reference audio must be a WAV or MP3 file')
+      return
     }
-    formData.append('consent', 'true')
+    const ctype = ext === 'wav' ? 'audio/wav' : 'audio/mpeg'
 
     setIsUploading(true)
     setError(null)
     try {
-      await ApiService.createVoice(formData)
+      const { upload_url, object_key } = await ApiService.presignUpload(ext)
+      await ApiService.putUpload(upload_url, referenceAudio, ctype)
+      await ApiService.createVoice({
+        name: name.trim(),
+        description: description.trim(),
+        reference_audio_url: object_key,
+        consent: 'true',
+      })
       setName('')
       setDescription('')
       setReferenceAudio(null)

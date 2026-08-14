@@ -1,6 +1,8 @@
 import json
+import logging
 import os
 import subprocess
+import tempfile
 import uuid
 from datetime import datetime
 
@@ -10,18 +12,22 @@ from flask import Blueprint, jsonify, request, g
 from src.models.voice import Voice
 from src.database import db
 from src.auth import auth_required
+from src.services.storage import (
+    get_storage,
+    is_valid_storage_key,
+    resolve_reference_for_tts,
+)
 
+logger = logging.getLogger(__name__)
 voices_bp = Blueprint('voices', __name__)
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-UPLOAD_DIR = os.environ.get('UPLOAD_DIR', os.path.join(BASE_DIR, 'uploads'))
 FINAL_DIR = os.environ.get('FINAL_DIR', os.path.join(BASE_DIR, 'final'))
 FFPROBE_PATH = os.environ.get('FFPROBE_PATH', '/usr/local/bin/ffprobe')
 TTS_URL = os.environ.get('TTS_URL', 'http://localhost:8001')
 
 # Reference-audio contract — aligned to the TTS microservice's real accepted
 # contract (source of truth for end-to-end cloning): WAV/MP3, 3-20s, >=16kHz.
-ALLOWED_EXTENSIONS = {'wav', 'mp3'}
 MAX_FILE_BYTES = 25 * 1024 * 1024  # matches the TTS service's download cap
 MIN_DURATION = 3.0
 MAX_DURATION = 20.0
@@ -85,10 +91,6 @@ def validate_audio(path):
     return duration
 
 
-def _extension_allowed(filename):
-    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
-
-
 def _unlink_quiet(path):
     if path and os.path.isfile(path):
         try:
@@ -111,48 +113,53 @@ def list_voices():
 @auth_required
 def create_voice():
     user_id = g.current_user['id']
+    payload = request.get_json(silent=True) or {}
 
-    name = (request.form.get('name') or '').strip()
+    name = (payload.get('name') or '').strip()
     if not name:
         return jsonify({'error': 'Voice name is required'}), 400
     if len(name) > 100:
         return jsonify({'error': 'name must be 100 characters or fewer'}), 400
-    description = (request.form.get('description') or '').strip()
+    description = (payload.get('description') or '').strip()
     if len(description) > 300:
         return jsonify({'error': 'description must be 300 characters or fewer'}), 400
 
-    consent = (request.form.get('consent') or '').strip().lower()
+    consent = (payload.get('consent') or '').strip().lower()
     if consent not in ('true', '1', 'yes', 'on'):
         return jsonify({'error': 'Consent is required: you must confirm you own this voice'}), 400
 
-    if 'reference_audio' not in request.files:
-        return jsonify({'error': 'reference_audio file is required'}), 400
-    audio = request.files['reference_audio']
-    filename = audio.filename or ''
-    if not filename or not _extension_allowed(filename):
-        return jsonify({'error': 'reference_audio must be a WAV or MP3 file'}), 400
-    ext = filename.rsplit('.', 1)[1].lower()
+    key = (payload.get('reference_audio_url') or '').strip()
+    if not is_valid_storage_key(key, user_id):
+        return jsonify({'error': 'reference_audio_url must be a valid uploaded audio key'}), 400
 
-    voice_dir = os.path.join(UPLOAD_DIR, str(user_id), 'voices')
-    os.makedirs(voice_dir, exist_ok=True)
-    tmp_path = os.path.join(voice_dir, f'.tmp-{uuid.uuid4().hex}.{ext}')
+    storage = get_storage()
     try:
-        audio.save(tmp_path)
+        data = storage.get_object(key)
+    except Exception as e:
+        return jsonify({'error': f'Failed to fetch uploaded audio: {e}'}), 400
+
+    ext = key.rsplit('.', 1)[1].lower()
+    tmp_path = None
+    fd, tmp_path = tempfile.mkstemp(prefix='voice-ref-', suffix=f'.{ext}')
+    try:
+        with os.fdopen(fd, 'wb') as fh:
+            fh.write(data)
         validate_audio(tmp_path)
     except ValueError as e:
-        _unlink_quiet(tmp_path)
+        try:
+            storage.delete_object(key)
+        except Exception:
+            pass
         return jsonify({'error': str(e)}), 400
     except Exception as e:
+        return jsonify({'error': f'Failed to validate audio: {e}'}), 400
+    finally:
         _unlink_quiet(tmp_path)
-        return jsonify({'error': f'Failed to save audio: {e}'}), 400
-
-    final_path = os.path.join(voice_dir, f'{uuid.uuid4().hex}.{ext}')
-    os.replace(tmp_path, final_path)
 
     voice = Voice(
         user_id=user_id,
         name=name,
-        reference_audio_url=final_path,
+        reference_audio_url=key,
         description=description,
         consent_confirmed_at=datetime.utcnow(),
     )
@@ -172,7 +179,13 @@ def delete_voice(voice_id):
     ref = voice.reference_audio_url
     db.session.delete(voice)
     db.session.commit()
-    _unlink_quiet(ref)
+    if is_valid_storage_key(ref, voice.user_id):
+        try:
+            get_storage().delete_object(ref)
+        except Exception as e:
+            logger.warning('failed to delete storage object %r: %s', ref, e)
+    else:
+        _unlink_quiet(ref)
     return '', 204
 
 
@@ -185,7 +198,20 @@ def preview_voice(voice_id):
         return jsonify({'error': 'Voice not found'}), 404
     if voice.user_id != user_id:
         return jsonify({'error': 'Forbidden'}), 403
-    if not os.path.isfile(voice.reference_audio_url):
+
+    ref = voice.reference_audio_url
+    if is_valid_storage_key(ref, voice.user_id):
+        storage = get_storage()
+        try:
+            if not storage.object_exists(ref):
+                return jsonify({'error': 'Reference audio file is missing from storage'}), 410
+            ref = resolve_reference_for_tts(ref)
+        except Exception as e:
+            return jsonify({
+                'error': 'Voice preview service is unavailable',
+                'details': str(e),
+            }), 503
+    elif not os.path.isfile(ref):
         return jsonify({'error': 'Reference audio file is missing from storage'}), 410
 
     try:
@@ -193,7 +219,7 @@ def preview_voice(voice_id):
             f'{TTS_URL.rstrip("/")}/tts',
             json={
                 'text': PREVIEW_TEXT,
-                'reference_audio_url': voice.reference_audio_url,
+                'reference_audio_url': ref,
                 'voice_id': str(voice.id),
             },
             timeout=120,

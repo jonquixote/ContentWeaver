@@ -218,11 +218,13 @@ def generate_assembler_video_task(self, project_id, prompt, duration=30, orienta
                 try:
                     from src.models.voice import Voice
                     from src.services.tts_client import synthesize
+                    from src.services.storage import resolve_reference_for_tts
                     voice_model = Voice.query.filter_by(id=voice_id, user_id=user_id).first()
-                    if voice_model and os.path.isfile(voice_model.reference_audio_url):
+                    ref = resolve_reference_for_tts(voice_model.reference_audio_url) if voice_model else None
+                    if ref and (os.path.isfile(ref) or ref.startswith(('http://', 'https://'))):
                         wav_bytes = synthesize(
                             voiceover_text,
-                            voice_model.reference_audio_url,
+                            ref,
                             voice_id=str(voice_model.id),
                         )
                         audio_file = write_voice_wav(wav_bytes, prefix=f'voice_{voice_model.id}')
