@@ -5,7 +5,7 @@ Run from money_weaver_backend:
     ./venv/bin/python scripts/migrate_to_r2.py
 
 What it does:
-    Walks final/**/*.mp4, work/**/*.mp4 and uploads/**/* under MIGRATE_ROOT
+    Walks final/**/*.mp4, work/**/* and uploads/**/* under MIGRATE_ROOT
     (default: the money_weaver_backend directory) and uploads each file to the
     configured storage backend under a key equal to its path relative to
     MIGRATE_ROOT (e.g. final/foo.mp4, work/bar.wav, uploads/<uid>/voices/x.wav).
@@ -42,7 +42,7 @@ if BACKEND_DIR not in sys.path:
 from src.services.storage import get_storage
 
 DEFAULT_ROOT = BACKEND_DIR
-PATTERNS = ('final/**/*.mp4', 'work/**/*.mp4', 'uploads/**/*')
+PATTERNS = ('final/**/*.mp4', 'work/**/*', 'uploads/**/*')
 
 
 def main():
@@ -58,6 +58,9 @@ def main():
     for pattern in PATTERNS:
         for path in glob.glob(os.path.join(root, pattern), recursive=True):
             if not os.path.isfile(path):
+                continue
+            name = os.path.basename(path)
+            if name.startswith('._') or name == '.DS_Store':
                 continue
             key = path.replace(root + os.sep, '').replace('\\', '/')
             if storage.object_exists(key):
