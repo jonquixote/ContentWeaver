@@ -30,7 +30,8 @@ app.config['SECRET_KEY'] = os.environ['SECRET_KEY']
 # Enable CORS for all routes
 CORS(app, resources={
     r"/api/*": {"origins": [os.getenv('FRONTEND_ORIGIN', 'http://localhost:5173')]},
-    r"/final/*": {"origins": [os.getenv('FRONTEND_ORIGIN', 'http://localhost:5173')]}
+    r"/final/*": {"origins": [os.getenv('FRONTEND_ORIGIN', 'http://localhost:5173')]},
+    r"/media/*": {"origins": [os.getenv('FRONTEND_ORIGIN', 'http://localhost:5173')]}
 })
 
 # Database configuration
@@ -157,6 +158,37 @@ def serve_final_video(filename):
         return response
     else:
         return "Video not found", 404
+
+# Serve local storage media (videos, thumbnails, voice refs)
+@app.route('/media/<path:filename>')
+def serve_media(filename):
+    # Same local dir the LocalStorageProvider writes to; mirror of /final route
+    media_dir = os.environ.get('STORAGE_LOCAL_DIR',
+                               os.path.join(os.path.dirname(os.path.dirname(__file__)), 'uploads'))
+
+    token = None
+    auth = request.headers.get('Authorization', '')
+    if auth.startswith('Bearer '):
+        token = auth[7:]
+    elif request.args.get('token'):
+        token = request.args.get('token')
+    if not token:
+        return "Authentication required", 401
+    try:
+        payload = jwt.decode(token, os.environ['SECRET_KEY'], algorithms=['HS256'])
+    except jwt.ExpiredSignatureError:
+        return "Token expired", 401
+    except jwt.InvalidTokenError:
+        return "Invalid token", 401
+    if payload.get('jti') and TokenBlocklist.query.filter_by(jti=payload['jti']).first():
+        return "Token revoked", 401
+
+    if os.path.exists(os.path.join(media_dir, filename)):
+        response = send_from_directory(media_dir, filename)
+        response.headers['Accept-Ranges'] = 'bytes'
+        return response
+    else:
+        return "Media not found", 404
 
 if __name__ == '__main__':
     port = int(os.getenv('PORT', 5004))
