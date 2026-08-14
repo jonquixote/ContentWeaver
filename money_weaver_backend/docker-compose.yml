@@ -23,6 +23,21 @@ services:
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin-change-me}
     command: server /data --console-address ":9001"
 
+  # One-shot bucket init for MinIO (creates the moneyweaver bucket on startup)
+  minio-init:
+    image: minio/mc
+    restart: "no"
+    depends_on:
+      - minio
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin-change-me}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin-change-me}
+    entrypoint: >
+      /bin/sh -c "
+      mc alias set local http://minio:9000 $${MINIO_ROOT_USER} $${MINIO_ROOT_PASSWORD};
+      mc mb -p local/moneyweaver;
+      "
+
   # PostgreSQL database (optional, can use SQLite for development)
   postgres:
     image: postgres:15-alpine
