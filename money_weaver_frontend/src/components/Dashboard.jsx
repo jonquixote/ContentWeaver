@@ -27,10 +27,15 @@ const escapeHtml = (str) => String(str ?? '')
   .replace(/"/g, '&quot;')
   .replace(/'/g, '&#39;')
 
-// Backend /final/ media requires auth via query token
-const mediaUrl = (path) => path ? `${path}${path.includes('?') ? '&' : '?'}token=${encodeURIComponent(localStorage.getItem('authToken') || '')}` : path
-
-const absMediaUrl = (path) => path ? mediaUrl(path.startsWith('/') ? `http://localhost:5004${path}` : path) : path
+// Backend /final/ and /media/ media require auth via query token.
+// Absolute presigned S3/R2 URLs pass through untouched (appending the JWT would
+// leak it to the storage host and can invalidate the SigV4 signature).
+const absMediaUrl = (path) => {
+  if (!path) return path
+  if (!path.startsWith('/')) return path
+  const abs = `http://localhost:5004${path}`
+  return `${abs}${abs.includes('?') ? '&' : '?'}token=${encodeURIComponent(localStorage.getItem('authToken') || '')}`
+}
 
 // Helper function to format markdown for audio transcripts
 const formatScriptMarkdown = (script) => {

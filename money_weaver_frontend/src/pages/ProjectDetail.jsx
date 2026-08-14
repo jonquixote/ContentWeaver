@@ -13,7 +13,11 @@ import '../App.css'
 
 const resolveUrl = (url) => {
   if (!url) return null
-  const abs = url.startsWith('/') ? `http://localhost:5004${url}` : url
+  // Backend-relative paths (legacy /final/, /media/ storage) need the app JWT.
+  // Absolute presigned S3/R2 URLs pass through untouched (appending the JWT
+  // would leak it to the storage host and can invalidate the SigV4 signature).
+  if (!url.startsWith('/')) return url
+  const abs = `http://localhost:5004${url}`
   return `${abs}${abs.includes('?') ? '&' : '?'}token=${encodeURIComponent(localStorage.getItem('authToken') || '')}`
 }
 
