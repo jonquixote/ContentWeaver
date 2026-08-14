@@ -7,6 +7,12 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 # Load environment variables
 load_dotenv()
 
+# Local storage mode issues presigned-upload URLs that must point at this API's
+# real host; default http://localhost:5004 works for dev, set STORAGE_BACKEND_URL
+# for any other deployment.
+if os.getenv('STORAGE_BACKEND', 'local') == 'local' and not os.getenv('STORAGE_BACKEND_URL'):
+    print('WARNING: STORAGE_BACKEND_URL unset — local uploads assumed to hit http://localhost:5004')
+
 from flask import Flask, request, send_from_directory
 from flask_cors import CORS
 import jwt

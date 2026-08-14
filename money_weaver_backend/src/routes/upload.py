@@ -8,6 +8,9 @@ from src.services.storage import get_storage, is_valid_storage_key
 upload_bp = Blueprint('uploads', __name__)
 
 CONTENT_TYPES = {'wav': 'audio/wav', 'mp3': 'audio/mpeg'}
+# Reference-audio cap enforced by validate_audio / the TTS service; reject at
+# the proxy before buffering the whole body in RAM.
+MAX_UPLOAD_BYTES = 25 * 1024 * 1024
 
 
 @upload_bp.route('/uploads/presign', methods=['GET'])
@@ -32,9 +35,13 @@ def presign_upload():
 def put_upload(path):
     if not is_valid_storage_key(path, g.current_user['id']):
         return jsonify({'error': 'invalid upload path'}), 400
+    if request.content_length is not None and request.content_length > MAX_UPLOAD_BYTES:
+        return jsonify({'error': 'upload body exceeds the 25MB cap'}), 413
     data = request.get_data()
     if not data:
         return jsonify({'error': 'empty upload body'}), 400
+    if len(data) > MAX_UPLOAD_BYTES:
+        return jsonify({'error': 'upload body exceeds the 25MB cap'}), 413
     ext = path.rsplit('.', 1)[1].lower()
     try:
         get_storage().put_object(path, data, CONTENT_TYPES[ext])

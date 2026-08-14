@@ -213,7 +213,9 @@ class ApiService {
       const errorData = await response.json().catch(() => ({}))
       throw new Error(errorData.error || `Upload failed! status: ${response.status}`)
     }
-    return response.json()
+    // S3/R2 presigned PUTs answer 200 with an empty body; the local PUT-proxy
+    // returns JSON. Never let a body-parse failure abort a successful upload.
+    return response.json().catch(() => ({}))
   }
 
   async createVoice(payload) {

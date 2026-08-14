@@ -152,6 +152,10 @@ def create_voice():
             pass
         return jsonify({'error': str(e)}), 400
     except Exception as e:
+        try:
+            storage.delete_object(key)
+        except Exception:
+            pass
         return jsonify({'error': f'Failed to validate audio: {e}'}), 400
     finally:
         _unlink_quiet(tmp_path)
