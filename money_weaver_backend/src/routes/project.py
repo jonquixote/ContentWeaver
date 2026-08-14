@@ -6,11 +6,32 @@ from src.validation import require_fields
 
 project_bp = Blueprint('project', __name__)
 
+
+def _resolve_video_url(value):
+    """Swap a storage key (videos/...) for a fresh presigned URL; leave legacy
+    /final/... paths untouched. Returns the key itself on storage outage."""
+    if not value:
+        return value
+    if value.startswith('videos/') or value.startswith('thumbs/'):
+        try:
+            from src.services.storage import get_storage
+            return get_storage().get_presigned_url(value)
+        except Exception:
+            return value
+    return value
+
+
+def _project_dict(project):
+    d = project.to_dict()
+    d['video_url'] = _resolve_video_url(d['video_url'])
+    return d
+
+
 @project_bp.route('/projects', methods=['GET'])
 @auth_required
 def get_projects():
     projects = Project.query.filter_by(user_id=g.current_user['id']).all()
-    return jsonify([project.to_dict() for project in projects])
+    return jsonify([_project_dict(project) for project in projects])
 
 @project_bp.route('/projects', methods=['POST'])
 @auth_required
@@ -37,7 +58,7 @@ def get_project(project_id):
     project = Project.query.get_or_404(project_id)
     if project.user_id != g.current_user['id']:
         return jsonify({'error': 'Forbidden'}), 403
-    return jsonify(project.to_dict())
+    return jsonify(_project_dict(project))
 
 @project_bp.route('/projects/<int:project_id>', methods=['PUT'])
 @auth_required

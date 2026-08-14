@@ -116,8 +116,13 @@ def get_task_status(task_id):
         except (ValueError, TypeError):
             result = None
 
-    video_url = (result or {}).get('video_url') if isinstance(result, dict) else None
-    thumbnail_url = (result or {}).get('thumbnail_url') if isinstance(result, dict) else None
+    video_url = None
+    thumbnail_url = None
+    if task.status == 'completed':
+        stored_video = (result or {}).get('video_url') if isinstance(result, dict) else None
+        stored_thumb = (result or {}).get('thumbnail_url') if isinstance(result, dict) else None
+        video_url = _resolve_media_url(stored_video)
+        thumbnail_url = _resolve_media_url(stored_thumb)
 
     if task.status == 'failed':
         message = task.error_message or 'Task failed'
@@ -135,6 +140,24 @@ def get_task_status(task_id):
         'thumbnail_url': thumbnail_url,
         'error': task.error_message
     })
+
+
+def _resolve_media_url(value):
+    """Resolve a stored media value to a playable URL.
+
+    Storage keys (videos/..., thumbs/...) are swapped for a fresh 1h presigned
+    URL; legacy /final/... paths are returned unchanged. Falls back to the
+    stored value on storage outage so the status endpoint never 500s.
+    """
+    if not value:
+        return None
+    if value.startswith('videos/') or value.startswith('thumbs/'):
+        try:
+            from src.services.storage import get_storage
+            return get_storage().get_presigned_url(value)
+        except Exception:
+            return value
+    return value
 
 
 def _progress_message(progress):

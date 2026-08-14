@@ -8,6 +8,7 @@ from src.services.video.tts_service import tts_service
 from src.services.video.advanced_tts_service import advanced_tts_service
 from src.services.video.assembly_service import assembly_service, generate_thumbnail
 from src.services.script_parsing_service import script_parsing_service
+from src.services.storage import get_storage
 import time
 import json
 import os
@@ -304,10 +305,31 @@ def generate_assembler_video_task(self, project_id, prompt, duration=30, orienta
                 task_record.thumbnail_path = thumbnail_path
                 db.session.commit()
 
+            # Upload final video + thumbnail to storage (durable keys, served as
+            # expiring presigned URLs on read). Local files stay in final/ during
+            # dev; production may delete them after a successful upload. task_record
+            # may be None (dispatch race) — skip the upload and keep /final URLs.
+            storage = get_storage()
+            key_video = f'videos/{project.user_id}/{project_id}/{task_record.id}.mp4' if task_record else None
+            key_thumb = f'thumbs/{project.user_id}/{project_id}/{task_record.id}.jpg' if task_record else None
+            video_uploaded = False
+            thumb_uploaded = False
+            if task_record:
+                try:
+                    with open(final_video_path, 'rb') as f:
+                        storage.put_object(key_video, f.read(), 'video/mp4')
+                    video_uploaded = True
+                    if thumbnail_path:
+                        with open(thumbnail_path, 'rb') as f:
+                            storage.put_object(key_thumb, f.read(), 'image/jpeg')
+                        thumb_uploaded = True
+                except Exception as e:
+                    print(f"Storage upload failed, falling back to /final URLs: {e}")
+
             # Final result
             result = {
-                'video_url': f'/final/{output_filename}',
-                'thumbnail_url': f'/final/{os.path.basename(thumbnail_path)}' if thumbnail_path else None,
+                'video_url': key_video if video_uploaded else f'/final/{output_filename}',
+                'thumbnail_url': key_thumb if thumb_uploaded else (f'/final/{os.path.basename(thumbnail_path)}' if thumbnail_path else None),
                 'script': script,
                 'duration': duration,
                 'resolution': f"{width}x{height}",
