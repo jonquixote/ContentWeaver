@@ -18,12 +18,12 @@ def get_tasks():
         if not project_ids:
             return jsonify([])
         tasks = Task.query.filter(Task.project_id.in_(project_ids)).order_by(Task.id.desc()).all()
-        return jsonify([task.to_dict() for task in tasks])
+        return jsonify([_resolve_result_media(task.to_dict()) for task in tasks])
     project = Project.query.get(project_id)
     if not project or project.user_id != g.current_user['id']:
         return jsonify({'error': 'Forbidden'}), 403
     tasks = Task.query.filter_by(project_id=project_id).order_by(Task.id.desc()).all()
-    return jsonify([task.to_dict() for task in tasks])
+    return jsonify([_resolve_result_media(task.to_dict()) for task in tasks])
 
 @task_bp.route('/tasks', methods=['POST'])
 @auth_required
@@ -60,7 +60,7 @@ def get_task(task_id):
         return jsonify({'error': 'Not found'}), 404
     if project.user_id != g.current_user['id']:
         return jsonify({'error': 'Forbidden'}), 403
-    return jsonify(task.to_dict())
+    return jsonify(_resolve_result_media(task.to_dict()))
 
 @task_bp.route('/tasks/<int:task_id>', methods=['PUT'])
 @auth_required
@@ -158,6 +158,32 @@ def _resolve_media_url(value):
         except Exception:
             return value
     return value
+
+
+def _resolve_result_media(task_dict):
+    """Resolve storage keys inside a task dict's `result` JSON.
+
+    Mirrors the status route so list/detail endpoints return the same playable
+    URLs (storage keys -> presigned URL; legacy /final/... unchanged). Reuses
+    `_resolve_media_url`, which never raises on storage outage. Non-JSON or
+    non-dict `result` values pass through untouched.
+    """
+    raw = task_dict.get('result')
+    if not raw:
+        return task_dict
+    try:
+        result = json.loads(raw)
+    except (ValueError, TypeError):
+        return task_dict
+    if not isinstance(result, dict):
+        return task_dict
+    for key in ('video_url', 'thumbnail_url'):
+        stored = result.get(key)
+        resolved = _resolve_media_url(stored)
+        if resolved != stored:
+            result[key] = resolved
+    task_dict['result'] = json.dumps(result)
+    return task_dict
 
 
 def _progress_message(progress):

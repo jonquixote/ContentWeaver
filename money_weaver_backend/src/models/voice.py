@@ -12,7 +12,7 @@ class Voice(get_db().Model):
     id = get_db().Column(get_db().Integer, primary_key=True)
     user_id = get_db().Column(get_db().Integer, nullable=False, index=True)
     name = get_db().Column(get_db().String(100), nullable=False)
-    reference_audio_url = get_db().Column(get_db().String(500), nullable=False)  # local file path
+    reference_audio_url = get_db().Column(get_db().String(500), nullable=False)  # storage key (e.g. voices/<user_id>/<uuid>.<ext>) resolved by the routes layer, or legacy local path
     description = get_db().Column(get_db().String(300), default='')
     created_at = get_db().Column(get_db().DateTime, default=datetime.utcnow)
     consent_confirmed_at = get_db().Column(get_db().DateTime, nullable=True)
