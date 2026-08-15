@@ -1,25 +1,24 @@
+import { useAuthStore } from '@/store/authStore'
+
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5004/api'
 
 class ApiService {
   constructor() {
-    this.token = localStorage.getItem('authToken')
+    this.token = useAuthStore.getState().token || null
   }
 
   setToken(token) {
     this.token = token
-    if (token) {
-      localStorage.setItem('authToken', token)
-    } else {
-      localStorage.removeItem('authToken')
-    }
+    useAuthStore.getState().setToken(token)
   }
 
   async request(endpoint, options = {}) {
     const url = `${API_BASE_URL}${endpoint}`
+    const token = useAuthStore.getState().token
     const config = {
       headers: {
         'Content-Type': 'application/json',
-        ...(this.token && { 'Authorization': `Bearer ${this.token}` }),
+        ...(token && { 'Authorization': `Bearer ${token}` }),
         ...options.headers,
       },
       ...options,

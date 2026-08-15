@@ -1,5 +1,6 @@
-import { createContext, useContext, useState, useEffect } from 'react'
+import { createContext, useContext, useEffect } from 'react'
 import api from '@/services/api'
+import { useAuthStore } from '@/store/authStore'
 
 const AuthContext = createContext()
 
@@ -12,40 +13,38 @@ export const useAuth = () => {
 }
 
 export const AuthProvider = ({ children }) => {
-  const [user, setUser] = useState(null)
-  const [loading, setLoading] = useState(true)
+  const user = useAuthStore((s) => s.user)
+  const loading = useAuthStore((s) => s.loading)
 
   useEffect(() => {
-    // Check if user is logged in by verifying the token with the backend
+    // Verify a stored token with the backend, then hydrate the store.
     const checkAuthStatus = async () => {
-      const token = localStorage.getItem('authToken')
+      const { token } = useAuthStore.getState()
       if (token) {
         try {
-          // In a real app, you would verify the token with the backend
-          // For now, we'll just set a user based on the token existing
-          // In a more complete implementation, we would make an API call to verify the token
           const response = await api.request('/auth/me', {
             method: 'GET',
             headers: {
               'Authorization': `Bearer ${token}`
             }
           })
-          setUser(response)
+          useAuthStore.getState().hydrate({ user: response, token })
         } catch (error) {
           console.error('Failed to verify token:', error)
-          localStorage.removeItem('authToken')
+          useAuthStore.getState().hydrate({ user: null, token: null })
         }
+      } else {
+        useAuthStore.getState().hydrate({ user: null, token: null })
       }
-      setLoading(false)
     }
-    
+
     checkAuthStatus()
   }, [])
 
   const login = async (credentials) => {
     const response = await api.login(credentials)
     const { user, token } = response
-    setUser(user)
+    useAuthStore.getState().setUser(user)
     api.setToken(token)
     return user
   }
@@ -56,7 +55,7 @@ export const AuthProvider = ({ children }) => {
     } catch (error) {
       console.error('Logout error:', error)
     } finally {
-      setUser(null)
+      useAuthStore.getState().setUser(null)
       api.setToken(null)
     }
   }
@@ -68,7 +67,7 @@ export const AuthProvider = ({ children }) => {
       password: userData.password
     })
     const { user, token } = response
-    setUser(user)
+    useAuthStore.getState().setUser(user)
     api.setToken(token)
     return user
   }
