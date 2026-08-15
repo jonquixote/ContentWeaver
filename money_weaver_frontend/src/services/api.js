@@ -185,6 +185,11 @@ class ApiService {
     return this.request('/voices')
   }
 
+  // Preset endpoints
+  async getPresets() {
+    return this.request('/presets')
+  }
+
   async presignUpload(ext) {
     return this.request(`/uploads/presign?ext=${encodeURIComponent(ext)}`)
   }

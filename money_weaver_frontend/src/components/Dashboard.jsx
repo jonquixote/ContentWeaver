@@ -1,455 +1,167 @@
-import { useState, useEffect } from 'react'
+import { useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Progress } from '@/components/ui/progress'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { Play, Plus, Clock, Video, Zap, Settings, User, Eye, Download, PlayCircle, Mic } from 'lucide-react'
+import { Skeleton } from '@/components/ui/skeleton'
+import { Play, Plus, Clock, Video, Zap, Settings, User, Eye, Mic, LogOut } from 'lucide-react'
 // eslint-disable-next-line no-unused-vars
 import { motion } from 'framer-motion'
 import { useNavigate } from 'react-router-dom'
+import { toast } from 'sonner'
 import api from '@/services/api'
-import { 
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from '@/components/ui/dialog'
-import { ScrollArea } from '@/components/ui/scroll-area'
+import { useAuthStore } from '@/store/authStore'
+import { useProjects } from '@/api/projects'
+import { useTasks } from '@/api/tasks'
+import { usePresets } from '@/api/presets'
 import '../App.css'
 
-const escapeHtml = (str) => String(str ?? '')
-  .replace(/&/g, '&amp;')
-  .replace(/</g, '&lt;')
-  .replace(/>/g, '&gt;')
-  .replace(/"/g, '&quot;')
-  .replace(/'/g, '&#39;')
+const POLL_INTERVAL_MS = 5000
 
-// Backend /final/ and /media/ media require auth via query token.
-// Absolute presigned S3/R2 URLs pass through untouched (appending the JWT would
-// leak it to the storage host and can invalidate the SigV4 signature).
-const absMediaUrl = (path) => {
-  if (!path) return path
-  if (!path.startsWith('/')) return path
-  const abs = `http://localhost:5004${path}`
-  return `${abs}${abs.includes('?') ? '&' : '?'}token=${encodeURIComponent(localStorage.getItem('authToken') || '')}`
+const ACTIVE_STATUSES = ['running', 'processing']
+
+const isActive = (t) => ACTIVE_STATUSES.includes(t.status)
+
+const getStatusColor = (status) => {
+  switch (status) {
+    case 'completed': return 'bg-green-500'
+    case 'processing':
+    case 'running': return 'bg-blue-500'
+    case 'failed': return 'bg-red-500'
+    default: return 'bg-gray-500'
+  }
 }
 
-// Helper function to format markdown for audio transcripts
-const formatScriptMarkdown = (script) => {
-  if (!script) return "No script generated yet";
+const getWorkflowIcon = (type) => {
+  return type === 'generative' ? <Zap className="h-4 w-4" /> : <Video className="h-4 w-4" />
+}
 
-  // Split the script into lines for processing
-  const lines = script.split('\n');
-  let formattedLines = [];
-  
-  lines.forEach(line => {
-    if (line.startsWith('## ') || line.startsWith('# ')) {
-      // Format headers
-      formattedLines.push(`<strong class="block text-lg my-3 script-content scene">${escapeHtml(line.replace(/^#+\s*/, ''))}</strong>`);
-    } else if (/^\d+\.\s/.test(line)) {
-      // Format numbered scenes
-      formattedLines.push(`<div class="my-3 p-2 bg-slate-700 rounded"><strong class="script-content scene">${escapeHtml(line)}</strong></div>`);
-    } else if (/^(\w+(?:\s+\w+)*):\s*(.*)/.test(line)) {
-      // Format dialogue lines (Speaker: text)
-      const match = line.match(/^(\w+(?:\s+\w+)*):\s*(.*)/);
-      formattedLines.push(`<div class="my-2"><span class="font-semibold script-content speaker">${escapeHtml(match[1])}:</span> <span class="script-content">${escapeHtml(match[2])}</span></div>`);
-    } else if (line.startsWith('[') && line.endsWith(']')) {
-      // Format action descriptions in brackets
-      formattedLines.push(`<em class="script-content action">${escapeHtml(line)}</em>`);
-    } else if (line.trim() === '') {
-      // Handle empty lines
-      formattedLines.push('<br />');
-    } else {
-      // Regular text
-      formattedLines.push(`<span class="script-content">${escapeHtml(line)}</span>`);
-    }
-  });
-  
-  return formattedLines.join('');
-};
+const ErrorRetryCard = ({ title, message, onRetry }) => (
+  <div className="p-8 bg-slate-800/50 rounded-lg border border-slate-700 text-center">
+    <div className="text-red-400 text-2xl mb-4">⚠️</div>
+    <h3 className="text-lg font-bold text-white mb-2">{title}</h3>
+    <p className="text-slate-400 mb-6">{message}</p>
+    <Button onClick={onRetry} className="bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600">
+      Retry
+    </Button>
+  </div>
+)
+
+const ProjectListSkeleton = () => (
+  <div className="grid gap-4">
+    {[0, 1].map((i) => (
+      <Card key={i} className="bg-slate-800/50 border-slate-700">
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-3">
+              <Skeleton className="h-8 w-8 rounded-md bg-slate-700" />
+              <div className="space-y-2">
+                <Skeleton className="h-4 w-48 bg-slate-700" />
+                <Skeleton className="h-3 w-64 bg-slate-700" />
+              </div>
+            </div>
+            <Skeleton className="h-6 w-16 rounded-full bg-slate-700" />
+          </div>
+        </CardHeader>
+        <CardContent>
+          <div className="flex items-center justify-between">
+            <Skeleton className="h-4 w-32 bg-slate-700" />
+            <Skeleton className="h-8 w-28 bg-slate-700" />
+          </div>
+        </CardContent>
+      </Card>
+    ))}
+  </div>
+)
+
+const TaskListSkeleton = () => (
+  <div className="grid gap-4">
+    {[0, 1].map((i) => (
+      <Card key={i} className="bg-slate-800/50 border-slate-700">
+        <CardHeader>
+          <Skeleton className="h-4 w-40 bg-slate-700" />
+          <Skeleton className="h-3 w-24 bg-slate-700" />
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <Skeleton className="h-3 w-20 bg-slate-700" />
+              <Skeleton className="h-3 w-10 bg-slate-700" />
+            </div>
+            <Skeleton className="h-2 w-full bg-slate-700" />
+          </div>
+        </CardContent>
+      </Card>
+    ))}
+  </div>
+)
 
 const Dashboard = ({ onCreateVideo }) => {
-  const [projects, setProjects] = useState([])
-  const [tasks, setTasks] = useState([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState(null)
-  const [selectedProject, setSelectedProject] = useState(null)
-  const [isModalOpen, setIsModalOpen] = useState(false)
-  const [videoError, setVideoError] = useState(false)
   const navigate = useNavigate()
 
-  // Fetch real data from the backend
+  const projectsQuery = useProjects()
+  const tasksQuery = useTasks({
+    // Keep the legacy live-status behaviour: while any task is in flight,
+    // refetch the task list (which carries status + progress) every few seconds.
+    refetchInterval: (query) => {
+      const list = query.state.data ?? []
+      return list.some(isActive) ? POLL_INTERVAL_MS : false
+    },
+  })
+  const presetsQuery = usePresets()
+
+  const projects = projectsQuery.data ?? []
+  const tasks = tasksQuery.data ?? []
+  const presets = presetsQuery.data ?? []
+
+  const projectsLoading = projectsQuery.isLoading
+  const tasksLoading = tasksQuery.isLoading
+  const presetsLoading = presetsQuery.isLoading
+
+  const completedCount = projects.filter((p) => p.status === 'completed').length
+  const successRate = projects.length ? Math.round((completedCount / projects.length) * 100) : 0
+
   useEffect(() => {
-    const fetchData = async () => {
-      try {
-        setLoading(true)
-        console.log('Fetching data from API...')
-        // For now, we'll use a default user ID of 1
-        // In a real app, you'd get this from authentication
-        const [projectsData, tasksData] = await Promise.all([
-          api.getProjects(),
-          api.getTasks()
-        ])
-        
-        console.log('Projects data:', projectsData)
-        console.log('Tasks data:', tasksData)
-        
-        setProjects(projectsData)
-        setTasks(tasksData)
-        setError(null)
-      } catch (err) {
-        console.error('Failed to fetch data:', err)
-        setError('Failed to load data. Please try again later.')
-      } finally {
-        setLoading(false)
-      }
+    if (projectsQuery.isError) {
+      toast.error('Failed to load projects', {
+        id: 'dashboard-projects-error',
+        description: projectsQuery.error?.message,
+      })
     }
+  }, [projectsQuery.isError, projectsQuery.error])
 
-    fetchData()
-  }, [])
-
-  // Poll for task updates
   useEffect(() => {
-    if (tasks.length === 0) return
-
-    const interval = setInterval(async () => {
-      try {
-        const updatedTasks = await Promise.all(
-          tasks.map(async (task) => {
-            if (task.status !== 'completed' && task.status !== 'failed' && task.id) {
-              try {
-                const statusRes = await api.getTaskStatus(task.id)
-                return {
-                  ...task,
-                  status: statusRes.status,
-                  progress: statusRes.progress
-                }
-              } catch (err) {
-                console.error('Failed to fetch task status:', err)
-                return task
-              }
-            }
-            return task
-          })
-        )
-        setTasks(updatedTasks)
-      } catch (err) {
-        console.error('Failed to update task statuses:', err)
-      }
-    }, 5000) // Poll every 5 seconds
-
-    return () => clearInterval(interval)
-  }, [tasks])
-
-  const getStatusColor = (status) => {
-    switch (status) {
-      case 'completed': return 'bg-green-500'
-      case 'processing':
-      case 'running': return 'bg-blue-500'
-      case 'failed': return 'bg-red-500'
-      case 'draft': return 'bg-gray-500'
-      default: return 'bg-gray-500'
+    if (tasksQuery.isError) {
+      toast.error('Failed to load tasks', {
+        id: 'dashboard-tasks-error',
+        description: tasksQuery.error?.message,
+      })
     }
-  }
+  }, [tasksQuery.isError, tasksQuery.error])
 
-  const getWorkflowIcon = (type) => {
-    return type === 'generative' ? <Zap className="h-4 w-4" /> : <Video className="h-4 w-4" />
-  }
+  useEffect(() => {
+    if (presetsQuery.isError) {
+      toast.error('Failed to load presets', {
+        id: 'dashboard-presets-error',
+        description: presetsQuery.error?.message,
+      })
+    }
+  }, [presetsQuery.isError, presetsQuery.error])
 
-  const handleViewDetails = (project) => {
-    setSelectedProject(project)
-    setIsModalOpen(true)
-  }
-
-  const closeDetailsModal = () => {
-    setIsModalOpen(false)
-    setSelectedProject(null)
-    setVideoError(false)
-  }
-
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-500 mx-auto"></div>
-          <p className="mt-4 text-slate-300">Loading dashboard...</p>
-        </div>
-      </div>
-    )
-  }
-
-  if (error) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 flex items-center justify-center">
-        <div className="text-center p-8 bg-slate-800/50 rounded-lg border border-slate-700 max-w-md">
-          <div className="text-red-400 text-2xl mb-4">⚠️</div>
-          <h2 className="text-xl font-bold text-white mb-2">Error Loading Data</h2>
-          <p className="text-slate-300 mb-6">{error}</p>
-          <Button 
-            onClick={() => window.location.reload()} 
-            className="bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600"
-          >
-            Retry
-          </Button>
-        </div>
-      </div>
-    )
+  const handleLogout = async () => {
+    try {
+      await api.logout()
+    } catch (err) {
+      console.error('Logout error:', err)
+    } finally {
+      useAuthStore.getState().logout()
+      navigate('/login')
+    }
   }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900">
-      {/* Project Details Modal */}
-      <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
-        <DialogContent className="max-w-3xl max-h-[90vh] bg-slate-800 border-slate-700 overflow-hidden flex flex-col">
-          {selectedProject && (
-            <div>
-              <DialogHeader className="flex-shrink-0">
-                <DialogTitle className="text-white text-2xl">{selectedProject.title}</DialogTitle>
-                <DialogDescription className="text-slate-400">
-                  {selectedProject.description}
-                </DialogDescription>
-              </DialogHeader>
-              <div className="grid gap-4 py-4 overflow-hidden flex-grow">
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <h3 className="text-sm font-medium text-slate-400">Status</h3>
-                    <Badge className={`${getStatusColor(selectedProject.status)} text-white mt-1`}>
-                      {selectedProject.status}
-                    </Badge>
-                  </div>
-                  <div>
-                    <h3 className="text-sm font-medium text-slate-400">Workflow Type</h3>
-                    <div className="flex items-center mt-1">
-                      {getWorkflowIcon(selectedProject.workflow_type)}
-                      <span className="text-white ml-2 capitalize">{selectedProject.workflow_type}</span>
-                    </div>
-                  </div>
-                </div>
-                <div>
-                  <h3 className="text-sm font-medium text-slate-400">Created</h3>
-                  <p className="text-white">
-                    {new Date(selectedProject.created_at).toLocaleString()}
-                  </p>
-                </div>
-                <div className="flex-grow overflow-hidden">
-                  <h3 className="text-sm font-medium text-slate-400">Script</h3>
-                  <ScrollArea className="h-[200px] w-full rounded-md border border-slate-700 p-4 mt-1">
-                    <div 
-                      className="script-content"
-                      dangerouslySetInnerHTML={{ 
-                        __html: formatScriptMarkdown(selectedProject.script) || "No script generated yet" 
-                      }}
-                    />
-                  </ScrollArea>
-                </div>
-                {selectedProject.video_url && (
-                  <div>
-                    <h3 className="text-sm font-medium text-slate-400">Video</h3>
-                    <div className="mt-2">
-                      <div className="relative pt-[56.25%] rounded-lg overflow-hidden bg-slate-900">
-                                                {videoError ? (
-                          <div className="absolute inset-0 flex flex-col items-center justify-center text-white p-4 text-center bg-slate-800">
-                            <p className="mb-4">Unable to play video directly</p>
-                            {videoError.isHTML ? (
-                              <p className="text-sm text-amber-400 mb-4">
-                                The video file does not appear to exist at the specified location.
-                              </p>
-                            ) : (
-                              <p className="text-sm text-slate-400 mb-2">
-                                URL Type: {selectedProject.video_url.startsWith('http') ? 'HTTP URL' : 
-                                          selectedProject.video_url.startsWith('blob:') ? 'Blob URL' : 
-                                          selectedProject.video_url.startsWith('data:') ? 'Data URL' : 
-                                          selectedProject.video_url.startsWith('/') ? 'Relative Path' :
-                                          'Other'}
-                              </p>
-                            )}
-                            <p className="text-xs text-slate-500 mb-2">Relative URL: {selectedProject.video_url}</p>
-                            <p className="text-xs text-slate-500 mb-4 break-all">Absolute URL: {selectedProject.video_url.startsWith('/') ? `http://localhost:5004${selectedProject.video_url}` : selectedProject.video_url}</p>
-                            {videoError.isHTML ? (
-                              <p className="text-xs text-amber-400 mb-4">
-                                The server returned an HTML page instead of a video file. The video may still be processing or the file path may be incorrect.
-                              </p>
-                            ) : (
-                              <p className="text-xs text-amber-400 mb-4">Check browser console for detailed error information</p>
-                            )}
-                            <div className="flex gap-2">
-                              <Button 
-                                variant="default" 
-                                className="bg-purple-600 hover:bg-purple-700"
-                                onClick={() => window.open(absMediaUrl(selectedProject.video_url), '_blank')}
-                              >
-                                Open in New Tab
-                              </Button>
-                              <Button 
-                                variant="outline"
-                                className="border-slate-600 text-slate-300 hover:bg-slate-700"
-                                onClick={() => {
-                                  // Convert relative URL to absolute if needed
-                                  const absoluteUrl = absMediaUrl(selectedProject.video_url);
-                                  
-                                  // Check if it's a blob or data URL
-                                  if (absoluteUrl.startsWith('blob:') || absoluteUrl.startsWith('data:')) {
-                                    // For blob URLs, we need to fetch the data first
-                                    fetch(absoluteUrl)
-                                      .then(response => response.blob())
-                                      .then(blob => {
-                                        const url = window.URL.createObjectURL(blob);
-                                        const link = document.createElement('a');
-                                        link.href = url;
-                                        link.download = `video-${selectedProject.id}.mp4`;
-                                        document.body.appendChild(link);
-                                        link.click();
-                                        document.body.removeChild(link);
-                                        window.URL.revokeObjectURL(url);
-                                      })
-                                      .catch(err => {
-                                        console.error("Error downloading blob:", err);
-                                        // Fallback to opening in new tab
-                                        window.open(absoluteUrl, '_blank');
-                                      });
-                                  } else {
-                                    // For regular URLs, try direct download first
-                                    const link = document.createElement('a');
-                                    link.href = absoluteUrl;
-                                    link.download = `video-${selectedProject.id}.mp4`;
-                                    // Try to download, if it fails open in new tab
-                                    link.onerror = () => {
-                                      window.open(absoluteUrl, '_blank');
-                                    };
-                                    document.body.appendChild(link);
-                                    link.click();
-                                    document.body.removeChild(link);
-                                  }
-                                }}
-                              >
-                                Download
-                              </Button>
-                            </div>
-                          </div>
-                        ) : (
-                                                    <video 
-                            src={absMediaUrl(selectedProject.video_url)}
-                            controls 
-                            className="absolute top-0 left-0 w-full h-full"
-                            onError={(e) => {
-                              console.error("Error loading video:", e);
-                              console.log("Video URL:", selectedProject.video_url);
-                              console.log("Absolute URL:", selectedProject.video_url.startsWith('/') ? `http://localhost:5004${selectedProject.video_url}` : selectedProject.video_url);
-                              // Try to fetch the URL to see what content is actually returned
-                              fetch(absMediaUrl(selectedProject.video_url))
-                                .then(response => {
-                                  console.log("URL fetch response:", response.status);
-                                  console.log("Content-Type:", response.headers.get('Content-Type'));
-                                  console.log("Content-Length:", response.headers.get('Content-Length'));
-                                  
-                                  // Check if it's actually a video file
-                                  const contentType = response.headers.get('Content-Type');
-                                  const isVideo = contentType && contentType.startsWith('video/');
-                                  const isHTML = contentType && contentType.startsWith('text/html');
-                                  
-                                  if (isHTML) {
-                                    console.warn("Warning: Content-Type is HTML - file may not exist");
-                                  } else if (!isVideo) {
-                                    console.warn("Warning: Content-Type is not a video type:", contentType);
-                                  }
-                                  
-                                  // Check content length
-                                  const contentLength = response.headers.get('Content-Length');
-                                  if (contentLength === '0' || contentLength === null) {
-                                    console.warn("Warning: Content-Length is zero or null");
-                                  }
-                                  
-                                  // Store response data for use in the next then block
-                                  return response.text().then(content => ({
-                                    content,
-                                    status: response.status,
-                                    contentType: contentType,
-                                    isHTML: isHTML,
-                                    isVideo: isVideo,
-                                    contentLength: contentLength
-                                  }));
-                                })
-                                .then(({content, status, contentType, isHTML}) => {
-                                  console.log("First 500 characters of content:", content.substring(0, 500));
-                                  // Check if it looks like HTML (might be a 404 page)
-                                  const looksLikeHTML = content.trim().startsWith('<!DOCTYPE html') || content.trim().startsWith('<html');
-                                  if (looksLikeHTML) {
-                                    console.warn("Warning: Content appears to be HTML, not a video file");
-                                  }
-                                  
-                                  // Set a more specific error state
-                                  setVideoError({
-                                    isHTML: looksLikeHTML || isHTML,
-                                    contentType: looksLikeHTML ? 'html' : contentType,
-                                    status: status
-                                  });
-                                })
-                                .catch(err => {
-                                  console.error("URL fetch error:", err);
-                                  setVideoError(true);
-                                });
-                            }}
-                          />
-                        )}
-                      </div>
-                      <div className="flex flex-wrap gap-2 mt-2">
-                        <Button 
-                          variant="outline" 
-                          size="sm" 
-                          className="border-slate-600 text-slate-300 hover:bg-slate-600"
-                          onClick={() => {
-                            const url = selectedProject.video_url;
-                            if (navigator.clipboard?.writeText) {
-                              navigator.clipboard.writeText(url);
-                            } else {
-                              const textarea = document.createElement('textarea');
-                              textarea.value = url;
-                              document.body.appendChild(textarea);
-                              textarea.select();
-                              document.execCommand('copy');
-                              textarea.remove();
-                            }
-                          }}
-                        >
-                          Copy URL
-                        </Button>
-                        <Button 
-                          variant="outline" 
-                          size="sm" 
-                          className="border-slate-600 text-slate-300 hover:bg-slate-600"
-                          onClick={() => {
-                            const link = document.createElement('a');
-                            link.href = absMediaUrl(selectedProject.video_url);
-                            link.download = `video-${selectedProject.id}.mp4`;
-                            document.body.appendChild(link);
-                            link.click();
-                            document.body.removeChild(link);
-                          }}
-                        >
-                          <Download className="h-4 w-4 mr-2" />
-                          Download
-                        </Button>
-                      </div>
-                    </div>
-                  </div>
-                )}
-                <div className="flex justify-end space-x-2 pt-4">
-                  <Button variant="outline" className="border-slate-600 text-slate-300 hover:bg-slate-700" onClick={closeDetailsModal}>
-                    Close
-                  </Button>
-                  <Button className="bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600">
-                    Edit Project
-                  </Button>
-                </div>
-              </div>
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
-
       {/* Header */}
       <header className="border-b border-slate-800 bg-slate-900/50 backdrop-blur-sm">
         <div className="container mx-auto px-4 py-4">
@@ -477,6 +189,15 @@ const Dashboard = ({ onCreateVideo }) => {
                 <User className="h-4 w-4 mr-2" />
                 Profile
               </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                className="border-red-500/40 text-red-400 hover:bg-red-500/10 hover:text-red-300"
+                onClick={handleLogout}
+              >
+                <LogOut className="h-4 w-4 mr-2" />
+                Logout
+              </Button>
             </div>
           </div>
         </div>
@@ -487,69 +208,82 @@ const Dashboard = ({ onCreateVideo }) => {
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
           {/* Stats Cards */}
           <div className="lg:col-span-4 grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.1 }}
-            >
-              <Card className="bg-slate-800/50 border-slate-700">
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm font-medium text-slate-400">Total Projects</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold text-white">{projects.length}</div>
-                </CardContent>
-              </Card>
-            </motion.div>
+            {projectsLoading || tasksLoading ? (
+              [0, 1, 2, 3].map((i) => (
+                <Card key={i} className="bg-slate-800/50 border-slate-700">
+                  <CardHeader className="pb-2">
+                    <Skeleton className="h-4 w-24 bg-slate-700" />
+                  </CardHeader>
+                  <CardContent>
+                    <Skeleton className="h-8 w-12 bg-slate-700" />
+                  </CardContent>
+                </Card>
+              ))
+            ) : (
+              <>
+                <motion.div
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.1 }}
+                >
+                  <Card className="bg-slate-800/50 border-slate-700">
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-sm font-medium text-slate-400">Total Projects</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="text-2xl font-bold text-white">{projects.length}</div>
+                    </CardContent>
+                  </Card>
+                </motion.div>
 
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.2 }}
-            >
-              <Card className="bg-slate-800/50 border-slate-700">
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm font-medium text-slate-400">Active Tasks</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold text-white">
-                    {tasks.filter(t => t.status === 'running' || t.status === 'processing').length}
-                  </div>
-                </CardContent>
-              </Card>
-            </motion.div>
+                <motion.div
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.2 }}
+                >
+                  <Card className="bg-slate-800/50 border-slate-700">
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-sm font-medium text-slate-400">Active Tasks</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="text-2xl font-bold text-white">
+                        {tasks.filter(isActive).length}
+                      </div>
+                    </CardContent>
+                  </Card>
+                </motion.div>
 
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.3 }}
-            >
-              <Card className="bg-slate-800/50 border-slate-700">
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm font-medium text-slate-400">Completed</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold text-white">
-                    {projects.filter(p => p.status === 'completed').length}
-                  </div>
-                </CardContent>
-              </Card>
-            </motion.div>
+                <motion.div
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.3 }}
+                >
+                  <Card className="bg-slate-800/50 border-slate-700">
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-sm font-medium text-slate-400">Completed</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="text-2xl font-bold text-white">{completedCount}</div>
+                    </CardContent>
+                  </Card>
+                </motion.div>
 
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.4 }}
-            >
-              <Card className="bg-slate-800/50 border-slate-700">
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm font-medium text-slate-400">Success Rate</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold text-white">94%</div>
-                </CardContent>
-              </Card>
-            </motion.div>
+                <motion.div
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.4 }}
+                >
+                  <Card className="bg-slate-800/50 border-slate-700">
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-sm font-medium text-slate-400">Success Rate</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="text-2xl font-bold text-white">{successRate}%</div>
+                    </CardContent>
+                  </Card>
+                </motion.div>
+              </>
+            )}
           </div>
 
           {/* Main Content Area */}
@@ -569,92 +303,120 @@ const Dashboard = ({ onCreateVideo }) => {
                   </Button>
                 </div>
 
-                <div className="grid gap-4">
-                  {projects.map((project, index) => (
-                    <motion.div
-                      key={project.id}
-                      initial={{ opacity: 0, x: -20 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      transition={{ delay: index * 0.1 }}
-                    >
-                      <Card className="bg-slate-800/50 border-slate-700 hover:bg-slate-800/70 transition-colors">
-                        <CardHeader>
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center space-x-3">
-                              {getWorkflowIcon(project.workflow_type)}
-                              <div>
-                                <CardTitle className="text-white">{project.title}</CardTitle>
-                                <CardDescription className="text-slate-400">
-                                  {project.description}
-                                </CardDescription>
+                {projectsQuery.isError ? (
+                  <ErrorRetryCard
+                    title="Failed to load projects"
+                    message={projectsQuery.error?.message}
+                    onRetry={() => projectsQuery.refetch()}
+                  />
+                ) : projectsLoading ? (
+                  <ProjectListSkeleton />
+                ) : projects.length > 0 ? (
+                  <div className="grid gap-4">
+                    {projects.map((project, index) => (
+                      <motion.div
+                        key={project.id}
+                        initial={{ opacity: 0, x: -20 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        transition={{ delay: index * 0.1 }}
+                      >
+                        <Card className="bg-slate-800/50 border-slate-700 hover:bg-slate-800/70 transition-colors">
+                          <CardHeader>
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center space-x-3">
+                                {getWorkflowIcon(project.workflow_type)}
+                                <div>
+                                  <CardTitle className="text-white">{project.title}</CardTitle>
+                                  <CardDescription className="text-slate-400">
+                                    {project.description}
+                                  </CardDescription>
+                                </div>
                               </div>
-                            </div>
-                            <Badge className={`${getStatusColor(project.status)} text-white`}>
-                              {project.status}
-                            </Badge>
-                          </div>
-                        </CardHeader>
-                        <CardContent>
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center space-x-4 text-sm text-slate-400">
-                              <span className="flex items-center">
-                                <Clock className="h-4 w-4 mr-1" />
-                                {new Date(project.created_at).toLocaleDateString()}
-                              </span>
-                              <Badge variant="outline" className="border-slate-600 text-slate-300">
-                                {project.workflow_type}
+                              <Badge className={`${getStatusColor(project.status)} text-white`}>
+                                {project.status}
                               </Badge>
                             </div>
-                            <Button 
-                              variant="outline" 
-                              size="sm"
-                              onClick={() => handleViewDetails(project)}
-                            >
-                              <Eye className="h-4 w-4 mr-2" />
-                              View Details
-                            </Button>
-                          </div>
-                        </CardContent>
-                      </Card>
-                    </motion.div>
-                  ))}
-                </div>
+                          </CardHeader>
+                          <CardContent>
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center space-x-4 text-sm text-slate-400">
+                                <span className="flex items-center">
+                                  <Clock className="h-4 w-4 mr-1" />
+                                  {new Date(project.created_at).toLocaleDateString()}
+                                </span>
+                                <Badge variant="outline" className="border-slate-600 text-slate-300">
+                                  {project.workflow_type}
+                                </Badge>
+                              </div>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => navigate(`/projects/${project.id}`)}
+                              >
+                                <Eye className="h-4 w-4 mr-2" />
+                                View Details
+                              </Button>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      </motion.div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="p-8 bg-slate-800/50 rounded-lg border border-slate-700 text-center">
+                    <p className="text-slate-400">No projects yet. Create your first video project.</p>
+                  </div>
+                )}
               </TabsContent>
 
               <TabsContent value="tasks" className="space-y-4">
                 <h2 className="text-xl font-semibold text-white">Active Tasks</h2>
-                <div className="grid gap-4">
-                  {tasks.filter(task => task.status === 'running' || task.status === 'processing').map((task, index) => (
-                    <motion.div
-                      key={task.id}
-                      initial={{ opacity: 0, x: -20 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      transition={{ delay: index * 0.1 }}
-                    >
-                      <Card className="bg-slate-800/50 border-slate-700">
-                        <CardHeader>
-                          <CardTitle className="text-white">
-                            {task.task_type ? task.task_type.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()) : 'Unknown Task'}
-                          </CardTitle>
-                          <CardDescription className="text-slate-400">
-                            Project ID: {task.project_id}
-                          </CardDescription>
-                        </CardHeader>
-                        <CardContent>
-                          <div className="space-y-2">
-                            <div className="flex items-center justify-between text-sm">
-                              <span className="text-slate-400">Progress</span>
-                              <span className="text-white">
-                                {task.progress !== undefined ? `${task.progress}%` : 'Unknown'}
-                              </span>
+                {tasksQuery.isError ? (
+                  <ErrorRetryCard
+                    title="Failed to load tasks"
+                    message={tasksQuery.error?.message}
+                    onRetry={() => tasksQuery.refetch()}
+                  />
+                ) : tasksLoading ? (
+                  <TaskListSkeleton />
+                ) : tasks.filter(isActive).length > 0 ? (
+                  <div className="grid gap-4">
+                    {tasks.filter(isActive).map((task, index) => (
+                      <motion.div
+                        key={task.id}
+                        initial={{ opacity: 0, x: -20 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        transition={{ delay: index * 0.1 }}
+                      >
+                        <Card className="bg-slate-800/50 border-slate-700">
+                          <CardHeader>
+                            <CardTitle className="text-white">
+                              {task.task_type ? task.task_type.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()) : 'Unknown Task'}
+                            </CardTitle>
+                            <CardDescription className="text-slate-400">
+                              Project ID: {task.project_id}
+                            </CardDescription>
+                          </CardHeader>
+                          <CardContent>
+                            <div className="space-y-2">
+                              <div className="flex items-center justify-between text-sm">
+                                <span className="text-slate-400">Progress</span>
+                                <span className="text-white">
+                                  {task.progress !== undefined ? `${task.progress}%` : 'Unknown'}
+                                </span>
+                              </div>
+                              <Progress value={task.progress || 0} className="h-2" />
                             </div>
-                            <Progress value={task.progress || 0} className="h-2" />
-                          </div>
-                        </CardContent>
-                      </Card>
-                    </motion.div>
-                  ))}
-                </div>
+                          </CardContent>
+                        </Card>
+                      </motion.div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="p-8 bg-slate-800/50 rounded-lg border border-slate-700 text-center">
+                    <p className="text-slate-400">No active tasks right now.</p>
+                  </div>
+                )}
               </TabsContent>
             </Tabs>
           </div>
@@ -686,6 +448,34 @@ const Dashboard = ({ onCreateVideo }) => {
 
             <Card className="bg-slate-800/50 border-slate-700">
               <CardHeader>
+                <CardTitle className="text-white">Format Presets</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                {presetsQuery.isError ? (
+                  <p className="text-sm text-slate-500">Failed to load presets.</p>
+                ) : presetsLoading ? (
+                  <div className="space-y-2">
+                    <Skeleton className="h-4 w-full bg-slate-700" />
+                    <Skeleton className="h-4 w-3/4 bg-slate-700" />
+                    <Skeleton className="h-4 w-1/2 bg-slate-700" />
+                  </div>
+                ) : presets.length > 0 ? (
+                  presets.map((preset) => (
+                    <div key={preset.id} className="flex items-center justify-between text-sm">
+                      <span className="text-slate-300">{preset.name}</span>
+                      <span className="text-xs text-slate-500">
+                        {preset.width}×{preset.height}
+                      </span>
+                    </div>
+                  ))
+                ) : (
+                  <p className="text-sm text-slate-500">No presets available.</p>
+                )}
+              </CardContent>
+            </Card>
+
+            <Card className="bg-slate-800/50 border-slate-700">
+              <CardHeader>
                 <CardTitle className="text-white">System Status</CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
@@ -711,4 +501,3 @@ const Dashboard = ({ onCreateVideo }) => {
 }
 
 export default Dashboard
-

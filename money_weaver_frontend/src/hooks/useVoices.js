@@ -1,0 +1,1 @@
+export { useVoices } from '@/api/voices'
