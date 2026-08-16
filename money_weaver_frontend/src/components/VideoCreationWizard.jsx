@@ -39,7 +39,6 @@ const VideoCreationWizard = ({ onBack }) => {
     workflowType: 'assembler',
     presetId: null,
     duration: '30',
-    style: 'professional',
     voiceType: 'female',
     voiceId: null,
     language: 'en',
@@ -134,11 +133,11 @@ const VideoCreationWizard = ({ onBack }) => {
   const canProceed = () => {
     if (currentStep === 1) return Boolean(formData.title.trim() && formData.prompt.trim())
     if (currentStep === 2) return scenes.length > 0
-    if (currentStep === 3) return Boolean(selectedPreset)
+    if (currentStep === 3) return presets.length === 0 || Boolean(selectedPreset)
     return true
   }
 
-  const canGenerate = Boolean(formData.prompt.trim()) && Boolean(selectedPreset)
+  const canGenerate = Boolean(formData.prompt.trim()) && (presets.length === 0 || Boolean(selectedPreset))
 
   const nextStep = () => {
     if (!canProceed()) return
@@ -616,7 +615,7 @@ const VideoCreationWizard = ({ onBack }) => {
                           <Skeleton className="h-10 w-full" />
                         ) : (
                           <Select
-                            value={formData.voiceId ? String(formData.voiceId) : 'default'}
+                            value={formData.voiceId && voices.some((v) => v.id === formData.voiceId) ? String(formData.voiceId) : 'default'}
                             onValueChange={(value) => handleInputChange('voiceId', value === 'default' ? null : Number(value))}
                           >
                             <SelectTrigger className="bg-slate-700 border-slate-600 text-white">
