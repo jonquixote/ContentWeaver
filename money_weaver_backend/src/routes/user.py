@@ -1,7 +1,7 @@
 from flask import Blueprint, jsonify, request, g
 from src.models.user import User
 from src.database import db
-from src.auth import auth_required
+from src.auth import auth_required, current_token_blocklist_entry
 from src.validation import require_fields
 from sqlalchemy.exc import IntegrityError
 
@@ -50,12 +50,38 @@ def update_me():
     return jsonify(user.to_dict())
 
 
+def _user_has_child_data(user_id):
+    """True when the user owns rows that FK-reference user.id (Project, ApiKey).
+
+    SQLite (this app's dev/prod DB) does not enforce foreign keys by default, so
+    deleting such a user would silently orphan rows instead of raising an
+    IntegrityError. Check explicitly so the 409 path behaves identically on
+    SQLite and PostgreSQL.
+    """
+    from src.models.project import Project
+    from src.models.api_key import ApiKey
+    return (Project.query.filter_by(user_id=user_id).first() is not None
+            or ApiKey.query.filter_by(user_id=user_id).first() is not None)
+
+
+_CHILD_DATA_ERROR = ('Delete projects and API keys first, or contact support', 409)
+
+
 @user_bp.route('/users/me', methods=['DELETE'])
 @auth_required
 def delete_me():
     user = User.query.get_or_404(g.current_user['id'])
-    db.session.delete(user)
-    db.session.commit()
+    if _user_has_child_data(user.id):
+        return jsonify({'error': _CHILD_DATA_ERROR[0]}), _CHILD_DATA_ERROR[1]
+    block = current_token_blocklist_entry()
+    if block is not None:
+        db.session.add(block)
+    try:
+        db.session.delete(user)
+        db.session.commit()
+    except IntegrityError:
+        db.session.rollback()
+        return jsonify({'error': _CHILD_DATA_ERROR[0]}), _CHILD_DATA_ERROR[1]
     return '', 204
 
 @user_bp.route('/users', methods=['GET'])
@@ -106,6 +132,12 @@ def delete_user(user_id):
     if user_id != g.current_user['id']:
         return jsonify({'error': 'Forbidden'}), 403
     user = User.query.get_or_404(user_id)
-    db.session.delete(user)
-    db.session.commit()
+    if _user_has_child_data(user.id):
+        return jsonify({'error': _CHILD_DATA_ERROR[0]}), _CHILD_DATA_ERROR[1]
+    try:
+        db.session.delete(user)
+        db.session.commit()
+    except IntegrityError:
+        db.session.rollback()
+        return jsonify({'error': _CHILD_DATA_ERROR[0]}), _CHILD_DATA_ERROR[1]
     return '', 204

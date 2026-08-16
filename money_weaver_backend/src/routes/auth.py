@@ -1,7 +1,7 @@
 from flask import Blueprint, jsonify, request
 from src.models.user import User
 from src.database import db
-from src.auth import auth_required
+from src.auth import auth_required, current_token_blocklist_entry
 from src.validation import require_fields
 from sqlalchemy.exc import IntegrityError
 
@@ -74,14 +74,10 @@ def login():
 @auth_bp.route('/auth/logout', methods=['POST'])
 @auth_required
 def logout():
-    import jwt
-    import os
-    from src.models.token_blocklist import TokenBlocklist
-    token = request.headers.get('Authorization')[7:]
-    payload = jwt.decode(token, os.environ['SECRET_KEY'], algorithms=['HS256'])
-    if payload.get('jti'):
+    block = current_token_blocklist_entry()
+    if block is not None:
+        db.session.add(block)
         try:
-            db.session.add(TokenBlocklist(jti=payload['jti']))
             db.session.commit()
         except IntegrityError:
             db.session.rollback()
