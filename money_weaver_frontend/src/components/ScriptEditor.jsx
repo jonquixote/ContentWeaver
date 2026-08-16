@@ -1,17 +1,14 @@
-import { forwardRef, useImperativeHandle } from 'react'
 import { useEditor, EditorContent } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
 import Placeholder from '@tiptap/extension-placeholder'
+import { jsonToScriptText } from '@/lib/scriptParser'
 
-const ScriptEditor = forwardRef(function ScriptEditor(
-  { value = '', onChange, placeholder = 'Write your script...', minHeight = 'min-h-[300px]' },
-  ref
-) {
+const ScriptEditor = ({ value = '', onChange, placeholder = 'Write your script. Bold scene headers like **Scene 1: Intro (0s-5s)** structure your storyboard...', minHeight = 'min-h-[300px]' }) => {
   const editor = useEditor({
     extensions: [StarterKit, Placeholder.configure({ placeholder })],
     ...(value ? { content: value } : {}),
     onUpdate: ({ editor }) => {
-      onChange?.(editor.getHTML(), editor.getText())
+      onChange?.(editor.getHTML(), jsonToScriptText(editor.getJSON()))
     },
     editorProps: {
       attributes: {
@@ -20,21 +17,11 @@ const ScriptEditor = forwardRef(function ScriptEditor(
     },
   })
 
-  useImperativeHandle(
-    ref,
-    () => ({
-      getText: () => editor?.getText() || '',
-      getHTML: () => editor?.getHTML() || '',
-      getJSON: () => editor?.getJSON() || null,
-    }),
-    [editor]
-  )
-
   return (
     <div className="bg-slate-700 border border-slate-600 rounded-md overflow-hidden">
       <EditorContent editor={editor} />
     </div>
   )
-})
+}
 
 export default ScriptEditor

@@ -27,9 +27,9 @@ const StoryboardPreview = ({ text = '' }) => {
         </p>
       ) : (
         <div className="grid gap-3 sm:grid-cols-2">
-          {scenes.map((scene) => (
+          {scenes.map((scene, index) => (
             <div
-              key={scene.scene_number}
+              key={`${scene.scene_number}-${index}`}
               className="p-4 rounded-lg bg-slate-700/40 border border-slate-600"
             >
               <div className="flex items-center justify-between mb-2">

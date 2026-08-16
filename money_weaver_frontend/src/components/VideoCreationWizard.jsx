@@ -282,7 +282,7 @@ const VideoCreationWizard = ({ onBack }) => {
                       <ScriptEditor
                         value={formData.scriptHtml}
                         onChange={handleScriptChange}
-                        placeholder="Write your script. Use **Scene N: Title (Xs-Ys)** headers with a Voiceover: &quot;...&quot; line per scene — bold markers render as styled text."
+                        placeholder="Write your script. Make scene headers bold — e.g. **Scene 1: Intro (0s-5s)** — each followed by a Voiceover: &quot;...&quot; line to structure your storyboard."
                       />
                       <p className="text-xs text-slate-400">
                         Be specific about the content, style, and tone you want for your video. Scene headers are parsed into a storyboard preview below.
