@@ -6,6 +6,7 @@ import { Badge } from '@/components/ui/badge'
 import { Progress } from '@/components/ui/progress'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { ArrowLeft, Clock, Play, RefreshCw, Video } from 'lucide-react'
+import VideoPlayer from '@/components/VideoPlayer'
 // eslint-disable-next-line no-unused-vars
 import { motion } from 'framer-motion'
 import api from '@/services/api'
@@ -239,7 +240,7 @@ const ProjectDetail = () => {
                             className="w-full aspect-video object-cover"
                           />
                         )}
-                        <video src={videoUrl} controls className="w-full aspect-video" poster={thumbnailUrl || undefined} />
+                        <VideoPlayer src={videoUrl} poster={thumbnailUrl || undefined} />
                       </div>
                       <div className="flex flex-wrap gap-2">
                         <Button

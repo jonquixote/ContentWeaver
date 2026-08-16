@@ -6,6 +6,7 @@ import { Progress } from '@/components/ui/progress'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { useTaskStatus } from '@/hooks/useTaskStatus'
+import VideoPlayer from '@/components/VideoPlayer'
 
 // Backend /final/ and /media/ media require auth via query token.
 // Absolute presigned S3/R2 URLs pass through untouched (appending the JWT would
@@ -247,11 +248,7 @@ const VideoProgressTracker = ({ taskId, onClose }) => {
               <h3 className="text-lg font-medium text-white mb-1">Video Generation Complete!</h3>
               <p className="text-green-200 mb-4">Your video has been successfully created.</p>
               {status?.video_url && (
-                <video
-                  src={absMediaUrl(status.video_url)}
-                  controls
-                  className="mx-auto max-w-full rounded-lg border border-green-700"
-                />
+                <VideoPlayer src={absMediaUrl(status.video_url)} className="mx-auto max-w-full rounded-lg border border-green-700" />
               )}
             </motion.div>
           )}
