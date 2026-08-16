@@ -1,0 +1,17 @@
+/* TipTap editor */
+.tiptap p.is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  float: left;
+  height: 0;
+  pointer-events: none;
+  color: rgb(148 163 184);
+}
+
+.tiptap strong {
+  color: inherit;
+  font-weight: 700;
+}
+
+.tiptap:focus {
+  outline: none;
+}

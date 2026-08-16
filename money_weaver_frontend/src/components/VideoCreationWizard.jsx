@@ -13,6 +13,8 @@ import { ArrowLeft, ArrowRight, Video, Zap, Wand2, Play, Settings } from 'lucide
 import { motion, AnimatePresence } from 'framer-motion'
 import ApiService from '../services/api'
 import VideoProgressTracker from './VideoProgressTracker'
+import ScriptEditor from './ScriptEditor'
+import StoryboardPreview from './StoryboardPreview'
 import '../App.css'
 
 const VideoCreationWizard = ({ onBack }) => {
@@ -21,6 +23,7 @@ const VideoCreationWizard = ({ onBack }) => {
     title: '',
     description: '',
     prompt: '',
+    scriptHtml: '',
     workflowType: 'assembler',
     duration: '30',
     style: 'professional',
@@ -82,6 +85,10 @@ const VideoCreationWizard = ({ onBack }) => {
     } else {
       setFormData(prev => ({ ...prev, [field]: value }));
     }
+  }
+
+  const handleScriptChange = (html, text) => {
+    setFormData(prev => ({ ...prev, scriptHtml: html, prompt: text }))
   }
 
   const nextStep = () => {
@@ -271,18 +278,18 @@ const VideoCreationWizard = ({ onBack }) => {
                     </div>
 
                     <div className="space-y-2">
-                      <Label htmlFor="prompt" className="text-white">Video Prompt</Label>
-                      <Textarea
-                        id="prompt"
-                        placeholder="Describe what you want your video to be about..."
-                        value={formData.prompt}
-                        onChange={(e) => handleInputChange('prompt', e.target.value)}
-                        className="bg-slate-700 border-slate-600 text-white min-h-[120px]"
+                      <Label htmlFor="script" className="text-white">Video Script</Label>
+                      <ScriptEditor
+                        value={formData.scriptHtml}
+                        onChange={handleScriptChange}
+                        placeholder="Write your script. Use **Scene N: Title (Xs-Ys)** headers with a Voiceover: &quot;...&quot; line per scene — bold markers render as styled text."
                       />
                       <p className="text-xs text-slate-400">
-                        Be specific about the content, style, and tone you want for your video.
+                        Be specific about the content, style, and tone you want for your video. Scene headers are parsed into a storyboard preview below.
                       </p>
                     </div>
+
+                    <StoryboardPreview text={formData.prompt} />
                   </CardContent>
                 </Card>
               </motion.div>
@@ -543,7 +550,7 @@ const VideoCreationWizard = ({ onBack }) => {
                         <div className="space-y-1 text-sm">
                           <p className="text-slate-300"><span className="text-slate-400">Title:</span> {formData.title}</p>
                           <p className="text-slate-300"><span className="text-slate-400">Description:</span> {formData.description}</p>
-                          <p className="text-slate-300"><span className="text-slate-400">Prompt:</span> {formData.prompt}</p>
+                          <p className="text-slate-300"><span className="text-slate-400">Script:</span> {formData.prompt}</p>
                         </div>
                       </div>
 
