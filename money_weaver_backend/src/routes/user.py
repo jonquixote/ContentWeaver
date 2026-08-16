@@ -3,8 +3,60 @@ from src.models.user import User
 from src.database import db
 from src.auth import auth_required
 from src.validation import require_fields
+from sqlalchemy.exc import IntegrityError
 
 user_bp = Blueprint('user', __name__)
+
+
+def _apply_user_update(user, data):
+    """Apply partial user updates (username/email/password).
+
+    Returns an error tuple (jsonify response, status code) on failure, or None
+    after a successful commit. Shared by PUT /users/<id> and PATCH /users/me.
+    """
+    try:
+        require_fields(data, [])
+    except ValueError as e:
+        return jsonify({'error': str(e)}), 400
+    user.username = data.get('username', user.username)
+    user.email = data.get('email', user.email)
+    if 'password' in data:
+        if not isinstance(data['password'], str):
+            return jsonify({'error': 'Password must be a string'}), 400
+        user.hash_password(data['password'])
+    try:
+        db.session.commit()
+    except IntegrityError:
+        db.session.rollback()
+        return jsonify({'error': 'Username or email already in use'}), 409
+    return None
+
+
+@user_bp.route('/users/me', methods=['GET'])
+@auth_required
+def get_me():
+    user = User.query.get_or_404(g.current_user['id'])
+    return jsonify(user.to_dict())
+
+
+@user_bp.route('/users/me', methods=['PATCH'])
+@auth_required
+def update_me():
+    user = User.query.get_or_404(g.current_user['id'])
+    data = request.json
+    error = _apply_user_update(user, data)
+    if error:
+        return error
+    return jsonify(user.to_dict())
+
+
+@user_bp.route('/users/me', methods=['DELETE'])
+@auth_required
+def delete_me():
+    user = User.query.get_or_404(g.current_user['id'])
+    db.session.delete(user)
+    db.session.commit()
+    return '', 204
 
 @user_bp.route('/users', methods=['GET'])
 @auth_required
@@ -43,17 +95,9 @@ def update_user(user_id):
         return jsonify({'error': 'Forbidden'}), 403
     user = User.query.get_or_404(user_id)
     data = request.json
-    try:
-        require_fields(data, [])
-    except ValueError as e:
-        return jsonify({'error': str(e)}), 400
-    user.username = data.get('username', user.username)
-    user.email = data.get('email', user.email)
-    if 'password' in data:
-        if not isinstance(data['password'], str):
-            return jsonify({'error': 'Password must be a string'}), 400
-        user.hash_password(data['password'])
-    db.session.commit()
+    error = _apply_user_update(user, data)
+    if error:
+        return error
     return jsonify(user.to_dict())
 
 @user_bp.route('/users/<int:user_id>', methods=['DELETE'])

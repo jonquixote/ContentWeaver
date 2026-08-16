@@ -102,6 +102,23 @@ class ApiService {
     })
   }
 
+  async getMe() {
+    return this.request('/users/me')
+  }
+
+  async updateMe(patch) {
+    return this.request('/users/me', {
+      method: 'PATCH',
+      body: patch,
+    })
+  }
+
+  async deleteMe() {
+    return this.request('/users/me', {
+      method: 'DELETE',
+    })
+  }
+
   // Project endpoints
   async getProjects(userId = null) {
     const query = userId ? `?user_id=${userId}` : ''

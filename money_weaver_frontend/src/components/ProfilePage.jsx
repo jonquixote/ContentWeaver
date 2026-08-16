@@ -1,54 +1,123 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { useForm } from 'react-hook-form'
+import { zodResolver } from '@hookform/resolvers/zod'
+import { z } from 'zod'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Textarea } from '@/components/ui/textarea'
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Separator } from '@/components/ui/separator'
-import { Save, Upload, Key, CreditCard, User } from 'lucide-react'
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
+import { Save, Key, User, Trash2 } from 'lucide-react'
+import api from '@/services/api'
+import { useAuthStore } from '@/store/authStore'
+
+const profileSchema = z.object({
+  username: z.string().min(3, 'Username must be at least 3 characters'),
+  email: z.string().email('Invalid email address'),
+})
+
+const passwordSchema = z
+  .object({
+    current: z.string().min(1, 'Current password is required'),
+    new: z.string().min(6, 'New password must be at least 6 characters'),
+    confirm: z.string().min(1, 'Please confirm your new password'),
+  })
+  .refine((d) => d.new === d.confirm, {
+    message: 'New passwords do not match',
+    path: ['confirm'],
+  })
 
 const ProfilePage = () => {
-  const [profile, setProfile] = useState({
-    name: 'John Doe',
-    email: 'john@example.com',
-    username: 'johndoe',
-    bio: 'AI video creator and content producer',
-    avatar: '',
+  const navigate = useNavigate()
+  const storeUser = useAuthStore((s) => s.user)
+  const [savingProfile, setSavingProfile] = useState(false)
+  const [changingPassword, setChangingPassword] = useState(false)
+  const [deleting, setDeleting] = useState(false)
+  const [error, setError] = useState(null)
+  const [notice, setNotice] = useState(null)
+
+  const profileForm = useForm({
+    resolver: zodResolver(profileSchema),
+    defaultValues: {
+      username: storeUser?.username || '',
+      email: storeUser?.email || '',
+    },
   })
 
-  const [password, setPassword] = useState({
-    current: '',
-    new: '',
-    confirm: '',
+  const passwordForm = useForm({
+    resolver: zodResolver(passwordSchema),
+    defaultValues: { current: '', new: '', confirm: '' },
   })
 
-  const [billing] = useState({
-    plan: 'Pro',
-    nextBilling: '2025-10-01',
-    paymentMethod: 'Visa ending in 1234',
-  })
+  useEffect(() => {
+    // Refresh the logged-in user's profile from the backend.
+    const loadMe = async () => {
+      try {
+        const user = await api.getMe()
+        useAuthStore.getState().setUser(user)
+        profileForm.reset({ username: user.username, email: user.email })
+      } catch (err) {
+        console.error('Failed to load profile:', err)
+        setError(err.message || 'Failed to load profile')
+      }
+    }
+    loadMe()
+  }, [profileForm])
 
-  const handleSaveProfile = () => {
-    // In a real app, this would save to a backend
-    console.log('Saving profile:', profile)
-    alert('Profile updated successfully!')
+  const handleSaveProfile = async (values) => {
+    setSavingProfile(true)
+    setError(null)
+    setNotice(null)
+    try {
+      const updated = await api.updateMe({
+        username: values.username,
+        email: values.email,
+      })
+      useAuthStore.getState().setUser(updated)
+      setNotice('Profile updated successfully')
+    } catch (err) {
+      setError(err.message || 'Failed to update profile')
+    } finally {
+      setSavingProfile(false)
+    }
   }
 
-  const handleChangePassword = () => {
-    // In a real app, this would save to a backend
-    if (password.new !== password.confirm) {
-      alert('New passwords do not match!')
+  const handleChangePassword = async (values) => {
+    setChangingPassword(true)
+    setError(null)
+    setNotice(null)
+    try {
+      await api.updateMe({ password: values.new })
+      setNotice('Password changed successfully')
+      passwordForm.reset()
+    } catch (err) {
+      setError(err.message || 'Failed to change password')
+    } finally {
+      setChangingPassword(false)
+    }
+  }
+
+  const handleDeleteAccount = async () => {
+    if (!window.confirm('Permanently delete your account and all its data? This cannot be undone.')) {
       return
     }
-    console.log('Changing password')
-    alert('Password changed successfully!')
-    setPassword({ current: '', new: '', confirm: '' })
+    setDeleting(true)
+    try {
+      await api.deleteMe()
+      await api.logout()
+    } catch (err) {
+      console.error('Failed to delete account:', err)
+    } finally {
+      useAuthStore.getState().logout()
+      setDeleting(false)
+      navigate('/login')
+    }
   }
 
-  const handleProfileChange = (key, value) => {
-    setProfile(prev => ({ ...prev, [key]: value }))
-  }
+  const user = storeUser || {}
+  const initials = (user.username || 'U').slice(0, 2).toUpperCase()
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900">
@@ -57,9 +126,13 @@ const ProfilePage = () => {
         <div className="container mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
             <h1 className="text-2xl font-bold text-white">Profile</h1>
-            <Button onClick={handleSaveProfile} className="bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600">
+            <Button
+              onClick={profileForm.handleSubmit(handleSaveProfile)}
+              disabled={savingProfile}
+              className="bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600"
+            >
               <Save className="h-4 w-4 mr-2" />
-              Save Changes
+              {savingProfile ? 'Saving...' : 'Save Changes'}
             </Button>
           </div>
         </div>
@@ -74,54 +147,34 @@ const ProfilePage = () => {
               <CardHeader>
                 <div className="flex flex-col items-center space-y-4">
                   <Avatar className="h-24 w-24">
-                    <AvatarImage src={profile.avatar} alt={profile.name} />
+                    <AvatarImage src={user.avatar || ''} alt={user.username || 'User'} />
                     <AvatarFallback className="bg-gradient-to-r from-purple-500 to-pink-500 text-white text-2xl">
-                      {profile.name.charAt(0)}
+                      {initials}
                     </AvatarFallback>
                   </Avatar>
-                  <Button variant="outline" className="border-slate-600 text-slate-300 hover:bg-slate-700">
-                    <Upload className="h-4 w-4 mr-2" />
-                    Upload New Photo
-                  </Button>
                 </div>
               </CardHeader>
               <CardContent className="text-center">
-                <h2 className="text-xl font-bold text-white">{profile.name}</h2>
-                <p className="text-slate-400">@{profile.username}</p>
-                <p className="text-sm text-slate-400 mt-2">{profile.bio}</p>
-              </CardContent>
-            </Card>
-
-            {/* Billing Info */}
-            <Card className="bg-slate-800/50 border-slate-700 mt-6">
-              <CardHeader>
-                <CardTitle className="text-white flex items-center">
-                  <CreditCard className="h-5 w-5 mr-2" />
-                  Subscription
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div>
-                  <Label className="text-slate-400">Current Plan</Label>
-                  <p className="text-white font-medium">{billing.plan}</p>
-                </div>
-                <div>
-                  <Label className="text-slate-400">Next Billing Date</Label>
-                  <p className="text-white">{billing.nextBilling}</p>
-                </div>
-                <div>
-                  <Label className="text-slate-400">Payment Method</Label>
-                  <p className="text-white">{billing.paymentMethod}</p>
-                </div>
-                <Button className="w-full mt-4 bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600">
-                  Manage Subscription
-                </Button>
+                <h2 className="text-xl font-bold text-white">{user.username || 'User'}</h2>
+                <p className="text-slate-400">@{user.username}</p>
+                <p className="text-sm text-slate-400 mt-2">{user.email}</p>
               </CardContent>
             </Card>
           </div>
 
           {/* Profile Content */}
           <div className="lg:col-span-2 space-y-6">
+            {error && (
+              <div className="p-3 rounded-md bg-red-900/50 border border-red-800 text-red-300">
+                {error}
+              </div>
+            )}
+            {notice && (
+              <div className="p-3 rounded-md bg-green-900/50 border border-green-800 text-green-300">
+                {notice}
+              </div>
+            )}
+
             {/* Profile Information */}
             <Card className="bg-slate-800/50 border-slate-700">
               <CardHeader>
@@ -130,45 +183,36 @@ const ProfilePage = () => {
                   Profile Information
                 </CardTitle>
                 <CardDescription className="text-slate-400">
-                  Update your personal information and bio
+                  Update your username and email
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div>
-                    <Label className="text-white">Full Name</Label>
-                    <Input
-                      value={profile.name}
-                      onChange={(e) => handleProfileChange('name', e.target.value)}
-                      className="mt-2 bg-slate-700 border-slate-600 text-white"
-                    />
-                  </div>
-                  <div>
                     <Label className="text-white">Username</Label>
                     <Input
-                      value={profile.username}
-                      onChange={(e) => handleProfileChange('username', e.target.value)}
+                      {...profileForm.register('username')}
                       className="mt-2 bg-slate-700 border-slate-600 text-white"
                     />
+                    {profileForm.formState.errors.username && (
+                      <p className="text-red-400 text-sm mt-1">
+                        {profileForm.formState.errors.username.message}
+                      </p>
+                    )}
                   </div>
-                </div>
-                <div>
-                  <Label className="text-white">Email</Label>
-                  <Input
-                    type="email"
-                    value={profile.email}
-                    onChange={(e) => handleProfileChange('email', e.target.value)}
-                    className="mt-2 bg-slate-700 border-slate-600 text-white"
-                  />
-                </div>
-                <div>
-                  <Label className="text-white">Bio</Label>
-                  <Textarea
-                    value={profile.bio}
-                    onChange={(e) => handleProfileChange('bio', e.target.value)}
-                    className="mt-2 bg-slate-700 border-slate-600 text-white"
-                    rows={4}
-                  />
+                  <div>
+                    <Label className="text-white">Email</Label>
+                    <Input
+                      type="email"
+                      {...profileForm.register('email')}
+                      className="mt-2 bg-slate-700 border-slate-600 text-white"
+                    />
+                    {profileForm.formState.errors.email && (
+                      <p className="text-red-400 text-sm mt-1">
+                        {profileForm.formState.errors.email.message}
+                      </p>
+                    )}
+                  </div>
                 </div>
               </CardContent>
             </Card>
@@ -189,31 +233,47 @@ const ProfilePage = () => {
                   <Label className="text-white">Current Password</Label>
                   <Input
                     type="password"
-                    value={password.current}
-                    onChange={(e) => setPassword(prev => ({ ...prev, current: e.target.value }))}
+                    {...passwordForm.register('current')}
                     className="mt-2 bg-slate-700 border-slate-600 text-white"
                   />
+                  {passwordForm.formState.errors.current && (
+                    <p className="text-red-400 text-sm mt-1">
+                      {passwordForm.formState.errors.current.message}
+                    </p>
+                  )}
                 </div>
                 <div>
                   <Label className="text-white">New Password</Label>
                   <Input
                     type="password"
-                    value={password.new}
-                    onChange={(e) => setPassword(prev => ({ ...prev, new: e.target.value }))}
+                    {...passwordForm.register('new')}
                     className="mt-2 bg-slate-700 border-slate-600 text-white"
                   />
+                  {passwordForm.formState.errors.new && (
+                    <p className="text-red-400 text-sm mt-1">
+                      {passwordForm.formState.errors.new.message}
+                    </p>
+                  )}
                 </div>
                 <div>
                   <Label className="text-white">Confirm New Password</Label>
                   <Input
                     type="password"
-                    value={password.confirm}
-                    onChange={(e) => setPassword(prev => ({ ...prev, confirm: e.target.value }))}
+                    {...passwordForm.register('confirm')}
                     className="mt-2 bg-slate-700 border-slate-600 text-white"
                   />
+                  {passwordForm.formState.errors.confirm && (
+                    <p className="text-red-400 text-sm mt-1">
+                      {passwordForm.formState.errors.confirm.message}
+                    </p>
+                  )}
                 </div>
-                <Button onClick={handleChangePassword} className="bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600">
-                  Update Password
+                <Button
+                  onClick={passwordForm.handleSubmit(handleChangePassword)}
+                  disabled={changingPassword}
+                  className="bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600"
+                >
+                  {changingPassword ? 'Updating...' : 'Update Password'}
                 </Button>
               </CardContent>
             </Card>
@@ -227,32 +287,16 @@ const ProfilePage = () => {
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div className="flex justify-between items-center">
-                  <div>
-                    <h3 className="text-white font-medium">Two-Factor Authentication</h3>
-                    <p className="text-slate-400 text-sm">Add an extra layer of security to your account</p>
-                  </div>
-                  <Button variant="outline" className="border-slate-600 text-slate-300 hover:bg-slate-700">
-                    Enable
-                  </Button>
-                </div>
-                <Separator className="bg-slate-700" />
-                <div className="flex justify-between items-center">
-                  <div>
-                    <h3 className="text-white font-medium">Download Your Data</h3>
-                    <p className="text-slate-400 text-sm">Get a copy of your personal data</p>
-                  </div>
-                  <Button variant="outline" className="border-slate-600 text-slate-300 hover:bg-slate-700">
-                    Download
-                  </Button>
-                </div>
                 <Separator className="bg-slate-700" />
                 <div className="flex justify-between items-center">
                   <div>
                     <h3 className="text-red-400 font-medium">Delete Account</h3>
                     <p className="text-slate-400 text-sm">Permanently delete your account and all data</p>
                   </div>
-                  <Button variant="destructive">Delete Account</Button>
+                  <Button variant="destructive" onClick={handleDeleteAccount} disabled={deleting}>
+                    <Trash2 className="h-4 w-4 mr-2" />
+                    {deleting ? 'Deleting...' : 'Delete Account'}
+                  </Button>
                 </div>
               </CardContent>
             </Card>

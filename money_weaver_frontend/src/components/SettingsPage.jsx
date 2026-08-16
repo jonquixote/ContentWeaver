@@ -1,4 +1,8 @@
 import { useState, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { useForm } from 'react-hook-form'
+import { zodResolver } from '@hookform/resolvers/zod'
+import { z } from 'zod'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -6,10 +10,24 @@ import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Separator } from '@/components/ui/separator'
-import { Save, Palette, Bell, Shield, Database, Cloud, Plus, Trash2, Check, X, Cpu } from 'lucide-react'
+import { Save, Palette, Bell, Shield, Database, Cloud, Plus, Trash2, Check, X, Cpu, Key } from 'lucide-react'
 import api from '@/services/api'
+import { useAuthStore } from '@/store/authStore'
+
+const passwordSchema = z
+  .object({
+    current: z.string().min(1, 'Current password is required'),
+    new: z.string().min(6, 'New password must be at least 6 characters'),
+    confirm: z.string().min(1, 'Please confirm your new password'),
+  })
+  .refine((d) => d.new === d.confirm, {
+    message: 'New passwords do not match',
+    path: ['confirm'],
+  })
 
 const SettingsPage = () => {
+  const navigate = useNavigate()
+  const user = useAuthStore((s) => s.user)
   const [settings, setSettings] = useState({
     theme: 'dark',
     notifications: true,
@@ -32,18 +50,26 @@ const SettingsPage = () => {
   const [testLoading, setTestLoading] = useState(false)
   const [availableModels, setAvailableModels] = useState([])
   const [modelsLoading, setModelsLoading] = useState(false)
+  const [changingPassword, setChangingPassword] = useState(false)
+  const [deleting, setDeleting] = useState(false)
+  const [notice, setNotice] = useState(null)
+
+  const passwordForm = useForm({
+    resolver: zodResolver(passwordSchema),
+    defaultValues: { current: '', new: '', confirm: '' },
+  })
 
   // Load API keys and models when component mounts
   useEffect(() => {
     loadApiKeys()
     loadAvailableModels()
-  }, [])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id])
 
   const loadApiKeys = async () => {
+    if (!user?.id) return
     try {
-      // In a real app, you would get the user ID from auth context
-      const userId = 1 // Default user ID for demo
-      const response = await api.request(`/api-keys/user/${userId}`)
+      const response = await api.request(`/api-keys/user/${user.id}`)
       setApiKeys(response.api_keys || [])
     } catch (error) {
       console.error('Failed to load API keys:', error)
@@ -97,12 +123,10 @@ const SettingsPage = () => {
     }
     
     try {
-      // In a real app, you would get the user ID from auth context
-      const userId = 1 // Default user ID for demo
       const response = await api.request('/api-keys', {
         method: 'POST',
         body: {
-          user_id: userId,
+          user_id: user?.id,
           name: newApiKey.name,
           provider: newApiKey.provider,
           key: newApiKey.key
@@ -126,13 +150,8 @@ const SettingsPage = () => {
     }
     
     try {
-      // In a real app, you would get the user ID from auth context
-      const userId = 1 // Default user ID for demo
       const response = await api.request(`/api-keys/${apiKeyId}`, {
         method: 'DELETE',
-        body: {
-          user_id: userId
-        }
       })
       
       if (response.message) {
@@ -169,6 +188,38 @@ const SettingsPage = () => {
       setTestResult({ success: false, error: error.message || 'Failed to test API key' })
     } finally {
       setTestLoading(false)
+    }
+  }
+
+  const handleChangePassword = async (values) => {
+    setChangingPassword(true)
+    setNotice(null)
+    try {
+      await api.updateMe({ password: values.new })
+      setNotice('Password changed successfully')
+      passwordForm.reset()
+    } catch (error) {
+      console.error('Failed to change password:', error)
+      alert(error.message || 'Failed to change password')
+    } finally {
+      setChangingPassword(false)
+    }
+  }
+
+  const handleDeleteAccount = async () => {
+    if (!window.confirm('Permanently delete your account and all its data? This cannot be undone.')) {
+      return
+    }
+    setDeleting(true)
+    try {
+      await api.deleteMe()
+      await api.logout()
+    } catch (error) {
+      console.error('Failed to delete account:', error)
+    } finally {
+      useAuthStore.getState().logout()
+      setDeleting(false)
+      navigate('/login')
     }
   }
 
@@ -400,6 +451,83 @@ const SettingsPage = () => {
                 <div className="text-sm text-slate-400">
                   <p>The selected model will be used by default for all AI-powered content generation tasks.</p>
                   <p className="mt-1">Models are fetched dynamically from your LiteLLM proxy configuration.</p>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Security Settings */}
+            <Card className="bg-slate-800/50 border-slate-700">
+              <CardHeader>
+                <CardTitle className="text-white flex items-center">
+                  <Key className="h-5 w-5 mr-2" />
+                  Security
+                </CardTitle>
+                <CardDescription className="text-slate-400">
+                  Change your password or delete your account
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                {notice && (
+                  <div className="p-3 rounded-md bg-green-900/50 border border-green-800 text-green-300">
+                    {notice}
+                  </div>
+                )}
+                <div>
+                  <Label className="text-white">Current Password</Label>
+                  <Input
+                    type="password"
+                    {...passwordForm.register('current')}
+                    className="mt-2 bg-slate-700 border-slate-600 text-white"
+                  />
+                  {passwordForm.formState.errors.current && (
+                    <p className="text-red-400 text-sm mt-1">
+                      {passwordForm.formState.errors.current.message}
+                    </p>
+                  )}
+                </div>
+                <div>
+                  <Label className="text-white">New Password</Label>
+                  <Input
+                    type="password"
+                    {...passwordForm.register('new')}
+                    className="mt-2 bg-slate-700 border-slate-600 text-white"
+                  />
+                  {passwordForm.formState.errors.new && (
+                    <p className="text-red-400 text-sm mt-1">
+                      {passwordForm.formState.errors.new.message}
+                    </p>
+                  )}
+                </div>
+                <div>
+                  <Label className="text-white">Confirm New Password</Label>
+                  <Input
+                    type="password"
+                    {...passwordForm.register('confirm')}
+                    className="mt-2 bg-slate-700 border-slate-600 text-white"
+                  />
+                  {passwordForm.formState.errors.confirm && (
+                    <p className="text-red-400 text-sm mt-1">
+                      {passwordForm.formState.errors.confirm.message}
+                    </p>
+                  )}
+                </div>
+                <Button
+                  onClick={passwordForm.handleSubmit(handleChangePassword)}
+                  disabled={changingPassword}
+                  className="bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600"
+                >
+                  {changingPassword ? 'Updating...' : 'Update Password'}
+                </Button>
+                <Separator className="bg-slate-700" />
+                <div className="flex justify-between items-center">
+                  <div>
+                    <h3 className="text-red-400 font-medium">Delete Account</h3>
+                    <p className="text-slate-400 text-sm">Permanently delete your account and all data</p>
+                  </div>
+                  <Button variant="destructive" onClick={handleDeleteAccount} disabled={deleting}>
+                    <Trash2 className="h-4 w-4 mr-2" />
+                    {deleting ? 'Deleting...' : 'Delete Account'}
+                  </Button>
                 </div>
               </CardContent>
             </Card>
