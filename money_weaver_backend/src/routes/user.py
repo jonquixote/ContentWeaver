@@ -18,6 +18,10 @@ def _apply_user_update(user, data):
         require_fields(data, [])
     except ValueError as e:
         return jsonify({'error': str(e)}), 400
+    if 'username' in data and not str(data['username']).strip():
+        return jsonify({'error': 'Username cannot be empty'}), 400
+    if 'email' in data and not str(data['email']).strip():
+        return jsonify({'error': 'Email cannot be empty'}), 400
     user.username = data.get('username', user.username)
     user.email = data.get('email', user.email)
     if 'password' in data:
@@ -100,10 +104,18 @@ def create_user():
         return jsonify({'error': str(e)}), 400
     if not isinstance(data.get('password'), str):
         return jsonify({'error': 'Password must be a string'}), 400
+    if User.query.filter_by(username=data['username']).first():
+        return jsonify({'error': 'User with this username already exists'}), 409
+    if User.query.filter_by(email=data['email']).first():
+        return jsonify({'error': 'User with this email already exists'}), 409
     user = User(username=data['username'], email=data['email'])
     user.hash_password(data['password'])
     db.session.add(user)
-    db.session.commit()
+    try:
+        db.session.commit()
+    except IntegrityError:
+        db.session.rollback()
+        return jsonify({'error': 'Username or email already in use'}), 409
     return jsonify(user.to_dict()), 201
 
 @user_bp.route('/users/<int:user_id>', methods=['GET'])

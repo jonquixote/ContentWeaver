@@ -95,6 +95,56 @@ class UserRouteTest(unittest.TestCase):
             '/api/users/me', json={'password': 12345}, headers=self._auth(self.me_id))
         self.assertEqual(resp.status_code, 400)
 
+    def test_patch_blank_username_rejected(self):
+        resp = self.client.patch(
+            '/api/users/me', json={'username': '   '}, headers=self._auth(self.me_id))
+        self.assertEqual(resp.status_code, 400)
+        with self.app.app_context():
+            from src.models.user import User
+            self.assertEqual(db.session.get(User, self.me_id).username, 'me')
+
+    def test_patch_blank_email_rejected(self):
+        resp = self.client.patch(
+            '/api/users/me', json={'email': ''}, headers=self._auth(self.me_id))
+        self.assertEqual(resp.status_code, 400)
+        with self.app.app_context():
+            from src.models.user import User
+            self.assertEqual(db.session.get(User, self.me_id).email, 'me@t.com')
+
+    def test_create_user_requires_auth(self):
+        resp = self.client.post('/api/users', json={
+            'username': 'fresh', 'email': 'fresh@t.com', 'password': 'pw-fresh'})
+        self.assertEqual(resp.status_code, 401)
+
+    def test_create_user_creates(self):
+        resp = self.client.post('/api/users', json={
+            'username': 'fresh', 'email': 'fresh@t.com', 'password': 'pw-fresh'},
+            headers=self._auth(self.me_id))
+        self.assertEqual(resp.status_code, 201)
+        data = resp.get_json()
+        self.assertEqual(data['username'], 'fresh')
+        with self.app.app_context():
+            from src.models.user import User
+            self.assertIsNotNone(User.query.filter_by(username='fresh').first())
+
+    def test_create_user_duplicate_username_conflict(self):
+        resp = self.client.post('/api/users', json={
+            'username': 'other', 'email': 'fresh@t.com', 'password': 'pw-fresh'},
+            headers=self._auth(self.me_id))
+        self.assertEqual(resp.status_code, 409)
+        with self.app.app_context():
+            from src.models.user import User
+            self.assertIsNone(User.query.filter_by(email='fresh@t.com').first())
+
+    def test_create_user_duplicate_email_conflict(self):
+        resp = self.client.post('/api/users', json={
+            'username': 'fresh', 'email': 'other@t.com', 'password': 'pw-fresh'},
+            headers=self._auth(self.me_id))
+        self.assertEqual(resp.status_code, 409)
+        with self.app.app_context():
+            from src.models.user import User
+            self.assertIsNone(User.query.filter_by(username='fresh').first())
+
     def test_patch_duplicate_username_conflict(self):
         resp = self.client.patch(
             '/api/users/me', json={'username': 'other'}, headers=self._auth(self.me_id))
