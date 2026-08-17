@@ -65,11 +65,18 @@ PIXABAY_API_KEY=your-pixabay-api-key
 4. Start frontend: `cd money_weaver_frontend && npm run dev`
 
 ## Testing
-Test files are organized in the `tests/` directory:
+
+Backend (pytest, 77 tests). Use `venv` — `venv312` is broken:
 ```bash
-cd tests
-python test_assembler_pipeline.py
+cd money_weaver_backend && source venv/bin/activate && python -m pytest
 ```
+
+Frontend (Vitest, 17 hook tests, offline via MSW):
+```bash
+cd money_weaver_frontend && pnpm test
+```
+
+CI runs the same commands in `.github/workflows/ci.yml`.
 
 ## Current Status
 

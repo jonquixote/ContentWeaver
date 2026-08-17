@@ -47,10 +47,8 @@ The backend provides the same API endpoints as before:
 
 ## Testing
 
-The enhanced backend has been thoroughly tested with:
-- Script parsing accuracy tests
-- Video duration checking tests
-- Video cutting functionality tests
-- Complete workflow integration tests
-
-All tests pass successfully, demonstrating the reliability of the enhanced system.
+Run the pytest suite from `money_weaver_backend/` (use `venv` — `venv312` is broken):
+```bash
+source venv/bin/activate && python -m pytest
+```
+Tests use a fresh temp SQLite DB (via `tests/conftest.py`) and mock all external services.
