@@ -9,6 +9,7 @@ os.environ.setdefault('SECRET_KEY', 'route-test-secret')
 from flask import Flask
 
 from src.database import db
+from src.models.project import Project
 from src.routes.user import user_bp
 
 
@@ -111,6 +112,22 @@ class UserRouteTest(unittest.TestCase):
             from src.models.user import User
             self.assertEqual(db.session.get(User, self.me_id).email, 'me@t.com')
 
+    def test_patch_null_username_rejected(self):
+        resp = self.client.patch(
+            '/api/users/me', json={'username': None}, headers=self._auth(self.me_id))
+        self.assertEqual(resp.status_code, 400)
+        with self.app.app_context():
+            from src.models.user import User
+            self.assertEqual(db.session.get(User, self.me_id).username, 'me')
+
+    def test_patch_null_email_rejected(self):
+        resp = self.client.patch(
+            '/api/users/me', json={'email': None}, headers=self._auth(self.me_id))
+        self.assertEqual(resp.status_code, 400)
+        with self.app.app_context():
+            from src.models.user import User
+            self.assertEqual(db.session.get(User, self.me_id).email, 'me@t.com')
+
     def test_create_user_requires_auth(self):
         resp = self.client.post('/api/users', json={
             'username': 'fresh', 'email': 'fresh@t.com', 'password': 'pw-fresh'})
@@ -171,7 +188,6 @@ class UserRouteTest(unittest.TestCase):
             self.assertIsNone(db.session.get(User, self.me_id))
 
     def test_delete_me_conflict_with_child_data(self):
-        from src.models.project import Project
         with self.app.app_context():
             db.session.add(Project(title='child project', user_id=self.me_id, voice_type='female'))
             db.session.commit()
@@ -181,14 +197,12 @@ class UserRouteTest(unittest.TestCase):
         self.assertIn('projects', resp.get_json()['error'])
         with self.app.app_context():
             from src.models.user import User
-            from src.models.project import Project
             self.assertIsNotNone(db.session.get(User, self.me_id))
             self.assertEqual(db.session.query(Project).count(), 1)
         self.assertEqual(self.client.get('/api/users/me', headers=headers).status_code, 200)
 
     def test_delete_me_409_on_fk_violation(self):
         from unittest import mock
-        from src.models.project import Project
         with self.app.app_context():
             db.session.add(Project(title='child project', user_id=self.me_id, voice_type='female'))
             db.session.commit()

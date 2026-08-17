@@ -18,9 +18,9 @@ def _apply_user_update(user, data):
         require_fields(data, [])
     except ValueError as e:
         return jsonify({'error': str(e)}), 400
-    if 'username' in data and not str(data['username']).strip():
+    if 'username' in data and (data['username'] is None or not str(data['username']).strip()):
         return jsonify({'error': 'Username cannot be empty'}), 400
-    if 'email' in data and not str(data['email']).strip():
+    if 'email' in data and (data['email'] is None or not str(data['email']).strip()):
         return jsonify({'error': 'Email cannot be empty'}), 400
     user.username = data.get('username', user.username)
     user.email = data.get('email', user.email)

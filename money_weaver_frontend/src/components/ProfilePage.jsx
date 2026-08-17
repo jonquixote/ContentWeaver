@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useQueryClient } from '@tanstack/react-query'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
@@ -52,6 +53,7 @@ const ProfilePage = () => {
     defaultValues: { current: '', new: '', confirm: '' },
   })
 
+  const queryClient = useQueryClient()
   const { data: meData, error: meError } = useMe()
 
   useEffect(() => {
@@ -79,6 +81,7 @@ const ProfilePage = () => {
         email: values.email,
       })
       useAuthStore.getState().setUser(updated)
+      await queryClient.invalidateQueries({ queryKey: ['me'] })
       setNotice('Profile updated successfully')
     } catch (err) {
       setError(err.message || 'Failed to update profile')
