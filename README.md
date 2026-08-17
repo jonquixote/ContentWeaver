@@ -66,7 +66,7 @@ PIXABAY_API_KEY=your-pixabay-api-key
 
 ## Testing
 
-Backend (pytest, 77 tests). Use `venv` — `venv312` is broken:
+Backend (pytest, 151 tests). Use `venv` — `venv312` is broken:
 ```bash
 cd money_weaver_backend && source venv/bin/activate && python -m pytest
 ```
