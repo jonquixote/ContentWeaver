@@ -71,3 +71,7 @@ psycopg2-binary==2.9.9
 # onnxruntime, soundfile, numpy<2, fastapi, uvicorn, ...) are pinned in
 # tts_service/requirements.txt. Do NOT install them into this main venv (Python 3.13).
 # See .superpowers/sdd/task-1-report.md and docs/superpowers/plans/2026-08-10-04-phase3-voice-cloning.md.
+
+# --- DEV/TEST dependencies ---
+pytest==9.1.1
+pytest-cov==7.1.0
