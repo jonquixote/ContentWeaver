@@ -7,16 +7,9 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { useTaskStatus } from '@/hooks/useTaskStatus'
 import VideoPlayer from '@/components/VideoPlayer'
+import { resolveMediaUrl } from '@/services/api'
 
-// Backend /final/ and /media/ media require auth via query token.
-// Absolute presigned S3/R2 URLs pass through untouched (appending the JWT would
-// leak it to the storage host and can invalidate the SigV4 signature).
-const absMediaUrl = (path) => {
-  if (!path) return path
-  if (!path.startsWith('/')) return path
-  const abs = `http://localhost:5004${path}`
-  return `${abs}${abs.includes('?') ? '&' : '?'}token=${encodeURIComponent(localStorage.getItem('authToken') || '')}`
-}
+const absMediaUrl = (path) => resolveMediaUrl(path)
 import { 
   Settings, 
   FileText, 

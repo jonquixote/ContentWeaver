@@ -13,6 +13,7 @@ import { ArrowLeft, ArrowRight, Video, Zap, Play, Settings, PenLine, Film, Mic, 
 import { motion, AnimatePresence } from 'framer-motion'
 import { toast } from 'sonner'
 import ApiService from '../services/api'
+import { useAuthStore } from '@/store/authStore'
 import VideoProgressTracker from './VideoProgressTracker'
 import ScriptEditor from './ScriptEditor'
 import Storyboard from './Storyboard'
@@ -163,24 +164,18 @@ const VideoCreationWizard = ({ onBack }) => {
   const handleSubmit = async () => {
     setIsSubmitting(true)
     try {
-      // First create a user (for demo purposes, using a default user)
-      let user
-      try {
-        const users = await ApiService.getUsers()
-        user = users.length > 0 ? users[0] : null
-      } catch {
-        // Create a default user if none exists
-        user = await ApiService.createUser({
-          username: 'demo_user',
-          email: 'demo@moneyweaver.com'
-        })
+      const currentUser = useAuthStore.getState().user
+      if (!currentUser?.id) {
+        toast.error('You must be logged in to create a video')
+        setIsSubmitting(false)
+        return
       }
 
       // Create the project
       const project = await ApiService.createProject({
         title: formData.title,
         description: formData.description,
-        user_id: user.id,
+        user_id: currentUser.id,
         workflow_type: formData.workflowType
       })
 
@@ -201,12 +196,11 @@ const VideoCreationWizard = ({ onBack }) => {
         })
       }
 
-      console.log('Video generation started:', response)
       setTaskId(response.task_id)
       // Don't go back to dashboard immediately, show progress tracker instead
     } catch (error) {
       console.error('Failed to create video:', error)
-      alert('Failed to start video creation. Please try again.')
+      toast.error('Failed to start video creation. Please try again.')
       setIsSubmitting(false)
     }
   }

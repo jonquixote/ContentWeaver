@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
+import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -13,6 +14,19 @@ import { Separator } from '@/components/ui/separator'
 import { Save, Palette, Bell, Shield, Database, Cloud, Plus, Trash2, Check, X, Cpu, Key } from 'lucide-react'
 import api from '@/services/api'
 import { useAuthStore } from '@/store/authStore'
+import { useApiKeys, useAddApiKey, useDeleteApiKey, useTestApiKey } from '@/hooks/useApiKeys'
+import { useModels, useDefaultModel } from '@/hooks/useModels'
+
+const FALLBACK_MODELS = [
+  "gpt-4", "gpt-3.5-turbo",
+  "claude-2", "claude-instant-1",
+  "gemini-pro",
+  "groq/llama-3.1-8b-instant",
+  "groq/llama-3.1-70b-versatile",
+  "groq/llama-3.1-405b-reasoning",
+  "groq/mixtral-8x7b-32768",
+  "groq/gemma-7b-it"
+]
 
 const passwordSchema = z
   .object({
@@ -47,69 +61,47 @@ const SettingsPage = () => {
     key: ''
   })
   const [testResult, setTestResult] = useState(null)
-  const [testLoading, setTestLoading] = useState(false)
   const [availableModels, setAvailableModels] = useState([])
-  const [modelsLoading, setModelsLoading] = useState(false)
   const [changingPassword, setChangingPassword] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [notice, setNotice] = useState(null)
+
+  const apiKeysQuery = useApiKeys(user?.id)
+  const addKeyMutation = useAddApiKey(user?.id)
+  const deleteKeyMutation = useDeleteApiKey(user?.id)
+  const testKeyMutation = useTestApiKey()
+  const modelsQuery = useModels({ retry: false })
+  const defaultModelQuery = useDefaultModel({ retry: false })
+
+  useEffect(() => {
+    if (apiKeysQuery.data?.api_keys) {
+      setApiKeys(apiKeysQuery.data.api_keys)
+    }
+  }, [apiKeysQuery.data])
+
+  useEffect(() => {
+    const models = modelsQuery.data?.models
+    if (models && models.length > 0) {
+      setAvailableModels(models)
+    } else if (modelsQuery.isError) {
+      setAvailableModels(FALLBACK_MODELS)
+    }
+  }, [modelsQuery.data, modelsQuery.isError])
+
+  useEffect(() => {
+    if (defaultModelQuery.data?.default_model) {
+      setSettings(prev => ({ ...prev, defaultModel: defaultModelQuery.data.default_model }))
+    }
+  }, [defaultModelQuery.data])
 
   const passwordForm = useForm({
     resolver: zodResolver(passwordSchema),
     defaultValues: { current: '', new: '', confirm: '' },
   })
 
-  // Load API keys and models when component mounts
-  useEffect(() => {
-    loadApiKeys()
-    loadAvailableModels()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user?.id])
-
-  const loadApiKeys = async () => {
-    if (!user?.id) return
-    try {
-      const response = await api.request(`/api-keys/user/${user.id}`)
-      setApiKeys(response.api_keys || [])
-    } catch (error) {
-      console.error('Failed to load API keys:', error)
-    }
-  }
-
-  const loadAvailableModels = async () => {
-    setModelsLoading(true)
-    try {
-      const response = await api.getAvailableModels()
-      setAvailableModels(response.models || [])
-      
-      // Set default model if it exists in the available models
-      const defaultModelResponse = await api.getDefaultModel()
-      if (defaultModelResponse.default_model) {
-        setSettings(prev => ({ ...prev, defaultModel: defaultModelResponse.default_model }))
-      }
-    } catch (error) {
-      console.error('Failed to load available models:', error)
-      // Fallback to predefined models
-      const fallbackModels = [
-        "gpt-4", "gpt-3.5-turbo",
-        "claude-2", "claude-instant-1",
-        "gemini-pro",
-        "groq/llama-3.1-8b-instant",
-        "groq/llama-3.1-70b-versatile",
-        "groq/llama-3.1-405b-reasoning",
-        "groq/mixtral-8x7b-32768",
-        "groq/gemma-7b-it"
-      ]
-      setAvailableModels(fallbackModels)
-    } finally {
-      setModelsLoading(false)
-    }
-  }
-
   const handleSave = () => {
     // In a real app, this would save to a backend or local storage
-    console.log('Saving settings:', settings)
-    alert('Settings saved successfully!')
+    toast.success('Settings saved successfully!')
   }
 
   const handleChange = (key, value) => {
@@ -118,29 +110,21 @@ const SettingsPage = () => {
   
   const handleAddApiKey = async () => {
     if (!newApiKey.name || !newApiKey.key) {
-      alert('Please fill in all fields')
+      toast.error('Please fill in all fields')
       return
     }
     
     try {
-      const response = await api.request('/api-keys', {
-        method: 'POST',
-        body: {
-          user_id: user?.id,
-          name: newApiKey.name,
-          provider: newApiKey.provider,
-          key: newApiKey.key
-        }
+      await addKeyMutation.mutateAsync({
+        name: newApiKey.name,
+        provider: newApiKey.provider,
+        key: newApiKey.key
       })
-      
-      if (response.api_key) {
-        setApiKeys(prev => [...prev, response.api_key])
-        setNewApiKey({ name: '', provider: 'openai', key: '' })
-        alert('API key added successfully!')
-      }
+      setNewApiKey({ name: '', provider: 'openai', key: '' })
+      toast.success('API key added successfully!')
     } catch (error) {
       console.error('Failed to add API key:', error)
-      alert('Failed to add API key')
+      toast.error('Failed to add API key')
     }
   }
   
@@ -150,44 +134,31 @@ const SettingsPage = () => {
     }
     
     try {
-      const response = await api.request(`/api-keys/${apiKeyId}`, {
-        method: 'DELETE',
-      })
-      
-      if (response.message) {
-        setApiKeys(prev => prev.filter(key => key.id !== apiKeyId))
-        alert('API key deleted successfully!')
-      }
+      await deleteKeyMutation.mutateAsync({ apiKeyId })
+      toast.success('API key deleted successfully!')
     } catch (error) {
       console.error('Failed to delete API key:', error)
-      alert('Failed to delete API key')
+      toast.error('Failed to delete API key')
     }
   }
   
   const handleTestApiKey = async () => {
     if (!newApiKey.provider || !newApiKey.key) {
-      alert('Please select a provider and enter an API key')
+      toast.error('Please select a provider and enter an API key')
       return
     }
     
-    setTestLoading(true)
     setTestResult(null)
     
     try {
-      const response = await api.request('/api-keys/test', {
-        method: 'POST',
-        body: {
-          provider: newApiKey.provider,
-          key: newApiKey.key
-        }
+      const response = await testKeyMutation.mutateAsync({
+        provider: newApiKey.provider,
+        key: newApiKey.key
       })
-      
       setTestResult(response)
     } catch (error) {
       console.error('Failed to test API key:', error)
       setTestResult({ success: false, error: error.message || 'Failed to test API key' })
-    } finally {
-      setTestLoading(false)
     }
   }
 
@@ -200,7 +171,7 @@ const SettingsPage = () => {
       passwordForm.reset()
     } catch (error) {
       console.error('Failed to change password:', error)
-      alert(error.message || 'Failed to change password')
+      toast.error(error.message || 'Failed to change password')
     } finally {
       setChangingPassword(false)
     }
@@ -424,7 +395,7 @@ const SettingsPage = () => {
                     <p className="text-sm text-slate-400">Select the default model for script generation</p>
                   </div>
                   <div className="w-64">
-                    {modelsLoading ? (
+                    {modelsQuery.isLoading ? (
                       <div className="flex items-center justify-center p-2">
                         <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-purple-500 mr-2"></div>
                         <span className="text-slate-400 text-sm">Loading models...</span>
@@ -604,11 +575,11 @@ const SettingsPage = () => {
                     </Button>
                     <Button 
                       onClick={handleTestApiKey}
-                      disabled={testLoading}
+                      disabled={testKeyMutation.isPending}
                       variant="outline"
                       className="border-slate-600 text-slate-300 hover:bg-slate-700"
                     >
-                      {testLoading ? (
+                      {testKeyMutation.isPending ? (
                         <>
                           <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-purple-500 mr-2"></div>
                           Testing...

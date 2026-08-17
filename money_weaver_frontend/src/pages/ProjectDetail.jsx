@@ -9,18 +9,8 @@ import { ArrowLeft, Clock, Play, RefreshCw, Video } from 'lucide-react'
 import VideoPlayer from '@/components/VideoPlayer'
 // eslint-disable-next-line no-unused-vars
 import { motion } from 'framer-motion'
-import api from '@/services/api'
+import api, { resolveMediaUrl } from '@/services/api'
 import '../App.css'
-
-const resolveUrl = (url) => {
-  if (!url) return null
-  // Backend-relative paths (legacy /final/, /media/ storage) need the app JWT.
-  // Absolute presigned S3/R2 URLs pass through untouched (appending the JWT
-  // would leak it to the storage host and can invalidate the SigV4 signature).
-  if (!url.startsWith('/')) return url
-  const abs = `http://localhost:5004${url}`
-  return `${abs}${abs.includes('?') ? '&' : '?'}token=${encodeURIComponent(localStorage.getItem('authToken') || '')}`
-}
 
 const getStatusColor = (status) => {
   switch (status) {
@@ -136,8 +126,8 @@ const ProjectDetail = () => {
 
   const latestTask = tasks.length > 0 ? tasks[0] : null
   const taskResult = parseTaskResult(latestTask)
-  const videoUrl = resolveUrl(taskResult.video_url || project.video_url)
-  const thumbnailUrl = resolveUrl(taskResult.thumbnail_url)
+  const videoUrl = resolveMediaUrl(taskResult.video_url || project.video_url)
+  const thumbnailUrl = resolveMediaUrl(taskResult.thumbnail_url)
   const progress = latestTask?.progress ?? 0
 
   return (

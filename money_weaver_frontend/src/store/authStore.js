@@ -18,15 +18,6 @@ export const useAuthStore = create(
           localStorage.removeItem(AUTH_TOKEN_KEY)
         }
       },
-      setLoading: (loading) => set({ loading }),
-      login: ({ user, token }) => {
-        set({ user, token })
-        if (token) {
-          localStorage.setItem(AUTH_TOKEN_KEY, token)
-        } else {
-          localStorage.removeItem(AUTH_TOKEN_KEY)
-        }
-      },
       logout: () => {
         set({ user: null, token: null })
         localStorage.removeItem(AUTH_TOKEN_KEY)

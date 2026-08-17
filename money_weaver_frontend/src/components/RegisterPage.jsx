@@ -54,9 +54,8 @@ const RegisterPage = () => {
     }
   }
 
-  const handleSocialLogin = (provider) => {
+  const handleSocialLogin = () => {
     // In a real app, this would initiate OAuth flow
-    console.log(`Registering with ${provider}`)
     navigate('/dashboard')
   }
 

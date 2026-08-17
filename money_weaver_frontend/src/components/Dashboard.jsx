@@ -12,9 +12,9 @@ import { useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
 import api from '@/services/api'
 import { useAuthStore } from '@/store/authStore'
-import { useProjects } from '@/api/projects'
-import { useTasks } from '@/api/tasks'
-import { usePresets } from '@/api/presets'
+import { useProjects } from '@/hooks/useProjects'
+import { useTasks } from '@/hooks/useTasks'
+import { usePresets } from '@/hooks/usePresets'
 import '../App.css'
 
 const POLL_INTERVAL_MS = 5000

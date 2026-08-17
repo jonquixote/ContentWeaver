@@ -12,6 +12,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Save, Key, User, Trash2 } from 'lucide-react'
 import api from '@/services/api'
 import { useAuthStore } from '@/store/authStore'
+import { useMe } from '@/hooks/useUser'
 
 const profileSchema = z.object({
   username: z.string().min(3, 'Username must be at least 3 characters'),
@@ -51,20 +52,22 @@ const ProfilePage = () => {
     defaultValues: { current: '', new: '', confirm: '' },
   })
 
+  const { data: meData, error: meError } = useMe()
+
   useEffect(() => {
     // Refresh the logged-in user's profile from the backend.
-    const loadMe = async () => {
-      try {
-        const user = await api.getMe()
-        useAuthStore.getState().setUser(user)
-        profileForm.reset({ username: user.username, email: user.email })
-      } catch (err) {
-        console.error('Failed to load profile:', err)
-        setError(err.message || 'Failed to load profile')
-      }
+    if (meData) {
+      useAuthStore.getState().setUser(meData)
+      profileForm.reset({ username: meData.username, email: meData.email })
     }
-    loadMe()
-  }, [profileForm])
+  }, [meData, profileForm])
+
+  useEffect(() => {
+    if (meError) {
+      console.error('Failed to load profile:', meError)
+      setError(meError.message || 'Failed to load profile')
+    }
+  }, [meError])
 
   const handleSaveProfile = async (values) => {
     setSavingProfile(true)

@@ -1,6 +1,19 @@
 import { useAuthStore } from '@/store/authStore'
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5004/api'
+export const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5004/api'
+export const BACKEND_BASE_URL = API_BASE_URL.replace(/\/api\/?$/, '')
+
+// Backend-relative media paths (/final/, /media/) require auth via query token.
+// Absolute presigned S3/R2 URLs pass through untouched (appending the JWT would
+// leak it to the storage host and can invalidate the SigV4 signature).
+export function resolveMediaUrl(url) {
+  if (!url) return null
+  if (!url.startsWith('/')) return url
+  const token = useAuthStore.getState().token || ''
+  if (!token) return `${BACKEND_BASE_URL}${url}`
+  const sep = url.includes('?') ? '&' : '?'
+  return `${BACKEND_BASE_URL}${url}${sep}token=${encodeURIComponent(token)}`
+}
 
 class ApiService {
   constructor() {
@@ -262,9 +275,8 @@ class ApiService {
   // Authed URL for server-asset routes (/final/...) that can't send a Bearer
   // header (e.g. <audio src>). The backend accepts the token via ?token=.
   getAuthedAssetUrl(path) {
-    const base = API_BASE_URL.replace(/\/api\/?$/, '')
     const sep = path.includes('?') ? '&' : '?'
-    return `${base}${path}${this.token ? `${sep}token=${encodeURIComponent(this.token)}` : ''}`
+    return `${BACKEND_BASE_URL}${path}${this.token ? `${sep}token=${encodeURIComponent(this.token)}` : ''}`
   }
 
   // API Key endpoints
