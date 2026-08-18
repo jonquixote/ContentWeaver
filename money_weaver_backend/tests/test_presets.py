@@ -13,7 +13,7 @@ REQUIRED_PRESET_FIELDS = {
 def test_presets_seeded(client, auth_headers):
     r = client.get('/api/presets', headers=auth_headers)
     assert r.status_code == 200
-    data = r.get_json()
+    data = r.json()
     assert len(data) == 6
     for preset in data:
         assert set(preset.keys()) == REQUIRED_PRESET_FIELDS
@@ -31,7 +31,7 @@ def test_presets_seeded(client, auth_headers):
 def test_presets_have_exactly_one_default(client, auth_headers):
     r = client.get('/api/presets', headers=auth_headers)
     assert r.status_code == 200
-    defaults = [p for p in r.get_json() if p['is_default']]
+    defaults = [p for p in r.json() if p['is_default']]
     assert len(defaults) == 1
     assert defaults[0]['platform'] == 'youtube'
 

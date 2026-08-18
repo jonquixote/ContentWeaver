@@ -10,11 +10,11 @@ echo "Starting MoneyWeaver Services..."
 cd "$(dirname "$0")"
 
 # Activate virtual environment
-if [ -d "venv312" ]; then
-    echo "Activating Python 3.12 virtual environment..."
-    source venv312/bin/activate
+if [ -d "venv" ]; then
+    echo "Activating virtual environment..."
+    source venv/bin/activate
 else
-    echo "Error: Python 3.12 virtual environment not found!"
+    echo "Error: virtual environment not found!"
     exit 1
 fi
 
@@ -22,7 +22,7 @@ fi
 echo "Cleaning up existing processes..."
 pkill -f "litellm" 2>/dev/null || true
 pkill -f "celery" 2>/dev/null || true
-pkill -f "python.*main.py" 2>/dev/null || true
+pkill -f "python.*run.py" 2>/dev/null || true
 sleep 3
 
 if [ -f .env ]; then
@@ -61,19 +61,19 @@ else
     echo "Warning: Celery worker may not have started correctly. Check celery_worker.log for details."
 fi
 
-# Start the Flask backend
-echo "Starting Flask backend..."
-python src/main.py > flask_backend.log 2>&1 &
-FLASK_PID=$!
+# Start the FastAPI backend
+echo "Starting FastAPI backend..."
+python run.py > fastapi_backend.log 2>&1 &
+FASTAPI_PID=$!
 
-# Wait a moment for Flask to start
+# Wait a moment for FastAPI to start
 sleep 5
 
-# Check if Flask backend is running
-if ps -p $FLASK_PID > /dev/null; then
-    echo "Flask backend is running (PID: $FLASK_PID)"
+# Check if FastAPI backend is running
+if ps -p $FASTAPI_PID > /dev/null; then
+    echo "FastAPI backend is running (PID: $FASTAPI_PID)"
 else
-    echo "Warning: Flask backend may not have started correctly. Check flask_backend.log for details."
+    echo "Warning: FastAPI backend may not have started correctly. Check fastapi_backend.log for details."
 fi
 
 echo ""
@@ -81,7 +81,7 @@ echo "Service Status:"
 echo "==============="
 echo "LiteLLM proxy: $(if ps -p $LITELLM_PID > /dev/null 2>&1; then echo 'RUNNING'; else echo 'NOT RUNNING'; fi)"
 echo "Celery worker: $(if ps -p $CELERY_PID > /dev/null; then echo 'RUNNING'; else echo 'NOT RUNNING'; fi)"
-echo "Flask backend: $(if ps -p $FLASK_PID > /dev/null; then echo 'RUNNING'; else echo 'NOT RUNNING'; fi)"
+echo "FastAPI backend: $(if ps -p $FASTAPI_PID > /dev/null; then echo 'RUNNING'; else echo 'NOT RUNNING'; fi)"
 
 echo ""
 echo "All services started successfully!"
@@ -89,4 +89,4 @@ echo "Backend API available at http://localhost:5004"
 echo "LiteLLM proxy available at http://localhost:8000"
 echo ""
 echo "To stop services, run: ./stop_all_services.sh"
-echo "To check logs, view: litellm_proxy.log, celery_worker.log, flask_backend.log"
+echo "To check logs, view: litellm_proxy.log, celery_worker.log, fastapi_backend.log"

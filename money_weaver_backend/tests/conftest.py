@@ -3,16 +3,21 @@ import tempfile
 
 import pytest
 
-# MUST be set at module top, BEFORE any `import src.main`.
-# main.py load_dotenv() does NOT override existing env vars, so these win over .env.
+# MUST be set at module top, BEFORE any `import fastapi_app` (or src packages
+# that read these at import time: fastapi_app/db.py creates the engine,
+# fastapi_app/routers/media.py reads STORAGE_LOCAL_DIR, local storage provider
+# reads STORAGE_LOCAL_DIR). A temp FILE db (not :memory:) is required so that
+# task bodies run via create_app_context() open their own connections against
+# the same shared sqlite file.
 os.environ['SECRET_KEY'] = 'test-secret'
 os.environ['DATABASE_URL'] = f"sqlite:///{tempfile.mkdtemp(prefix='mw-pytest-')}/test.db"
 os.environ['STORAGE_BACKEND'] = 'local'
 os.environ['STORAGE_LOCAL_DIR'] = tempfile.mkdtemp(prefix='mw-uploads-')
 
 
-# main.py:89-101 seeds presets INLINE (not factored into a function), so replicate
-# the exact rows here. Keep in sync with main.py's SEED_PRESETS.
+# Kept in sync with fastapi_app/main.py SEED_PRESETS (the lifespan seeds these
+# exactly once per TestClient session; teardown's drop_all wipes them, so the
+# lifespan re-seeds on the next test).
 _SEED_PRESETS = [
     ('YouTube Landscape', 'youtube', 1920, 1080, 30, 60, 600, True),
     ('YouTube Shorts', 'shorts', 1080, 1920, 30, 15, 60, False),
@@ -25,27 +30,31 @@ _SEED_PRESETS = [
 
 @pytest.fixture()
 def app():
-    from src.main import app, db
-    from src.models.preset import FormatPreset
-
-    with app.app_context():
-        db.create_all()
-        # main.py seeds at import time; teardown's drop_all below wipes presets,
-        # so re-seed here to keep the preset count at 6 for every test.
-        if FormatPreset.query.count() == 0:
-            for name, platform, w, h, fps, dmin, dmax, is_def in _SEED_PRESETS:
-                db.session.add(FormatPreset(name=name, platform=platform, width=w, height=h,
-                                            fps=fps, duration_min=dmin, duration_max=dmax,
-                                            is_default=is_def))
-            db.session.commit()
-        yield app
-        db.session.remove()
-        db.drop_all()
+    from fastapi_app.main import app
+    return app
 
 
 @pytest.fixture()
 def client(app):
-    return app.test_client()
+    from fastapi_app.db import engine
+    from src.database import db
+    from starlette.testclient import TestClient
+
+    with TestClient(app) as test_client:
+        yield test_client
+        db.metadata.drop_all(bind=engine)
+
+
+@pytest.fixture()
+def db_session(client):
+    from fastapi_app.db import db_session as _session_cm
+    with _session_cm() as session:
+        yield session
+
+
+@pytest.fixture()
+def storage_dir():
+    return os.environ['STORAGE_LOCAL_DIR']
 
 
 @pytest.fixture()
@@ -54,5 +63,5 @@ def auth_headers(client):
         'email': 'test@test.com', 'username': 'tester', 'password': 'password123'})
     r = client.post('/api/auth/login', json={
         'email': 'test@test.com', 'password': 'password123'})
-    token = r.get_json()['token']
+    token = r.json()['token']
     return {'Authorization': f'Bearer {token}'}

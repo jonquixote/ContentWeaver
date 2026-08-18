@@ -1,145 +1,132 @@
 """Route tests: /api/generate/assembler and /api/generate/generative voice_id pass-through."""
-import os
-import shutil
-import tempfile
-import unittest
 from unittest import mock
 
-os.environ.setdefault('SECRET_KEY', 'route-test-secret')
+import pytest
 
-from flask import Flask
+from src.models.voice import Voice
 
-from src.database import db
-from src.routes.video_generation import video_bp, _resolve_owned_voice
+from fastapi_app.routers.generation import (
+    _resolve_owned_voice,
+    generate_assembler_video_task,
+    generate_generative_video_task,
+)
 
 
-class VideoGenerationRouteTest(unittest.TestCase):
-    def setUp(self):
-        self.tmpdir = tempfile.mkdtemp(prefix='mw-route-test-')
-        os.environ['DATABASE_URL'] = f"sqlite:///{os.path.join(self.tmpdir, 'route.db')}"
-        self.app = Flask(__name__)
-        self.app.config['SQLALCHEMY_DATABASE_URI'] = os.environ['DATABASE_URL']
-        self.app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-        db.init_app(self.app)
-        with self.app.app_context():
-            from src.models.user import User
-            from src.models.project import Project
-            from src.models.voice import Voice
-            db.create_all()
-            self.owner = User(username='owner', email='owner@t.com', password_hash='x')
-            self.other = User(username='other', email='other@t.com', password_hash='y')
-            db.session.add_all([self.owner, self.other])
-            db.session.flush()
-            self.owner_id, self.other_id = self.owner.id, self.other.id
-            ref = os.path.join(self.tmpdir, 'ref.wav')
-            with open(ref, 'wb') as fh:
-                fh.write(b'RIFF\x00ref')
-            self.voice = Voice(user_id=self.owner_id, name='v', reference_audio_url=ref)
-            db.session.add(self.voice)
-            db.session.commit()
-            self.voice_id = self.voice.id
-        self.app.register_blueprint(video_bp, url_prefix='/api')
-        self.client = self.app.test_client()
+@pytest.fixture()
+def owner(client):
+    r = client.post('/api/auth/register', json={
+        'email': 'owner@t.com', 'username': 'owner', 'password': 'pw-owner'})
+    assert r.status_code == 201
+    token = client.post('/api/auth/login', json={
+        'email': 'owner@t.com', 'password': 'pw-owner'}).json()['token']
+    return {'Authorization': f'Bearer {token}'}
 
-    def tearDown(self):
-        with self.app.app_context():
-            db.session.remove()
-            db.drop_all()
-        shutil.rmtree(self.tmpdir, ignore_errors=True)
 
-    def _auth_headers(self, user_id):
-        import jwt, datetime
-        token = jwt.encode(
-            {'user_id': user_id, 'jti': 'route-test', 'exp': datetime.datetime.utcnow() + datetime.timedelta(hours=1)},
-            os.environ['SECRET_KEY'], algorithm='HS256')
-        return {'Authorization': f'Bearer {token}'}
+@pytest.fixture()
+def other(client):
+    r = client.post('/api/auth/register', json={
+        'email': 'other@t.com', 'username': 'other', 'password': 'pw-other'})
+    assert r.status_code == 201
+    token = client.post('/api/auth/login', json={
+        'email': 'other@t.com', 'password': 'pw-other'}).json()['token']
+    return {'Authorization': f'Bearer {token}'}
 
-    def _seed_project(self, owner_id):
-        from src.models.project import Project
-        with self.app.app_context():
-            p = Project(title='p', user_id=owner_id, voice_type='female')
-            db.session.add(p)
-            db.session.commit()
-            return p.id
 
-    def test_assembler_passes_voice_id_to_task(self):
-        pid = self._seed_project(self.owner_id)
-        from src.tasks.video_tasks import generate_assembler_video_task
-        with mock.patch.object(generate_assembler_video_task, 'delay', return_value=mock.Mock(id='c-1')) as delay:
-            resp = self.client.post(
-                '/api/generate/assembler',
-                json={'project_id': pid, 'prompt': 'p', 'voice_id': self.voice_id},
-                headers=self._auth_headers(self.owner_id),
-            )
-        self.assertEqual(resp.status_code, 202)
-        delay.assert_called_once()
-        _, kwargs = delay.call_args
-        self.assertEqual(kwargs['voice_id'], self.voice_id)
+def _user_id(client, headers):
+    return client.get('/api/users/me', headers=headers).json()['id']
 
-    def test_assembler_rejects_unowned_voice(self):
-        pid = self._seed_project(self.owner_id)
-        resp = self.client.post(
+
+@pytest.fixture()
+def owner_voice(client, db_session, owner, tmp_path):
+    uid = _user_id(client, owner)
+    ref = tmp_path / 'ref.wav'
+    ref.write_bytes(b'RIFF\x00ref')
+    voice = Voice(user_id=uid, name='v', reference_audio_url=str(ref))
+    db_session.add(voice)
+    db_session.commit()
+    return voice.id
+
+
+def _seed_project(client, headers):
+    r = client.post('/api/projects', json={'title': 'p'}, headers=headers)
+    assert r.status_code == 201
+    return r.json()['id']
+
+
+def test_assembler_passes_voice_id_to_task(client, owner, owner_voice):
+    pid = _seed_project(client, owner)
+    with mock.patch.object(generate_assembler_video_task, 'delay',
+                           return_value=mock.Mock(id='c-1')) as delay:
+        resp = client.post(
             '/api/generate/assembler',
-            json={'project_id': pid, 'prompt': 'p', 'voice_id': self.voice_id},
-            headers=self._auth_headers(self.other_id),
-        )
-        self.assertEqual(resp.status_code, 403)
+            json={'project_id': pid, 'prompt': 'p', 'voice_id': owner_voice},
+            headers=owner)
+    assert resp.status_code == 202
+    delay.assert_called_once()
+    _, kwargs = delay.call_args
+    assert kwargs['voice_id'] == owner_voice
 
-    def test_assembler_rejects_nonexistent_voice(self):
-        pid = self._seed_project(self.owner_id)
-        resp = self.client.post(
+
+def test_assembler_rejects_unowned_voice(client, owner, other, owner_voice):
+    pid = _seed_project(client, owner)
+    resp = client.post(
+        '/api/generate/assembler',
+        json={'project_id': pid, 'prompt': 'p', 'voice_id': owner_voice},
+        headers=other)
+    assert resp.status_code == 403
+
+
+def test_assembler_rejects_nonexistent_voice(client, owner):
+    pid = _seed_project(client, owner)
+    resp = client.post(
+        '/api/generate/assembler',
+        json={'project_id': pid, 'prompt': 'p', 'voice_id': 999999},
+        headers=owner)
+    assert resp.status_code == 404
+
+
+def test_assembler_rejects_non_integer_voice_id(client, owner):
+    pid = _seed_project(client, owner)
+    resp = client.post(
+        '/api/generate/assembler',
+        json={'project_id': pid, 'prompt': 'p', 'voice_id': 'abc'},
+        headers=owner)
+    assert resp.status_code == 400
+
+
+def test_generative_passes_voice_id_to_task(client, owner, owner_voice):
+    pid = _seed_project(client, owner)
+    with mock.patch.object(generate_generative_video_task, 'delay',
+                           return_value=mock.Mock(id='c-2')) as delay:
+        resp = client.post(
+            '/api/generate/generative',
+            json={'project_id': pid, 'prompt': 'p', 'voice_id': owner_voice},
+            headers=owner)
+    assert resp.status_code == 202
+    delay.assert_called_once()
+    _, kwargs = delay.call_args
+    assert kwargs['voice_id'] == owner_voice
+
+
+def test_assembler_without_voice_id_passes_none(client, owner):
+    pid = _seed_project(client, owner)
+    with mock.patch.object(generate_assembler_video_task, 'delay',
+                           return_value=mock.Mock(id='c-3')) as delay:
+        resp = client.post(
             '/api/generate/assembler',
-            json={'project_id': pid, 'prompt': 'p', 'voice_id': 999999},
-            headers=self._auth_headers(self.owner_id),
-        )
-        self.assertEqual(resp.status_code, 404)
-
-    def test_assembler_rejects_non_integer_voice_id(self):
-        pid = self._seed_project(self.owner_id)
-        resp = self.client.post(
-            '/api/generate/assembler',
-            json={'project_id': pid, 'prompt': 'p', 'voice_id': 'abc'},
-            headers=self._auth_headers(self.owner_id),
-        )
-        self.assertEqual(resp.status_code, 400)
-
-    def test_generative_passes_voice_id_to_task(self):
-        pid = self._seed_project(self.owner_id)
-        from src.tasks.video_tasks import generate_generative_video_task
-        with mock.patch.object(generate_generative_video_task, 'delay', return_value=mock.Mock(id='c-2')) as delay:
-            resp = self.client.post(
-                '/api/generate/generative',
-                json={'project_id': pid, 'prompt': 'p', 'voice_id': self.voice_id},
-                headers=self._auth_headers(self.owner_id),
-            )
-        self.assertEqual(resp.status_code, 202)
-        delay.assert_called_once()
-        _, kwargs = delay.call_args
-        self.assertEqual(kwargs['voice_id'], self.voice_id)
-
-    def test_assembler_without_voice_id_passes_none(self):
-        pid = self._seed_project(self.owner_id)
-        from src.tasks.video_tasks import generate_assembler_video_task
-        with mock.patch.object(generate_assembler_video_task, 'delay', return_value=mock.Mock(id='c-3')) as delay:
-            resp = self.client.post(
-                '/api/generate/assembler',
-                json={'project_id': pid, 'prompt': 'p'},
-                headers=self._auth_headers(self.owner_id),
-            )
-        self.assertEqual(resp.status_code, 202)
-        _, kwargs = delay.call_args
-        self.assertIsNone(kwargs['voice_id'])
-
-    def test_resolve_owned_voice_helper(self):
-        with self.app.app_context():
-            self.assertEqual(_resolve_owned_voice(None, 1), (None, None))
-            self.assertEqual(_resolve_owned_voice('nope', 1)[1][1], 400)
-            self.assertEqual(_resolve_owned_voice(999999, 1)[1][1], 404)
-            self.assertEqual(_resolve_owned_voice(self.voice_id, self.other_id)[1][1], 403)
-            v, err = _resolve_owned_voice(self.voice_id, self.owner_id)
-            self.assertIsNone(err)
-            self.assertEqual(v.id, self.voice_id)
+            json={'project_id': pid, 'prompt': 'p'},
+            headers=owner)
+    assert resp.status_code == 202
+    _, kwargs = delay.call_args
+    assert kwargs['voice_id'] is None
 
 
-if __name__ == '__main__':
-    unittest.main()
+def test_resolve_owned_voice_helper(client, db_session, owner, owner_voice):
+    uid = _user_id(client, owner)
+    assert _resolve_owned_voice(db_session, None, uid) == (None, None)
+    assert _resolve_owned_voice(db_session, 'nope', uid)[1][1] == 400
+    assert _resolve_owned_voice(db_session, 999999, uid)[1][1] == 404
+    assert _resolve_owned_voice(db_session, owner_voice, 12345)[1][1] == 403
+    v, err = _resolve_owned_voice(db_session, owner_voice, uid)
+    assert err is None
+    assert v.id == owner_voice

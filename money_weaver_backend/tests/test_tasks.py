@@ -11,7 +11,6 @@ import json
 import types
 from unittest import mock
 
-from src.database import db
 from src.models.task import Task
 from src.models.project import Project
 
@@ -21,19 +20,19 @@ def _register_user(client, email, username):
         'email': email, 'username': username, 'password': 'password123'})
     assert r.status_code == 201
     token = client.post('/api/auth/login', json={
-        'email': email, 'password': 'password123'}).get_json()['token']
+        'email': email, 'password': 'password123'}).json()['token']
     return {'Authorization': f'Bearer {token}'}
 
 
 def _user_id(client, headers):
-    return client.get('/api/users/me', headers=headers).get_json()['id']
+    return client.get('/api/users/me', headers=headers).json()['id']
 
 
 def _create_project(client, auth_headers):
     r = client.post('/api/projects', json={'title': 'Task test project'},
                     headers=auth_headers)
     assert r.status_code == 201
-    return r.get_json()['id']
+    return r.json()['id']
 
 
 class FakeTaskSelf:
@@ -55,10 +54,10 @@ def test_create_project_returns_id(client, auth_headers):
     r = client.post('/api/projects', json={'title': 'Fresh project'},
                     headers=auth_headers)
     assert r.status_code == 201
-    assert isinstance(r.get_json()['id'], int)
+    assert isinstance(r.json()['id'], int)
 
 
-def test_assembler_returns_task_id_and_persists_ownership(client, app, auth_headers):
+def test_assembler_returns_task_id_and_persists_ownership(client, db_session, auth_headers):
     from src.tasks.video_tasks import generate_assembler_video_task
     user_id = _user_id(client, auth_headers)
     project_id = _create_project(client, auth_headers)
@@ -69,7 +68,7 @@ def test_assembler_returns_task_id_and_persists_ownership(client, app, auth_head
                         json={'project_id': project_id, 'prompt': 'a prompt'},
                         headers=auth_headers)
     assert r.status_code == 202
-    body = r.get_json()
+    body = r.json()
     assert body['message'] == 'Video generation started'
     assert isinstance(body['task_id'], int)
     assert body['celery_task_id'] == 'fake-celery-id'
@@ -79,17 +78,16 @@ def test_assembler_returns_task_id_and_persists_ownership(client, app, auth_head
     # DB-only status route: 200 with a status field (no Redis needed).
     status = client.get(f"/api/tasks/{body['task_id']}/status", headers=auth_headers)
     assert status.status_code == 200
-    assert 'status' in status.get_json()
+    assert 'status' in status.json()
 
     # Task row belongs to the caller: project_id points at the created project
     # and that project belongs to the current user. (Task has no user_id column;
     # ownership is inferred through the project.)
-    with app.app_context():
-        task = db.session.get(Task, body['task_id'])
-        assert task is not None
-        assert task.project_id == project_id
-        assert task.celery_task_id == 'fake-celery-id'
-        assert db.session.get(Project, project_id).user_id == user_id
+    task = db_session.get(Task, body['task_id'])
+    assert task is not None
+    assert task.project_id == project_id
+    assert task.celery_task_id == 'fake-celery-id'
+    assert db_session.get(Project, project_id).user_id == user_id
 
 
 def test_status_of_other_users_task_is_403(client, auth_headers):
@@ -99,14 +97,14 @@ def test_status_of_other_users_task_is_403(client, auth_headers):
                            return_value=mock.Mock(id='fake-celery-id')):
         task_id = client.post('/api/generate/assembler',
                               json={'project_id': project_id, 'prompt': 'p'},
-                              headers=auth_headers).get_json()['task_id']
+                              headers=auth_headers).json()['task_id']
 
     other_headers = _register_user(client, 'other-task@test.com', 'othertask')
     assert client.get(f'/api/tasks/{task_id}/status',
                       headers=other_headers).status_code == 403
 
 
-def test_assembler_task_state_transition_pending_to_completed(client, app, auth_headers, tmp_path):
+def test_assembler_task_state_transition_pending_to_completed(client, db_session, auth_headers, tmp_path):
     import src.tasks.video_tasks as vt
     from src.tasks.video_tasks import generate_assembler_video_task
     project_id = _create_project(client, auth_headers)
@@ -115,7 +113,7 @@ def test_assembler_task_state_transition_pending_to_completed(client, app, auth_
                            return_value=mock.Mock(id='fake-celery-id')):
         task_id = client.post('/api/generate/assembler',
                               json={'project_id': project_id, 'prompt': 'a prompt'},
-                              headers=auth_headers).get_json()['task_id']
+                              headers=auth_headers).json()['task_id']
 
     # Fake media assets that must exist on disk for the task body to proceed.
     out = tmp_path / 'out.mp4'
@@ -152,11 +150,10 @@ def test_assembler_task_state_transition_pending_to_completed(client, app, auth_
 
     assert result['status'] == 'Video generation completed!'
 
-    with app.app_context():
-        task = db.session.get(Task, task_id)
-        assert task is not None
-        assert task.status == 'completed'
-        assert task.progress == 100
-        result_data = json.loads(task.result)
-        assert result_data['status'] == 'completed'
-        assert db.session.get(Project, project_id).status == 'completed'
+    task = db_session.get(Task, task_id)
+    assert task is not None
+    assert task.status == 'completed'
+    assert task.progress == 100
+    result_data = json.loads(task.result)
+    assert result_data['status'] == 'completed'
+    assert db_session.get(Project, project_id).status == 'completed'
