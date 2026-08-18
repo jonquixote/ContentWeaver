@@ -11,7 +11,17 @@ from fastapi.responses import FileResponse, PlainTextResponse
 
 from fastapi_app.db import db_session, engine
 from fastapi_app.errors import register_error_handlers
-from fastapi_app.routers import auth, health, media
+from fastapi_app.routers import (
+    api_keys,
+    auth,
+    health,
+    media,
+    presets,
+    projects,
+    tasks,
+    templates,
+    users,
+)
 from src.database import db
 
 # SECRET_KEY is required, mirroring src/main.py.
@@ -81,6 +91,13 @@ app.add_middleware(
 app.include_router(health.router)
 app.include_router(auth.router)
 app.include_router(media.router)
+app.include_router(users.router)
+app.include_router(projects.router)
+app.include_router(tasks.router)
+app.include_router(presets.router)
+app.include_router(api_keys.router)
+app.include_router(api_keys.models_router)
+app.include_router(templates.router)
 
 
 @app.get('/', include_in_schema=False)
