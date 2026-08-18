@@ -14,13 +14,16 @@ from fastapi_app.errors import register_error_handlers
 from fastapi_app.routers import (
     api_keys,
     auth,
+    generation,
     health,
     media,
     presets,
     projects,
     tasks,
     templates,
+    uploads,
     users,
+    voices,
 )
 from src.database import db
 
@@ -98,6 +101,9 @@ app.include_router(presets.router)
 app.include_router(api_keys.router)
 app.include_router(api_keys.models_router)
 app.include_router(templates.router)
+app.include_router(generation.router)
+app.include_router(voices.router)
+app.include_router(uploads.router)
 
 
 @app.get('/', include_in_schema=False)
