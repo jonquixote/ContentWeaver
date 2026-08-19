@@ -8,7 +8,7 @@ STORAGE_LOCAL_DIR = os.environ.get('STORAGE_LOCAL_DIR', os.path.join(BASE_DIR, '
 
 class LocalStorageProvider(StorageProvider):
     """Local-disk storage backend. Files land under STORAGE_LOCAL_DIR and are
-    served by the /media/<key> route in src/main.py."""
+    served by the /media/<key> route in fastapi_app/main.py."""
 
     def __init__(self):
         self.root = STORAGE_LOCAL_DIR

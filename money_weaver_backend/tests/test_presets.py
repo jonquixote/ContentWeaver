@@ -1,7 +1,7 @@
 """Route tests for GET /api/presets (auth-protected, seeded format presets).
 
-Seeding is handled by src/main.py (import time) plus the conftest `app`
-fixture, which re-seeds the 6 rows after each drop_all teardown.
+Seeding is handled by the FastAPI lifespan (fastapi_app/main.py) plus the
+conftest fixture, which re-seeds the 6 rows after each drop_all teardown.
 """
 
 REQUIRED_PRESET_FIELDS = {

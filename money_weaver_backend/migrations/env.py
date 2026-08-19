@@ -21,7 +21,7 @@ config = context.config
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
-# DATABASE_URL resolution must match src/main.py:62 and fastapi_app/db.py:
+# DATABASE_URL resolution must match fastapi_app/db.py:
 # env var wins, fallback is the checked-in dev database.
 _DEFAULT_DB = os.path.abspath(
     os.path.join(os.path.dirname(__file__), os.pardir, 'src', 'database', 'app.db')
