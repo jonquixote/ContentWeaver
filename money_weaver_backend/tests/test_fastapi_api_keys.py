@@ -102,30 +102,18 @@ def test_test_api_key_missing_fields(client, auth_headers):
 
 
 def test_models_happy_path(client, auth_headers):
-    with mock.patch.object(api_keys.requests, 'get', return_value=SimpleNamespace(
-            status_code=200, json=lambda: {'data': [{'id': 'b-model'}, {'id': 'a-model'}]})):
+    models = [{"id": "a-model", "provider": "openrouter"}]
+    with mock.patch.object(api_keys.registry, 'list_models', return_value=models):
         r = client.get('/api/models', headers=auth_headers)
     assert r.status_code == 200
-    assert r.json()['models'] == ['a-model', 'b-model']
+    assert r.json()['models'] == models
 
 
-def test_models_falls_back_on_non_200(client, auth_headers):
-    with mock.patch.object(api_keys.requests, 'get', return_value=SimpleNamespace(
-            status_code=500, json=lambda: {})):
-        r = client.get('/api/models', headers=auth_headers)
-    assert r.status_code == 200
-    assert r.json()['models'] == api_keys._PREDEFINED_MODELS
-
-
-def test_models_falls_back_on_exception(client, auth_headers):
-    with mock.patch.object(api_keys.requests, 'get',
-                           side_effect=RuntimeError('net')):
-        r = client.get('/api/models', headers=auth_headers)
-    assert r.status_code == 200
-    assert r.json()['models'] == api_keys._PREDEFINED_MODELS
+def test_models_requires_auth(client):
+    assert client.get('/api/models').status_code == 401
 
 
 def test_default_model(client, auth_headers):
     r = client.get('/api/models/default', headers=auth_headers)
     assert r.status_code == 200
-    assert r.json()['default_model'] == 'groq/llama-3.1-70b-versatile'
+    assert r.json()['default_model'] == 'openrouter/free'

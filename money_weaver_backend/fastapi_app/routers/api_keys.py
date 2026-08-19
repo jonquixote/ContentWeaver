@@ -2,15 +2,18 @@ import os
 from typing import Optional
 
 import litellm
-import requests
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
+from sqlalchemy.orm import Session
+
 from fastapi_app.db import get_db
 from fastapi_app.deps import current_user
 from src.models.api_key import ApiKey
-from src.services.llm_service import llm_service
+from src.models.model_preference import ModelPreference
+from src.services.key_encryption import encrypt_key
+from src.services.providers.registry import registry
 from src.validation import require_fields
 
 # Configure LiteLLM to use the proxy for testing
@@ -20,18 +23,6 @@ litellm.master_key = os.getenv('LITELLM_MASTER_KEY', '')
 
 router = APIRouter(prefix='/api/api-keys', tags=['api-keys'])
 models_router = APIRouter(prefix='/api', tags=['models'])
-
-_PREDEFINED_MODELS = [
-    "gpt-4", "gpt-3.5-turbo",
-    "claude-2", "claude-instant-1",
-    "gemini-pro",
-    "groq/llama-3.1-8b-instant",
-    "groq/llama-3.1-70b-versatile",
-    "groq/llama-3.1-405b-reasoning",
-    "groq/mixtral-8x7b-32768",
-    "groq/gemma-7b-it",
-    "together_ai/mistralai/Mistral-7B-v0.1"
-]
 
 
 class ApiKeyCreate(BaseModel):
@@ -60,7 +51,7 @@ def add_api_key(body: ApiKeyCreate, user=Depends(current_user), session=Depends(
             user_id=user.id,
             name=data['name'],
             provider=data['provider'],
-            key=data['key']
+            key=encrypt_key(data['key'])
         )
         session.add(api_key)
         session.commit()
@@ -172,45 +163,14 @@ def test_api_key(body: ApiKeyTest, user=Depends(current_user)):
 
 @models_router.get('/models')
 def get_available_models(user=Depends(current_user)):
-    """Get available models from the LiteLLM proxy"""
-    try:
-        headers = {
-            "Authorization": f"Bearer {litellm.master_key}",
-            "Content-Type": "application/json"
-        }
-
-        response = requests.get(
-            f"{litellm_proxy_url}/v1/models",
-            headers=headers,
-            timeout=10
-        )
-
-        if response.status_code == 200:
-            models_data = response.json()
-            model_names = []
-            if 'data' in models_data:
-                for model in models_data['data']:
-                    if 'id' in model:
-                        model_names.append(model['id'])
-
-            return {
-                'models': sorted(model_names)
-            }
-        else:
-            return {
-                'models': _PREDEFINED_MODELS
-            }
-
-    except Exception as e:
-        return {
-            'models': _PREDEFINED_MODELS,
-            'error': str(e)
-        }
+    """Get available models from the registry (live, cache-backed)"""
+    return {"models": registry.list_models()}
 
 
 @models_router.get('/models/default')
-def get_default_model(user=Depends(current_user)):
-    """Get the default model for script generation"""
-    return {
-        'default_model': 'groq/llama-3.1-70b-versatile'
-    }
+def get_default_model(user=Depends(current_user), db: Session = Depends(get_db)):
+    """Get the default model for script generation (per-user prefs -> best free)"""
+    prefs = db.query(ModelPreference).filter_by(user_id=user.id).first()
+    prefs_dict = prefs.to_dict() if prefs else None
+    model = registry.resolve(prefs_dict, "script")
+    return {"default_model": model}

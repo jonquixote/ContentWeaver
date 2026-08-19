@@ -19,6 +19,7 @@ from fastapi_app.routers import (
     media,
     presets,
     projects,
+    settings,
     tasks,
     templates,
     uploads,
@@ -100,6 +101,7 @@ app.include_router(tasks.router)
 app.include_router(presets.router)
 app.include_router(api_keys.router)
 app.include_router(api_keys.models_router)
+app.include_router(settings.router)
 app.include_router(templates.router)
 app.include_router(generation.router)
 app.include_router(voices.router)
