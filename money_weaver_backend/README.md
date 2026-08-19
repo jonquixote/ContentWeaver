@@ -69,4 +69,4 @@ Run the pytest suite from `money_weaver_backend/` (use `venv` — `venv312` is b
 ```bash
 source venv/bin/activate && python -m pytest
 ```
-220 tests pass with 56.90% whole-suite coverage (enforced `--cov-fail-under=55`). Tests use a fresh temp SQLite DB (via `tests/conftest.py`) and mock all external services.
+220 tests pass with ≈57% whole-suite coverage (enforced `--cov-fail-under=55`). Tests use a fresh temp SQLite DB (via `tests/conftest.py`) and mock all external services.

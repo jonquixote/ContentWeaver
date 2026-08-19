@@ -60,7 +60,7 @@ PIXABAY_API_KEY=your-pixabay-api-key
 
 ### Starting Services
 1. Start Redis: `redis-server`
-2. Start Celery worker: `cd money_weaver_backend && celery -A src.services.celery_app.celery_app worker --loglevel=info`
+2. Start Celery worker: `cd money_weaver_backend && celery -A src.services.celery_app.celery_app worker --loglevel=info -Q celery,video_generation`
 3. Start FastAPI backend (port 5004): `cd money_weaver_backend && python run.py`
 4. Start frontend: `cd money_weaver_frontend && npm run dev`
 
@@ -75,7 +75,7 @@ python -m alembic upgrade head
 
 ## Testing
 
-Backend (pytest, 220 tests, 56.90% coverage, fail-under 55). Use `venv` — `venv312` is broken:
+Backend (pytest, 220 tests, ≈57% coverage, fail-under 55). Use `venv` — `venv312` is broken:
 ```bash
 cd money_weaver_backend && source venv/bin/activate && python -m pytest
 ```
