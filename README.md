@@ -4,7 +4,7 @@ This is the complete MoneyWeaver project with a video generation platform that c
 
 ## Project Structure
 
-- `money_weaver_backend/` - Flask backend with video generation pipeline
+- `money_weaver_backend/` - FastAPI backend with video generation pipeline
 - `money_weaver_frontend/` - React frontend dashboard
 - `tests/` - Test files and scripts
 - `video_env/` - Virtual environment for video processing
@@ -12,7 +12,7 @@ This is the complete MoneyWeaver project with a video generation platform that c
 ## Key Features
 
 ### Backend (money_weaver_backend/)
-- Flask REST API for project management
+- FastAPI REST API for project management (uvicorn, `python run.py`, port 5004)
 - User authentication and authorization
 - Video script generation using AI (Groq/Llama)
 - Stock video integration (Pexels, Pixabay)
@@ -61,12 +61,21 @@ PIXABAY_API_KEY=your-pixabay-api-key
 ### Starting Services
 1. Start Redis: `redis-server`
 2. Start Celery worker: `cd money_weaver_backend && celery -A src.services.celery_app.celery_app worker --loglevel=info`
-3. Start Flask backend: `cd money_weaver_backend && python src/main.py`
+3. Start FastAPI backend (port 5004): `cd money_weaver_backend && python run.py`
 4. Start frontend: `cd money_weaver_frontend && npm run dev`
+
+Or use the orchestration script from `money_weaver_backend/`: `./start_all_services.sh` (starts LiteLLM proxy, Celery, and the FastAPI backend via `venv` + `python run.py`).
+
+### Database Migrations (Alembic)
+
+```bash
+cd money_weaver_backend && source venv/bin/activate
+python -m alembic upgrade head
+```
 
 ## Testing
 
-Backend (pytest, 151 tests). Use `venv` — `venv312` is broken:
+Backend (pytest, 220 tests, 56.90% coverage, fail-under 55). Use `venv` — `venv312` is broken:
 ```bash
 cd money_weaver_backend && source venv/bin/activate && python -m pytest
 ```

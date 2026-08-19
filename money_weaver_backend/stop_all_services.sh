@@ -8,11 +8,11 @@ echo "Stopping MoneyWeaver Services..."
 cd "$(dirname "$0")"
 
 # Activate virtual environment
-if [ -d "venv312" ]; then
-    echo "Activating Python 3.12 virtual environment..."
-    source venv312/bin/activate
+if [ -d "venv" ]; then
+    echo "Activating virtual environment..."
+    source venv/bin/activate
 else
-    echo "Warning: Python 3.12 virtual environment not found!"
+    echo "Warning: virtual environment not found!"
 fi
 
 # Stop processes by killing them
@@ -22,8 +22,8 @@ pkill -f "litellm" 2>/dev/null || echo "LiteLLM proxy not running"
 echo "Stopping Celery worker..."
 pkill -f "celery" 2>/dev/null || echo "Celery worker not running"
 
-echo "Stopping Flask backend..."
-pkill -f "python.*main.py" 2>/dev/null || echo "Flask backend not running"
+echo "Stopping FastAPI backend..."
+pkill -f "python.*run.py" 2>/dev/null || echo "FastAPI backend not running"
 
 # Wait a moment for processes to terminate
 sleep 3

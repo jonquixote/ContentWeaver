@@ -19,8 +19,8 @@ COPY . .
 RUN mkdir -p src/database
 
 # Expose port
-EXPOSE 5000
+EXPOSE 5004
 
 # Default command
-CMD ["python", "src/main.py"]
+CMD ["python", "run.py"]
 

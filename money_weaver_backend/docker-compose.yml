@@ -69,7 +69,7 @@ services:
       - LITELLM_MASTER_KEY=${LITELLM_MASTER_KEY:-sk-master-key-change-me}
     command: ["--config", "/app/config.yaml", "--port", "8000"]
     
-  # Flask API server
+  # FastAPI server
   api:
     build: .
     ports:
@@ -90,7 +90,7 @@ services:
       - postgres
       - minio
       - litellm-proxy
-    command: python src/main.py
+    command: python run.py
 
   # Celery worker
   celery_worker:

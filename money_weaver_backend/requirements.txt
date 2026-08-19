@@ -54,10 +54,11 @@ boto3==1.38.13
 numpy==2.2.6 
 opencv-python==4.12.0.88
 # LiteLLM proxy dependencies
-# NOTE: the LiteLLM PROXY itself runs in its OWN venv (venv312, Python 3.12, see
-# start_all_services.sh) installed with `litellm[proxy]==1.76.1`. The main
-# py3.13 venv only needs the client SDK for src/services/llm_service.py and
-# src/routes/api_keys.py. Installing litellm[proxy] here would conflict with
+# NOTE: the LiteLLM PROXY runs from this same venv (see start_all_services.sh,
+# which activates `venv` and launches `litellm --config ... --port 8000`).
+# Only the client SDK is strictly needed here for src/services/llm_service.py
+# and the FastAPI api-keys router, but the proxy runs from the same env.
+# Installing litellm[proxy] here would conflict with
 # boto3==1.38.13 (proxy pins boto3==1.36.0), cryptography==45.0.7 (proxy wants
 # <44.0.0) and fastapi==0.116.1 (proxy wants <0.116.0) — same pattern as the
 # torch deps that tts_service owns.

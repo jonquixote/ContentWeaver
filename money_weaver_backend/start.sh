@@ -64,13 +64,13 @@ start_local_services() {
         fi
     fi
     
-    # Start the Flask backend API
-    if ! check_service "src/main.py" "Flask API"; then
-        echo "Starting Flask API server..."
-        source venv/bin/activate && python src/main.py > flask.log 2>&1 &
-        echo $! > flask.pid
+    # Start the FastAPI backend
+    if ! check_service "run.py" "FastAPI backend"; then
+        echo "Starting FastAPI backend server..."
+        source venv/bin/activate && python run.py > fastapi_backend.log 2>&1 &
+        echo $! > backend.pid
         sleep 3
-        echo "Flask API server started"
+        echo "FastAPI backend server started"
     fi
     
     # Start Celery worker
@@ -113,10 +113,10 @@ stop_services() {
     fi
     
     # Kill local services if running
-    if [ -f "flask.pid" ]; then
-        echo "Stopping Flask API server..."
-        kill $(cat flask.pid) 2>/dev/null || true
-        rm flask.pid
+    if [ -f "backend.pid" ]; then
+        echo "Stopping FastAPI backend server..."
+        kill $(cat backend.pid) 2>/dev/null || true
+        rm backend.pid
     fi
     
     if [ -f "celery.pid" ]; then

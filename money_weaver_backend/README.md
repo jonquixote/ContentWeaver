@@ -45,10 +45,28 @@ The backend provides the same API endpoints as before:
 - `/api/batch-mix` - Generate multiple video variations
 - `/api/task-status/<task_id>` - Check status of video generation tasks
 
+## Running the Backend
+
+FastAPI app served by uvicorn (port 5004):
+
+```bash
+cd money_weaver_backend && source venv/bin/activate
+python run.py
+```
+
+Or via `./start_all_services.sh` (activates `venv`, then starts LiteLLM proxy, Celery worker, and the FastAPI backend with `python run.py`). Stop with `./stop_all_services.sh`.
+
+Database migrations (Alembic):
+
+```bash
+cd money_weaver_backend && source venv/bin/activate
+python -m alembic upgrade head
+```
+
 ## Testing
 
 Run the pytest suite from `money_weaver_backend/` (use `venv` — `venv312` is broken):
 ```bash
 source venv/bin/activate && python -m pytest
 ```
-Tests use a fresh temp SQLite DB (via `tests/conftest.py`) and mock all external services.
+220 tests pass with 56.90% whole-suite coverage (enforced `--cov-fail-under=55`). Tests use a fresh temp SQLite DB (via `tests/conftest.py`) and mock all external services.

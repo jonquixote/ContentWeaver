@@ -34,4 +34,4 @@ fi
 
 # Start the backend application
 echo "Starting backend application..."
-python src/main.py
+python run.py

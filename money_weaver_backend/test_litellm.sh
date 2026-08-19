@@ -10,11 +10,11 @@ echo "Testing LiteLLM with minimal configuration..."
 cd "$(dirname "$0")"
 
 # Activate virtual environment
-if [ -d "venv312" ]; then
-    echo "Activating Python 3.12 virtual environment..."
-    source venv312/bin/activate
+if [ -d "venv" ]; then
+    echo "Activating virtual environment..."
+    source venv/bin/activate
 else
-    echo "Error: Python 3.12 virtual environment not found!"
+    echo "Error: virtual environment not found!"
     exit 1
 fi
 
