@@ -5,10 +5,23 @@ from typing import List, Dict, Tuple
 
 _TAG_RE = re.compile(r'<[^>]+>')
 
+HEADING_RE = re.compile(r'^(?:SCENE|SHOT)\s+\d+[:.]?\s*(.*)$', re.IGNORECASE)
+ACTION_RE = re.compile(r'^\[ACTION:\s*(.*)\]$', re.IGNORECASE)
+CAMERA_RE = re.compile(r'^\[CAMERA:\s*(.*)\]$', re.IGNORECASE)
+DIALOGUE_RE = re.compile(r'^\[DIALOGUE:\s*(.*)\]$', re.IGNORECASE)
+TRANSITION_RE = re.compile(r'^(CUT TO|FADE IN|FADE OUT|DISSOLVE TO|SMASH CUT)[:.]?\s*$', re.IGNORECASE)
+CHARACTER_RE = re.compile(r'^[A-Z][A-Z0-9 \-]{1,30}$')
+
 def _sanitize(text):
     text = html.unescape(text)
     text = _TAG_RE.sub('', text)
     return text
+
+def _ensure(scenes):
+    if not scenes:
+        scenes.append({'scene_number': 1, 'description': 'Main', 'start_time': 0,
+                       'end_time': 0, 'duration': 0, 'blocks': []})
+    return scenes[-1]
 
 class ScriptParsingService:
     def __init__(self):
@@ -31,6 +44,15 @@ class ScriptParsingService:
         # Extract full narrative if present
         full_narrative_match = re.search(r'\*\*Full Narrative:\*\*\s*(.*?)(?=\n\*\*Scene|\n\*\*$|$)', script_text, re.DOTALL | re.IGNORECASE)
         full_narrative = _sanitize(full_narrative_match.group(1).strip()) if full_narrative_match else ""
+
+        # Prefer screenplay-format parsing when typed blocks are present
+        screenplay_scenes = self.parse_screenplay(script_text)
+        if screenplay_scenes and any(s.get('blocks') for s in screenplay_scenes):
+            return {
+                'title': title,
+                'full_narrative': full_narrative,
+                'scenes': screenplay_scenes
+            }
         
         # Extract scenes using a more robust pattern
         scenes = []
@@ -64,7 +86,55 @@ class ScriptParsingService:
             'full_narrative': full_narrative,
             'scenes': scenes
         }
-    
+
+    def parse_screenplay(self, script_text: str) -> List[Dict]:
+        """
+        Parse a screenplay-format script into scenes with typed blocks.
+
+        Block types: heading, action, character, dialogue, transition, camera.
+        """
+        scenes = []
+        cur = None
+        cur_character = None
+        for raw in script_text.split('\n'):
+            line = raw.strip()
+            if not line or line == 'END':
+                continue
+            h = HEADING_RE.match(line)
+            if h and (cur is None or cur.get('blocks')):
+                cur = {'scene_number': len(scenes) + 1, 'description': h.group(1).strip(),
+                       'start_time': 0, 'end_time': 0, 'duration': 0, 'blocks': []}
+                cur['blocks'].append({'type': 'heading', 'text': line})
+                scenes.append(cur)
+                cur_character = None
+                continue
+            if ACTION_RE.match(line):
+                typ, text = 'action', ACTION_RE.match(line).group(1).strip()
+            elif CAMERA_RE.match(line):
+                typ, text = 'camera', CAMERA_RE.match(line).group(1).strip()
+            elif DIALOGUE_RE.match(line):
+                typ, text = 'dialogue', DIALOGUE_RE.match(line).group(1).strip()
+            else:
+                typ, text = None, None
+            if typ:
+                block = {'type': typ, 'text': text}
+                if typ == 'dialogue' and cur_character:
+                    block['speaker'] = cur_character
+                if cur is None:
+                    cur = _ensure(scenes)
+                cur['blocks'].append(block)
+                continue
+            if TRANSITION_RE.match(line):
+                _ensure(scenes)['blocks'].append({'type': 'transition', 'text': line})
+                continue
+            if CHARACTER_RE.match(line) and cur is not None:
+                cur_character = line
+                cur['blocks'].append({'type': 'character', 'text': line})
+                continue
+            if cur is not None and cur['blocks']:
+                cur['blocks'].append({'type': 'action', 'text': line})
+        return scenes
+
     def _parse_script_fallback(self, script_text: str) -> List[Dict]:
         """
         Fallback parsing method for when the strict pattern doesn't match.
@@ -261,7 +331,18 @@ class ScriptParsingService:
         Returns:
             str: Clean voiceover text
         """
-        # Use full narrative if available (preferred approach)
+        # Prefer dialogue blocks from screenplay-format scenes
+        dialogue_parts = []
+        for scene in parsed_script.get('scenes', []):
+            for block in scene.get('blocks', []):
+                if block.get('type') == 'dialogue' and block.get('text', '').strip():
+                    dialogue_parts.append(block['text'].strip())
+        if dialogue_parts:
+            result = ' '.join(dialogue_parts)
+            result = re.sub(r'\s+', ' ', result)
+            return _sanitize(result.strip())
+
+        # Fallback to full narrative
         full_narrative = parsed_script.get('full_narrative', '')
         if full_narrative and full_narrative.strip():
             return _sanitize(full_narrative.strip())
@@ -278,7 +359,6 @@ class ScriptParsingService:
         # Join with spaces and clean up extra whitespace
         result = ' '.join(voiceover_parts)
         # Clean up any extra spaces
-        import re
         result = re.sub(r'\s+', ' ', result)
         return _sanitize(result.strip())
     
@@ -294,7 +374,12 @@ class ScriptParsingService:
         """
         shot_descriptions = []
         for scene in parsed_script.get('scenes', []):
-            if scene.get('visual_description'):
+            blocks = scene.get('blocks', [])
+            action_camera = [b['text'] for b in blocks
+                             if b.get('type') in ('action', 'camera') and b.get('text', '').strip()]
+            if action_camera:
+                shot_descriptions.extend(_sanitize(text) for text in action_camera)
+            elif scene.get('visual_description'):
                 shot_descriptions.append(_sanitize(scene['visual_description']))
             # Fallback to general description if no specific visual description
             elif scene.get('description'):
