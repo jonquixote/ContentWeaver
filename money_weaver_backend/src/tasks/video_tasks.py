@@ -123,7 +123,7 @@ def get_default_model():
     return "groq/llama-3.3-70b-versatile"
 
 @celery_app.task(bind=True, name='src.tasks.video_tasks.generate_assembler_video_task')
-def generate_assembler_video_task(self, project_id, prompt, duration=30, orientation="landscape", width=1920, height=1080, voice_id=None):
+def generate_assembler_video_task(self, project_id, prompt, duration=30, orientation="landscape", width=1920, height=1080, voice_id=None, model=None):
     """
     Generate video using the assembler workflow (stock footage + TTS).
 
@@ -166,11 +166,12 @@ def generate_assembler_video_task(self, project_id, prompt, duration=30, orienta
             if task_record:
                 task_record.status = 'running'
                 task_record.progress = 10
+                task_record.generation_type = 'assembler'
                 db.session.commit()
                 
             # Update task status for Celery progress tracking
             self.update_state(state='PROGRESS', meta={'current': 10, 'total': 100, 'status': 'Generating script...'})
-            script = llm_service.generate_script(prompt, user_id, default_model, duration)
+            script = llm_service.generate_script(prompt, user_id, default_model, duration, model=model)
             
             # Parse the script for structured data
             parsed_script = script_parsing_service.parse_script(script)
@@ -182,6 +183,7 @@ def generate_assembler_video_task(self, project_id, prompt, duration=30, orienta
             # Update task record in database
             if task_record:
                 task_record.progress = 20
+                task_record.generation_type = 'assembler'
                 db.session.commit()
                 
             # Generate TTS from parsed voiceover text, not the full script
@@ -247,6 +249,7 @@ def generate_assembler_video_task(self, project_id, prompt, duration=30, orienta
             # Update task record in database
             if task_record:
                 task_record.progress = 40
+                task_record.generation_type = 'assembler'
                 db.session.commit()
                 
             # Search for stock footage based on script with duration information and resolution settings
@@ -305,6 +308,7 @@ def generate_assembler_video_task(self, project_id, prompt, duration=30, orienta
             if task_record:
                 task_record.progress = 90
                 task_record.thumbnail_path = thumbnail_path
+                task_record.generation_type = 'assembler'
                 db.session.commit()
 
             # Upload final video + thumbnail to storage (durable keys, served as
@@ -348,6 +352,7 @@ def generate_assembler_video_task(self, project_id, prompt, duration=30, orienta
             if task_record:
                 task_record.status = 'completed'
                 task_record.progress = 100
+                task_record.generation_type = 'assembler'
                 task_record.result = json.dumps(result)
                 db.session.commit()
             
@@ -433,9 +438,10 @@ def generate_generative_video_task(self, project_id, prompt, voice_id=None):
             project.script = enhanced_prompt
             db.session.commit()
 
-            # Update task record in database
+# Update task record in database
             if task_record:
-                task_record.progress = 30
+                task_record.progress = 80
+                task_record.generation_type = 'assembler'
                 db.session.commit()
             
             # Simulate ComfyUI workflow construction

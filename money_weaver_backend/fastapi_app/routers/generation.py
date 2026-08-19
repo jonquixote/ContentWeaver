@@ -17,6 +17,7 @@ from src.tasks.video_tasks import (
     generate_generative_video_task,
 )
 from src.validation import require_fields
+from src.services.llm_service import llm_service
 
 router = APIRouter(prefix='/api', tags=['generation'])
 
@@ -69,18 +70,21 @@ def _resolve_owned_voice(session, voice_id, user_id):
     return voice, None
 
 
-@router.post('/generate/assembler', status_code=202)
-def generate_assembler_video(body: AssemblerRequest,
-                             user=Depends(current_user),
-                             session=Depends(get_db)):
-    data = body.model_dump(exclude_unset=True)
+def _enqueue_assembler(body: dict, user, db, model=None):
+    """Shared helper to enqueue an assembler video task.
+
+    Sets task.generation_type = 'assembler' and calls
+    generate_assembler_video_task.delay().
+    """
+    data = {**body}
+    data['generation_type'] = 'assembler'
 
     try:
         require_fields(data, ['project_id', 'prompt'])
     except ValueError as e:
         raise HTTPException(400, str(e))
 
-    project = session.get(Project, data['project_id'])
+    project = db.get(Project, data['project_id'])
     if not project:
         raise HTTPException(404, 'Project not found')
     if project.user_id != user.id:
@@ -110,7 +114,7 @@ def generate_assembler_video(body: AssemblerRequest,
 
     # Optional cloned voice owned by the caller
     voice_id = data.get('voice_id')
-    voice, error = _resolve_owned_voice(session, voice_id, user.id)
+    voice, error = _resolve_owned_voice(db, voice_id, user.id)
     if error:
         raise HTTPException(error[1], error[0]['error'])
 
@@ -118,10 +122,11 @@ def generate_assembler_video(body: AssemblerRequest,
     task = Task(
         project_id=project.id,
         task_type='assembler_video_generation',
-        status='pending'
+        status='pending',
+        generation_type='assembler'
     )
-    session.add(task)
-    session.commit()
+    db.add(task)
+    db.commit()
 
     # Queue Celery task for assembler workflow with video settings
     try:
@@ -132,28 +137,30 @@ def generate_assembler_video(body: AssemblerRequest,
             orientation=orientation,
             width=width,
             height=height,
-            voice_id=voice.id if voice else None
+            voice_id=voice.id if voice else None,
+            model=model
         )
     except Exception as e:
-        session.delete(task)
-        session.commit()
+        db.delete(task)
+        db.commit()
         raise HTTPException(503, f'Task queue unavailable: {e}')
 
     # Update project status and voice type
     project.status = 'processing'
     project.workflow_type = 'assembler'
     project.voice_type = voice_type
-    session.commit()
+    db.commit()
 
     # Associate the Celery task id with the tracking task
     task.celery_task_id = celery_task.id
-    session.commit()
+    db.commit()
 
     return {
         'message': 'Video generation started',
         'task_id': task.id,
         'celery_task_id': celery_task.id,
         'project_id': project.id,
+        'generation_type': 'assembler',
         'settings': {
             'duration': duration,
             'orientation': orientation,
@@ -162,6 +169,31 @@ def generate_assembler_video(body: AssemblerRequest,
             'voice_id': voice.id if voice else None
         }
     }
+    """Coerce a payload voice_id and verify the caller owns that Voice.
+
+    Returns (voice_or_None, error_response_or_None) where error_response is a
+    (dict, status_code) tuple. The task re-checks ownership at run time; this
+    gives the caller fast feedback (400/404/403) before anything is queued.
+    """
+    if voice_id is None:
+        return None, None
+    try:
+        voice_id = int(voice_id)
+    except (TypeError, ValueError):
+        return None, ({'error': 'voice_id must be an integer'}, 400)
+    voice = session.get(Voice, voice_id)
+    if not voice:
+        return None, ({'error': 'Voice not found'}, 404)
+    if voice.user_id != user_id:
+        return None, ({'error': 'Forbidden'}, 403)
+    return voice, None
+
+
+@router.post('/generate/assembler', status_code=202)
+def generate_assembler_video(body: AssemblerRequest,
+                             user=Depends(current_user),
+                             session=Depends(get_db)):
+    return _enqueue_assembler(body.model_dump(exclude_unset=True), user, session)
 
 
 @router.post('/generate/generative', status_code=202)
@@ -275,6 +307,42 @@ def batch_mix_videos(body: BatchMixRequest,
         'project_id': project.id,
         'variations_count': len(data['variations'])
     }
+
+
+@router.post('/generate/surprise', status_code=202)
+def generate_surprise_video(
+    seed: Optional[int] = None,
+    voice_id: Optional[int] = None,
+    preset_id: Optional[int] = None,
+    duration: Optional[int] = None,
+    orientation: Optional[str] = None,
+    width: Optional[int] = None,
+    height: Optional[int] = None,
+    user=Depends(current_user),
+    session=Depends(get_db),
+    model: Optional[str] = None,
+):
+    body = {
+        'seed': seed,
+        'voice_id': voice_id,
+        'preset_id': preset_id,
+        'duration': duration,
+        'orientation': orientation,
+        'width': width,
+        'height': height,
+    }
+    prompt = llm_service.generate_idea(seed=body.get('seed'), model=model)['topic']
+    if 'project_id' not in body:
+        project = Project(
+            title='Surprise Video',
+            description='Surprise-generated video',
+            user_id=user.id,
+            workflow_type='assembler'
+        )
+        session.add(project)
+        session.commit()
+        body['project_id'] = project.id
+    return _enqueue_assembler({**body, 'prompt': prompt}, user, session, model=model)
 
 
 @router.get('/task-status/{task_id}')

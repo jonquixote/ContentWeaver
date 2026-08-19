@@ -11,6 +11,7 @@ class Task(get_db().Model):
     id = get_db().Column(get_db().Integer, primary_key=True)
     project_id = get_db().Column(get_db().Integer, get_db().ForeignKey('project.id'), nullable=False)
     task_type = get_db().Column(get_db().String(100), nullable=False)  # script_generation, video_assembly, etc.
+    generation_type = get_db().Column(get_db().String(20), default='assembler')
     status = get_db().Column(get_db().String(50), default='pending')  # pending, running, completed, failed
     progress = get_db().Column(get_db().Integer, default=0)  # 0-100
     result = get_db().Column(get_db().Text)  # JSON result data
@@ -38,5 +39,6 @@ class Task(get_db().Model):
             'thumbnail_path': self.thumbnail_path,
             'celery_task_id': self.celery_task_id,
             'created_at': self.created_at.isoformat() if self.created_at else None,
-            'updated_at': self.updated_at.isoformat() if self.updated_at else None
+            'updated_at': self.updated_at.isoformat() if self.updated_at else None,
+            'generation_type': self.generation_type
         }
