@@ -42,6 +42,7 @@ import src.models.preset  # noqa: E402, F401
 import src.models.template  # noqa: E402, F401
 import src.models.voice  # noqa: E402, F401
 import src.models.token_blocklist  # noqa: E402, F401
+import src.models.model_preference  # noqa: E402, F401
 
 target_metadata = db.metadata
 
