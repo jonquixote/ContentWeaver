@@ -9,18 +9,14 @@ echo "Starting MoneyWeaver Services..."
 # Navigate to the backend directory
 cd "$(dirname "$0")"
 
-# Activate virtual environment
-if [ -d "venv" ]; then
-    echo "Activating virtual environment..."
-    source venv/bin/activate
-else
+# Virtual environment check (no `activate` — it hardcodes a stale VIRTUAL_ENV path)
+if [ ! -x "venv/bin/python" ]; then
     echo "Error: virtual environment not found!"
     exit 1
 fi
 
 # Clean up any existing processes
 echo "Cleaning up existing processes..."
-pkill -f "litellm" 2>/dev/null || true
 pkill -f "celery" 2>/dev/null || true
 pkill -f "python.*run.py" 2>/dev/null || true
 sleep 3
@@ -31,24 +27,9 @@ if [ -f .env ]; then
     set +a
 fi
 
-# Start LiteLLM proxy in background with simplified config (no database)
-echo "Starting LiteLLM proxy..."
-LITELLM_DISABLE_DATABASE=true NO_DOCS="True" NO_REDOC="True" DATABASE_URL="" litellm --config litellm_config.yaml --port 8000 > litellm_proxy.log 2>&1 &
-LITELLM_PID=$!
-
-# Wait a moment for LiteLLM proxy to start
-sleep 5
-
-# Check if LiteLLM proxy is running by checking the process
-if ps -p $LITELLM_PID > /dev/null 2>&1; then
-    echo "LiteLLM proxy is running (PID: $LITELLM_PID)"
-else
-    echo "Warning: LiteLLM proxy may not have started correctly. Check litellm_proxy.log for details."
-fi
-
 # Start Celery worker in background
 echo "Starting Celery worker..."
-celery -A src.services.celery_app.celery_app worker --loglevel=info --queues=celery,video_generation > celery_worker.log 2>&1 &
+venv/bin/celery -A src.services.celery_app.celery_app worker --loglevel=info --queues=celery,video_generation > celery_worker.log 2>&1 &
 CELERY_PID=$!
 
 # Wait a moment for Celery to start
@@ -63,7 +44,7 @@ fi
 
 # Start the FastAPI backend
 echo "Starting FastAPI backend..."
-python run.py > fastapi_backend.log 2>&1 &
+venv/bin/python run.py > fastapi_backend.log 2>&1 &
 FASTAPI_PID=$!
 
 # Wait a moment for FastAPI to start
@@ -79,14 +60,12 @@ fi
 echo ""
 echo "Service Status:"
 echo "==============="
-echo "LiteLLM proxy: $(if ps -p $LITELLM_PID > /dev/null 2>&1; then echo 'RUNNING'; else echo 'NOT RUNNING'; fi)"
 echo "Celery worker: $(if ps -p $CELERY_PID > /dev/null; then echo 'RUNNING'; else echo 'NOT RUNNING'; fi)"
 echo "FastAPI backend: $(if ps -p $FASTAPI_PID > /dev/null; then echo 'RUNNING'; else echo 'NOT RUNNING'; fi)"
 
 echo ""
 echo "All services started successfully!"
 echo "Backend API available at http://localhost:5004"
-echo "LiteLLM proxy available at http://localhost:8000"
 echo ""
 echo "To stop services, run: ./stop_all_services.sh"
-echo "To check logs, view: litellm_proxy.log, celery_worker.log, fastapi_backend.log"
+echo "To check logs, view: celery_worker.log, fastapi_backend.log"
