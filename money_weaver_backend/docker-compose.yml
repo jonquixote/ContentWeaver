@@ -111,7 +111,7 @@ services:
       - postgres
       - minio
       - litellm-proxy
-    command: celery -A src.services.celery_app worker --loglevel=info
+    command: celery -A src.services.celery_app worker --loglevel=info -Q celery,video_generation
 
   # Celery Flower (monitoring)
   flower:

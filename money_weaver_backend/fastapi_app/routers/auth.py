@@ -46,7 +46,12 @@ def login(body: LoginRequest, session=Depends(get_db)):
 def logout(creds: HTTPAuthorizationCredentials = Depends(bearer),
            _user=Depends(current_user),
            session=Depends(get_db)):
-    payload = jwt.decode(creds.credentials, os.environ['SECRET_KEY'], algorithms=['HS256'])
+    try:
+        payload = jwt.decode(creds.credentials, os.environ['SECRET_KEY'], algorithms=['HS256'])
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(401, 'Token expired')
+    except jwt.InvalidTokenError:
+        raise HTTPException(401, 'Invalid token')
     block = TokenBlocklist(jti=payload.get('jti'))
     if block.jti:
         session.add(block)
