@@ -74,6 +74,7 @@ python-multipart==0.0.20
 # 2.9.9 ships no cp313 wheel; 2.9.10+ is the first version with Python 3.13 support
 # (avoids forcing a libpq-dev sdist build in CI).
 psycopg2-binary>=2.9.10
+edge-tts==7.2.1
 # --- DEV NOTE: MOSS-TTS inference microservice ---
 # The TTS microservice lives in money_weaver_backend/tts_service/ and runs in its
 # OWN venv (tts_service/.venv, python 3.12). Its deps (torch==2.2.2, torchaudio==2.2.2,

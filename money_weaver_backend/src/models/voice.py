@@ -14,6 +14,7 @@ class Voice(get_db().Model):
     name = get_db().Column(get_db().String(100), nullable=False)
     reference_audio_url = get_db().Column(get_db().String(500), nullable=False)  # storage key (e.g. voices/<user_id>/<uuid>.<ext>) resolved by the routes layer, or legacy local path
     description = get_db().Column(get_db().String(300), default='')
+    voice_engine = get_db().Column(get_db().String(20), default='moss', nullable=False)
     created_at = get_db().Column(get_db().DateTime, default=datetime.utcnow)
     consent_confirmed_at = get_db().Column(get_db().DateTime, nullable=True)
     last_used_at = get_db().Column(get_db().DateTime, nullable=True)
@@ -25,6 +26,7 @@ class Voice(get_db().Model):
             'name': self.name,
             'reference_audio_url': self.reference_audio_url,
             'description': self.description,
+            'voice_engine': self.voice_engine,
             'created_at': self.created_at.isoformat() if self.created_at else None,
             'consent_confirmed_at': self.consent_confirmed_at.isoformat() if self.consent_confirmed_at else None,
             'last_used_at': self.last_used_at.isoformat() if self.last_used_at else None
