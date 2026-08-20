@@ -348,10 +348,11 @@ class VideoAssemblyService:
                       audio_file: str, 
                       scene_timings: List[Dict],
                       output_filename: str = None,
-                      total_duration: int = 30,
-                      orientation: str = "landscape",
-                      width: int = 1920,
-                      height: int = 1080) -> Optional[str]:
+total_duration: int = 30,
+                       orientation: str = "landscape",
+                       width: int = 1920,
+                       height: int = 1080,
+                       niche: Dict = None) -> Optional[str]:
         """
         Assemble video clips with audio using FFmpeg, cutting clips to match scene timings
         
@@ -533,7 +534,7 @@ class VideoAssemblyService:
                     print(f"Successfully created video at: {output_path} (Size: {file_size} bytes)")
                     captions = build_caption_pngs(caption_segments, width, height)
                     if captions:
-                        self._burn_captions(output_path, captions, total_duration)
+                        self._burn_captions(output_path, captions, total_duration, niche=niche)
                     return output_path
                 else:
                     print(f"FFmpeg reported success but output file does not exist: {output_path}")

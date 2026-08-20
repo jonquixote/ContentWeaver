@@ -50,8 +50,9 @@ def build_ass(transcript, niche=None) -> str:
     niche: dict with optional captions{font, highlight}; highlight color hex
     """
     niche = niche or {}
-    highlight = str(niche.get('highlight', '#00FF88'))
-    font = str(niche.get('font', 'Arial'))
+    nc = niche.get('captions') or {}
+    highlight = str(nc.get('highlight', niche.get('highlight', '#00FF88')))
+    font = str(nc.get('font', niche.get('font', 'Arial')))
     color = highlight.lstrip('#').upper() or '00FF88'
     lines = []
     for w in transcript:
@@ -59,7 +60,7 @@ def build_ass(transcript, niche=None) -> str:
         end = _ass_ts(w['end'])
         word = str(w['word']).replace('\n', ' ')
         lines.append(f"Dialogue: 0,{start},{end},Default,,0,0,0,,{{\\c&{color}&}}{word}")
-    return ASS_HEADER.format(font=font) + "\n".join(lines)
+    return ASS_HEADER.format(font=font) + "\n".join(lines) + "\n"
 
 
 def export_srt(transcript) -> str:
@@ -91,5 +92,7 @@ def burn_ass(input_mp4, ass_path, output_mp4=None) -> str:
             str(output_mp4),
         ],
         check=True,
+        capture_output=True,
+        timeout=300,
     )
     return output_mp4

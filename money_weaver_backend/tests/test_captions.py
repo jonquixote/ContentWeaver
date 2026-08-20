@@ -21,6 +21,14 @@ def test_build_ass_niche_defaults():
     assert "\\c&00FF88&" in ass
 
 
+def test_build_ass_nested_captions_style():
+    ass = build_ass([{"word": "Hi", "start": 0, "end": 1}],
+                    {"captions": {"highlight": "#D32F2F", "font": "Courier"}})
+    assert "D32F2F" in ass
+    assert "Courier" in ass
+    assert "\\c&D32F2F&" in ass
+
+
 def test_build_ass_ass_timecode():
     ass = build_ass([{"word": "Hi", "start": 1.5, "end": 2.0}], {})
     assert "0:00:01.50" in ass
@@ -102,6 +110,33 @@ def test_burn_captions_routes_word_transcript_to_ass(tmp_path, monkeypatch):
     assert video.read_bytes() == b'burned'
     assert 'Hello' in captured['ass']
     assert os.path.exists(str(tmp_path / 'in.srt'))
+
+
+def test_burn_captions_passes_niche_to_ass(tmp_path, monkeypatch):
+    from src.services.video import captions as caps
+    from src.services.video.assembly_service import VideoAssemblyService
+
+    svc = VideoAssemblyService()
+    svc.output_dir = str(tmp_path)
+    svc.working_dir = str(tmp_path)
+    video = tmp_path / 'in.mp4'
+    video.write_bytes(b'video')
+    transcript = [{"word": "Hello", "start": 0.0, "end": 0.5}]
+
+    captured = {}
+
+    def fake_burn(input_mp4, ass_path, output_mp4):
+        with open(ass_path, encoding='utf-8') as f:
+            captured['ass'] = f.read()
+        with open(output_mp4, 'wb') as f:
+            f.write(b'burned')
+
+    monkeypatch.setattr(caps, 'burn_ass', fake_burn)
+    niche = {"captions": {"highlight": "#D32F2F", "font": "Courier"}}
+    result = svc._burn_captions(str(video), transcript, 30, niche=niche)
+    assert result == str(video)
+    assert "Courier" in captured['ass']
+    assert "\\c&D32F2F&" in captured['ass']
 
 
 def test_burn_captions_png_legacy_path_unaffected(tmp_path, monkeypatch):

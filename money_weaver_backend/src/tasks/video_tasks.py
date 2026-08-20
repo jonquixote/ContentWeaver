@@ -286,7 +286,15 @@ def generate_assembler_video_task(self, project_id, prompt, duration=30, orienta
             # Assemble video with stock footage and audio, using scene timings
             self.update_state(state='PROGRESS', meta={'current': 80, 'total': 100, 'status': 'Assembling video...'})
             output_filename = f"project_{project_id}_assembler.mp4"
-            
+
+            niche = None
+            if niche_id:
+                try:
+                    from src.services.providers.niche_profile import load as load_niche
+                    niche = load_niche(niche_id)
+                except (FileNotFoundError, ValueError):
+                    niche = None
+
             final_video_path = assembly_service.assemble_video(
                 video_files=video_data,  # Pass the full video data with metadata
                 audio_file=audio_file,
@@ -295,7 +303,8 @@ def generate_assembler_video_task(self, project_id, prompt, duration=30, orienta
                 total_duration=duration,
                 orientation=orientation,
                 width=width,
-                height=height
+                height=height,
+                niche=niche,
             )
             
             if not final_video_path:
