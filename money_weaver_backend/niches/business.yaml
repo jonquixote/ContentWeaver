@@ -1,0 +1,14 @@
+tone: direct
+hooks:
+- This business makes millions while you sleep
+- Why your startup will fail
+- The billionaire playbook
+forbidden:
+- get rich quick
+- unverified revenue claims
+visuals: office, charts, professional
+captions:
+  font: Roboto
+  highlight: '#009688'
+music: corporate
+word_count: 145

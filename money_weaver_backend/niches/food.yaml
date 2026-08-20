@@ -1,0 +1,14 @@
+tone: warm
+hooks:
+- This recipe will blow your mind
+- Youve been cooking it wrong
+- One ingredient changes everything
+forbidden:
+- unsafe food handling
+- unverified health claims
+visuals: food close-up, warm, rustic
+captions:
+  font: Lora
+  highlight: '#FF6F00'
+music: acoustic
+word_count: 125

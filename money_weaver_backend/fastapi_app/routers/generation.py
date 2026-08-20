@@ -36,6 +36,7 @@ class AssemblerRequest(BaseModel):
     height: Optional[int] = None
     voice_type: Optional[str] = None
     voice_id: Optional[int] = None
+    niche_id: Optional[str] = None
 
 
 class GenerativeRequest(BaseModel):
@@ -128,6 +129,9 @@ def _enqueue_assembler(body: dict, user, db, model=None):
     db.add(task)
     db.commit()
 
+    # Optional niche
+    niche_id = data.get('niche_id')
+
     # Queue Celery task for assembler workflow with video settings
     try:
         celery_task = generate_assembler_video_task.delay(
@@ -138,7 +142,8 @@ def _enqueue_assembler(body: dict, user, db, model=None):
             width=width,
             height=height,
             voice_id=voice.id if voice else None,
-            model=model
+            model=model,
+            niche_id=niche_id,
         )
     except Exception as e:
         db.delete(task)

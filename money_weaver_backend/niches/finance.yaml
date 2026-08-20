@@ -1,0 +1,14 @@
+tone: authoritative
+hooks:
+- This money mistake costs thousands
+- Rich vs poor mindset
+- The market is rigged
+forbidden:
+- financial advice disclaimer missing
+- guaranteed returns
+visuals: charts, luxury, minimal
+captions:
+  font: Montserrat
+  highlight: '#FFD700'
+music: corporate
+word_count: 140

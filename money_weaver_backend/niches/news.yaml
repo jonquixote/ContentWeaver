@@ -1,0 +1,14 @@
+tone: urgent
+hooks:
+- Breaking news you need to know
+- What media wont tell you
+- This just happened
+forbidden:
+- unverified claims
+- sensationalism without facts
+visuals: newsroom, urgent, clean
+captions:
+  font: Source Sans Pro
+  highlight: '#D32F2F'
+music: news
+word_count: 120

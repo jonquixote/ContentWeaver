@@ -1,0 +1,14 @@
+tone: curious
+hooks:
+- This fact will make you smarter
+- You learned it wrong in school
+- The truth about history
+forbidden:
+- misinformation
+- oversimplification
+visuals: clean, books, minimal
+captions:
+  font: Merriweather
+  highlight: '#3F51B5'
+music: ambient
+word_count: 150

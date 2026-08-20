@@ -1,0 +1,14 @@
+tone: neutral
+hooks:
+- You need to hear this
+- This will surprise you
+- The truth no one tells you
+forbidden:
+- clickbait without payoff
+- misinformation
+visuals: clean, versatile, modern
+captions:
+  font: Inter
+  highlight: '#00FF88'
+music: neutral
+word_count: 150

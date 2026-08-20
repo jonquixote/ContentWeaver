@@ -1,0 +1,14 @@
+tone: urgent
+hooks:
+- Stop scrolling and listen
+- This is your wake-up call
+- No one will save you
+forbidden:
+- toxic positivity
+- mental health diagnosis
+visuals: bold, dark, cinematic
+captions:
+  font: Anton
+  highlight: '#FFEB3B'
+music: epic
+word_count: 120

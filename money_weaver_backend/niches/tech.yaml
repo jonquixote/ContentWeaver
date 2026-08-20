@@ -1,0 +1,14 @@
+tone: contrarian
+hooks:
+- This tech will change everything
+- You are being lied to about AI
+- The future is already here
+forbidden:
+- outdated stats
+- hype without facts
+visuals: futuristic, neon, clean
+captions:
+  font: Inter
+  highlight: '#00FF88'
+music: electronic
+word_count: 150

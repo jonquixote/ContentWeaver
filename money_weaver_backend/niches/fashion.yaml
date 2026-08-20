@@ -1,0 +1,14 @@
+tone: trendy
+hooks:
+- This outfit costs more than your rent
+- You are wearing it wrong
+- The trend that broke fashion week
+forbidden:
+- body shaming
+- counterfeit
+visuals: runway, street style, vibrant
+captions:
+  font: Poppins
+  highlight: '#E91E63'
+music: upbeat
+word_count: 125

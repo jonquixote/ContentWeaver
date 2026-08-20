@@ -1,0 +1,14 @@
+tone: motivational
+hooks:
+- This workout changes everything
+- Stop doing this exercise
+- Get shredded in 30 days
+forbidden:
+- unsafe advice
+- spot reduction myth
+visuals: gym, energetic, sweat
+captions:
+  font: Bebas Neue
+  highlight: '#FF3B30'
+music: energetic
+word_count: 135

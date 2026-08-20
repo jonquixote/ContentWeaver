@@ -1,0 +1,14 @@
+tone: aspirational
+hooks:
+- This is what old money looks like
+- Why luxury is not what you think
+- The billionaire lifestyle
+forbidden:
+- counterfeit promotion
+- elitist shaming
+visuals: luxury, gold, minimal
+captions:
+  font: Cinzel
+  highlight: '#C9A86A'
+music: elegant
+word_count: 130

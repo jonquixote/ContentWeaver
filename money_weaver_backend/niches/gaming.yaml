@@ -1,0 +1,14 @@
+tone: hype
+hooks:
+- This game broke the internet
+- You missed this easter egg
+- Pro players hate this trick
+forbidden:
+- spoilers without warning
+- toxic language
+visuals: neon, gaming, fast cuts
+captions:
+  font: Orbitron
+  highlight: '#7F00FF'
+music: gaming
+word_count: 145

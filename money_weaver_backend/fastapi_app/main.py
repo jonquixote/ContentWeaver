@@ -18,6 +18,7 @@ from fastapi_app.routers import (
     health,
     ideas,
     media,
+    niches,
     presets,
     projects,
     settings,
@@ -108,6 +109,7 @@ app.include_router(templates.router)
 app.include_router(generation.router)
 app.include_router(voices.router)
 app.include_router(uploads.router)
+app.include_router(niches.router)
 
 
 @app.get('/', include_in_schema=False)

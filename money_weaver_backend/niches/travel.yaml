@@ -1,0 +1,14 @@
+tone: inspirational
+hooks:
+- This place should not exist
+- You need to see this before you die
+- Hidden gem no one knows
+forbidden:
+- dangerous location advice
+- cultural insensitivity
+visuals: cinematic, drone, landscapes
+captions:
+  font: Playfair Display
+  highlight: '#00BCD4'
+music: adventure
+word_count: 140

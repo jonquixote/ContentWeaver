@@ -1,0 +1,14 @@
+tone: empathetic
+hooks:
+- Doctors dont tell you this
+- This habit is killing you
+- Heal your body naturally
+forbidden:
+- medical claims without source
+- diagnosis
+visuals: clean, medical, nature
+captions:
+  font: Open Sans
+  highlight: '#4CAF50'
+music: calm
+word_count: 130

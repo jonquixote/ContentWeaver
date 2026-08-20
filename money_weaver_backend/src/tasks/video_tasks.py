@@ -123,7 +123,7 @@ def get_default_model():
     return "groq/llama-3.3-70b-versatile"
 
 @celery_app.task(bind=True, name='src.tasks.video_tasks.generate_assembler_video_task')
-def generate_assembler_video_task(self, project_id, prompt, duration=30, orientation="landscape", width=1920, height=1080, voice_id=None, model=None):
+def generate_assembler_video_task(self, project_id, prompt, duration=30, orientation="landscape", width=1920, height=1080, voice_id=None, model=None, niche_id=None):
     """
     Generate video using the assembler workflow (stock footage + TTS).
 
@@ -171,7 +171,7 @@ def generate_assembler_video_task(self, project_id, prompt, duration=30, orienta
                 
             # Update task status for Celery progress tracking
             self.update_state(state='PROGRESS', meta={'current': 10, 'total': 100, 'status': 'Generating script...'})
-            script = llm_service.generate_script(prompt, user_id, default_model, duration, model=model)
+            script = llm_service.generate_script(prompt, user_id, default_model, duration, model=model, niche_id=niche_id)
             
             # Parse the script for structured data
             parsed_script = script_parsing_service.parse_script(script)

@@ -1,0 +1,14 @@
+tone: energetic
+hooks:
+- This play defied physics
+- The moment that changed sports forever
+- You wont believe this comeback
+forbidden:
+- unsportsmanlike content
+- injury exploitation
+visuals: dynamic, stadium, slow-mo
+captions:
+  font: Oswald
+  highlight: '#FF5722'
+music: stadium
+word_count: 135
