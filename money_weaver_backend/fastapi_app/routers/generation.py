@@ -129,8 +129,13 @@ def _enqueue_assembler(body: dict, user, db, model=None):
     db.add(task)
     db.commit()
 
-    # Optional niche
+    # Optional niche — validate to guard path traversal (ValueError -> 400)
     niche_id = data.get('niche_id')
+    if niche_id is not None:
+        import re
+
+        if not re.fullmatch(r"[a-z0-9_-]{1,32}", str(niche_id)):
+            raise HTTPException(status_code=400, detail="invalid niche_id")
 
     # Queue Celery task for assembler workflow with video settings
     try:
@@ -174,24 +179,6 @@ def _enqueue_assembler(body: dict, user, db, model=None):
             'voice_id': voice.id if voice else None
         }
     }
-    """Coerce a payload voice_id and verify the caller owns that Voice.
-
-    Returns (voice_or_None, error_response_or_None) where error_response is a
-    (dict, status_code) tuple. The task re-checks ownership at run time; this
-    gives the caller fast feedback (400/404/403) before anything is queued.
-    """
-    if voice_id is None:
-        return None, None
-    try:
-        voice_id = int(voice_id)
-    except (TypeError, ValueError):
-        return None, ({'error': 'voice_id must be an integer'}, 400)
-    voice = session.get(Voice, voice_id)
-    if not voice:
-        return None, ({'error': 'Voice not found'}, 404)
-    if voice.user_id != user_id:
-        return None, ({'error': 'Forbidden'}, 403)
-    return voice, None
 
 
 @router.post('/generate/assembler', status_code=202)

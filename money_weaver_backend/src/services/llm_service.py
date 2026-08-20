@@ -73,10 +73,7 @@ class LLMService:
         except json.JSONDecodeError:
             return {"title": "Untitled", "topic": "", "script": raw}
 
-    def generate_script(self, prompt, user_id=None, model=None, duration=30, niche_id=None, **kwargs):
-        # niche_id may also be passed positionally via model arg pattern or kwargs
-        if niche_id is None and "niche_id" in kwargs:
-            niche_id = kwargs.pop("niche_id")
+    def generate_script(self, prompt, user_id, model=None, duration=30, niche_id=None):
         if niche_id:
             try:
                 from src.services.providers.niche_profile import load, inject_prompt

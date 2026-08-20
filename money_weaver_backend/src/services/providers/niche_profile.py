@@ -1,4 +1,6 @@
 import os
+import re
+from pathlib import Path
 
 import yaml
 
@@ -7,14 +9,29 @@ _NICHE_DIR = os.path.join(
     "niches",
 )
 
+_NICHE_ID_RE = re.compile(r"[a-z0-9_-]{1,32}")
+
 
 def list_niches():
+    if not os.path.isdir(_NICHE_DIR):
+        return []
     return sorted([f[:-5] for f in os.listdir(_NICHE_DIR) if f.endswith(".yaml")])
 
 
 def load(niche_id: str) -> dict:
-    path = os.path.join(_NICHE_DIR, f"{niche_id}.yaml")
-    if not os.path.exists(path):
+    if not re.fullmatch(r"[a-z0-9_-]{1,32}", niche_id):
+        raise ValueError(f"invalid niche_id: {niche_id}")
+    # Resolve and ensure path stays inside _NICHE_DIR (traversal guard)
+    base = Path(_NICHE_DIR).resolve()
+    path = (base / f"{niche_id}.yaml").resolve()
+    try:
+        if not path.is_relative_to(base):
+            raise ValueError(f"invalid niche_id: {niche_id}")
+    except AttributeError:
+        # Python <3.9 fallback
+        if os.path.commonpath([str(path), str(base)]) != str(base):
+            raise ValueError(f"invalid niche_id: {niche_id}")
+    if not path.is_file():
         raise FileNotFoundError(niche_id)
     with open(path) as fh:
         return yaml.safe_load(fh)

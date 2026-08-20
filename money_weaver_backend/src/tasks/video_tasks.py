@@ -171,7 +171,7 @@ def generate_assembler_video_task(self, project_id, prompt, duration=30, orienta
                 
             # Update task status for Celery progress tracking
             self.update_state(state='PROGRESS', meta={'current': 10, 'total': 100, 'status': 'Generating script...'})
-            script = llm_service.generate_script(prompt, user_id, default_model, duration, model=model, niche_id=niche_id)
+            script = llm_service.generate_script(prompt, user_id, model=model or default_model, duration=duration, niche_id=niche_id)
             
             # Parse the script for structured data
             parsed_script = script_parsing_service.parse_script(script)
