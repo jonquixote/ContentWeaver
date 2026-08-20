@@ -555,7 +555,11 @@ class VideoAssemblyService:
             traceback.print_exc()
             return None
     
-    def _burn_captions(self, video_path: str, captions: List[Dict], total_duration: float) -> str:
+    def _burn_captions(self, video_path: str, captions: List[Dict], total_duration: float, niche: Dict = None) -> str:
+        # Word-level transcript ({word,start,end}) routes to the ASS burn path;
+        # scene caption PNG dicts ({text,start,end,path}) keep the legacy overlay path.
+        if captions and isinstance(captions[0], dict) and 'word' in captions[0]:
+            return self._burn_word_captions(video_path, captions, total_duration, niche=niche)
         try:
             temp_path = os.path.join(self.output_dir, f"{os.path.basename(video_path)}.captions_{int(time.time())}.tmp.mp4")
             inputs = ['ffmpeg', '-i', video_path]
@@ -608,6 +612,39 @@ class VideoAssemblyService:
                     try:
                         os.remove(path)
                     except:
+                        pass
+
+    def _burn_word_captions(self, video_path: str, transcript: List[Dict], total_duration: float, niche: Dict = None) -> str:
+        """Burn word-level captions from an ASS file, writing an .srt sidecar.
+
+        Falls back to the plain video on any failure (libass may be missing from
+        the ffmpeg build, mirroring the legacy caption burn's never-fail design).
+        """
+        ass_path = None
+        temp_path = None
+        try:
+            from src.services.video.captions import build_ass, burn_ass, export_srt
+            ass_path = os.path.join(self.working_dir, f"word_captions_{int(time.time())}.ass")
+            with open(ass_path, 'w', encoding='utf-8') as f:
+                f.write(build_ass(transcript, niche))
+            srt_path = os.path.splitext(video_path)[0] + '.srt'
+            with open(srt_path, 'w', encoding='utf-8') as f:
+                f.write(export_srt(transcript))
+            temp_path = os.path.join(self.output_dir, f"{os.path.basename(video_path)}.wordcaps_{int(time.time())}.tmp.mp4")
+            burn_ass(video_path, ass_path, temp_path)
+            if os.path.exists(temp_path):
+                os.replace(temp_path, video_path)
+                print(f"Word captions burned into: {video_path}")
+            return video_path
+        except Exception as e:
+            print(f"Word caption burn failed, keeping plain video: {e}")
+            return video_path
+        finally:
+            for path in (ass_path, temp_path):
+                if path and os.path.exists(path):
+                    try:
+                        os.remove(path)
+                    except Exception:
                         pass
 
     def add_subtitles(self, 
