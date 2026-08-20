@@ -24,6 +24,7 @@ from fastapi_app.routers import (
     settings,
     tasks,
     templates,
+    topics,
     uploads,
     users,
     voices,
@@ -110,6 +111,7 @@ app.include_router(generation.router)
 app.include_router(voices.router)
 app.include_router(uploads.router)
 app.include_router(niches.router)
+app.include_router(topics.router)
 
 
 @app.get('/', include_in_schema=False)
