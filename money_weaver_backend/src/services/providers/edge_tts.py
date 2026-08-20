@@ -26,10 +26,11 @@ except ImportError:  # allow collection/mocking when lib not installed
 
 
 async def synthesize(text: str, voice: str = "en-US-AriaNeural") -> bytes:
-    """Synthesize `text` with Edge TTS `voice`. Returns audio bytes (RIFF/mp3).
+    """Synthesize `text` with Edge TTS `voice`. Returns raw audio bytes (MP3).
 
-    Handles both real `edge_tts.Communicate` (sync ctor, async save) and the
-    test mock `async def fake_comm` returning a coroutine.
+    Real `edge_tts.Communicate` streams MP3 (24kHz, single stream). Handles
+    both the real lib (sync ctor, async save) and the test mock
+    `async def fake_comm` returning a coroutine.
     """
     if not text or not text.strip():
         raise ValueError("text required")

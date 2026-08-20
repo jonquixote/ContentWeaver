@@ -19,20 +19,23 @@ from flask import Flask
 FINAL_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), 'final')
 
 
-def write_voice_wav(wav_bytes, prefix='voice', work_dir=None):
-    """Persist synthesized WAV bytes into the shared work/ dir.
+def write_voice_audio(audio_bytes, prefix='voice', work_dir=None):
+    """Persist synthesized audio bytes into the shared work/ dir.
 
-    Returns the file path. Location matches where advanced_tts_service writes
-    Kokoro output (money_weaver_backend/work), so the MOSS 24kHz WAV slots into
-    the assembly pipeline interchangeably with Kokoro.
+    Chooses the extension from the container magic bytes (MOSS returns WAV,
+    Edge returns MP3) so the file is labelled correctly for the assembly
+    pipeline. Location matches where advanced_tts_service writes Kokoro output
+    (money_weaver_backend/work), so the synthesized audio slots into the
+    assembly pipeline interchangeably with Kokoro.
     """
-    if not wav_bytes:
+    if not audio_bytes:
         return None
     work_dir = work_dir or advanced_tts_service.working_dir
     os.makedirs(work_dir, exist_ok=True)
-    path = os.path.join(work_dir, f'{prefix}_{uuid.uuid4().hex}.wav')
+    ext = '.wav' if audio_bytes[:4] == b'RIFF' and audio_bytes[8:12] == b'WAVE' else '.mp3'
+    path = os.path.join(work_dir, f'{prefix}_{uuid.uuid4().hex}{ext}')
     with open(path, 'wb') as fh:
-        fh.write(wav_bytes)
+        fh.write(audio_bytes)
     return path
 
 def find_task_record(task_id, project_id, task_type):
@@ -229,7 +232,7 @@ def generate_assembler_video_task(self, project_id, prompt, duration=30, orienta
                             ref,
                             voice_id=str(voice_model.id),
                         )
-                        audio_file = write_voice_wav(wav_bytes, prefix=f'voice_{voice_model.id}')
+                        audio_file = write_voice_audio(wav_bytes, prefix=f'voice_{voice_model.id}')
                     else:
                         print(f"Voice {voice_id} not found / not owned by user {user_id} / reference missing; falling back to Kokoro")
                 except Exception as e:
@@ -627,7 +630,7 @@ def clone_voice_task(self, reference_audio_path, text, project_id):
             from src.services.tts_client import synthesize
             try:
                 wav_bytes = synthesize(text, reference_audio_path)
-                audio_file = write_voice_wav(wav_bytes, prefix='clone')
+                audio_file = write_voice_audio(wav_bytes, prefix='clone')
             except Exception as e:
                 print(f"MOSS-TTS unavailable, falling back to Kokoro default for clone: {e}")
                 audio_file = advanced_tts_service.generate_tts(text, model_type="kokoro", voice='af_heart')

@@ -10,6 +10,8 @@ import requests
 
 TTS_URL = os.getenv('TTS_URL', 'http://localhost:8001')
 
+VALID_ENGINES = {"moss", "edge", "kokoro", "gtts"}
+
 
 def _edge_synthesize_sync(text: str, voice: str = "en-US-AriaNeural") -> bytes:
     """Sync wrapper around async edge_tts.synthesize."""
@@ -48,17 +50,15 @@ def tts_health(timeout=5):
 
 
 def synthesize(text, reference_audio_url=None, voice_id=None, timeout=300, voice_engine=None, voice="en-US-AriaNeural", **kwargs):
-    """Synthesize speech with a cloned voice and return the raw WAV bytes.
+    """Synthesize speech and return raw audio bytes (WAV from MOSS, MP3 from Edge).
 
-    POST {TTS_URL}/tts -> 200 (audio/wav, pcm_s16le 24kHz mono). Raises
-    HTTPError on 400 (bad input/ref contract), 502 (ref fetch fail), 503
-    (model load fail) or 500 (inference fail), and RequestException on any
-    transport-level failure.
-
-    Fallback chain: MOSS(8001) → Edge (free, 300 voices) → Kokoro → gTTS.
-    Edge triggered when `voice_engine=='edge'` or MOSS unreachable (transport
-    error) or free path (no reference). HTTP 4xx/5xx from MOSS are not
-    swallowed — callers (video_tasks) handle Kokoro fallback for 5xx.
+    Branching per request:
+      * `voice_engine=='edge'` → Edge → Kokoro → gTTS (no MOSS/cloning).
+      * no `reference_audio_url` (free path) → Edge → Kokoro → gTTS.
+      * `reference_audio_url` (cloned voice) → MOSS(8001) → Edge → Kokoro →
+        gTTS. MOSS transport errors and 5xx fall back to Edge; 4xx (bad
+        input/ref contract) still raise HTTPError.
+    Unknown `voice_engine` values raise ValueError.
     """
     # alias: ref_path / reference_audio_url / kwargs
     if reference_audio_url is None:
@@ -69,35 +69,53 @@ def synthesize(text, reference_audio_url=None, voice_id=None, timeout=300, voice
         voice = kwargs["voice"]
     language = kwargs.get("language", "en")
 
-    # Explicit edge path — no MOSS attempt
-    if voice_engine == "edge":
+    if voice_engine is not None and voice_engine not in VALID_ENGINES:
+        raise ValueError(
+            f"Unknown voice_engine: {voice_engine!r}. Valid: {sorted(VALID_ENGINES)}"
+        )
+
+    def _edge():
         try:
             return _edge_synthesize_sync(text, voice)
         except Exception:
-            # fallback to Kokoro/gTTS if edge fails
-            pass
+            return None
 
-    # Free path (no reference) → edge directly
-    if not reference_audio_url:
-        if voice_engine in (None, "edge"):
-            try:
-                return _edge_synthesize_sync(text, voice)
-            except Exception:
-                pass
+    # 1) Edge: explicit engine (even with a reference) or free path (no ref)
+    if voice_engine == "edge":
+        out = _edge()
+        if out is not None:
+            return out
+    elif not reference_audio_url and voice_engine is None:
+        out = _edge()
+        if out is not None:
+            return out
 
-    # MOSS attempt (requires reference)
-    if reference_audio_url is not None:
-        r = requests.post(
-            f'{_base_url()}/tts',
-            json={
-                'text': text,
-                'reference_audio_url': reference_audio_url,
-                'voice_id': voice_id,
-            },
-            timeout=timeout,
-        )
-        r.raise_for_status()
-        return r.content  # WAV bytes
+    # 2) MOSS attempt (requires reference); Edge fallback on transport/5xx
+    if reference_audio_url is not None and voice_engine != "edge":
+        try:
+            r = requests.post(
+                f'{_base_url()}/tts',
+                json={
+                    'text': text,
+                    'reference_audio_url': reference_audio_url,
+                    'voice_id': voice_id,
+                },
+                timeout=timeout,
+            )
+            r.raise_for_status()
+            return r.content  # WAV bytes
+        except requests.HTTPError as exc:
+            if exc.response is not None and 400 <= exc.response.status_code < 500:
+                raise  # 4xx: bad input/ref contract — do not fall back
+            out = _edge()
+            if out is not None:
+                return out
+            raise  # Edge also failed → surface the MOSS 5xx
+        except requests.RequestException:
+            out = _edge()
+            if out is not None:
+                return out
+            raise  # Edge also failed → surface the MOSS transport error
 
     # Final fallback: Kokoro → gTTS (file-based services)
     try:

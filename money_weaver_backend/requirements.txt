@@ -87,3 +87,4 @@ pyyaml==6.0.2
 # --- DEV/TEST dependencies ---
 pytest==9.1.1
 pytest-cov==7.1.0
+pytest-asyncio==1.4.0

@@ -113,17 +113,41 @@ class TestSynthesize(TTSCientTestBase):
         with self.assertRaises(requests.HTTPError):
             tts_client.synthesize('t', '/abs/path/ref.wav')
 
-    def test_drops_error_statuses_502_503_500(self):
+    def test_moss_5xx_falls_back_to_edge(self):
+        from unittest import mock
         for code in (502, 503, 500):
             MockTTSHandler.tts_status = code
-            with self.assertRaises(requests.HTTPError):
-                tts_client.synthesize('t', '/abs/path/ref.wav')
+            with mock.patch.object(tts_client, '_edge_synthesize_sync', return_value=b'EDGE-MP3') as edge:
+                out = tts_client.synthesize('t', '/abs/path/ref.wav')
+            self.assertEqual(out, b'EDGE-MP3')
+            edge.assert_called_once()
 
-    def test_raises_connection_error_when_down(self):
+    def test_moss_5xx_raises_when_edge_also_fails(self):
+        from unittest import mock
+        for code in (502, 503, 500):
+            MockTTSHandler.tts_status = code
+            with mock.patch.object(tts_client, '_edge_synthesize_sync', side_effect=RuntimeError('edge down')):
+                with self.assertRaises(requests.HTTPError):
+                    tts_client.synthesize('t', '/abs/path/ref.wav')
+
+    def test_moss_connection_error_falls_back_to_edge(self):
         from unittest import mock
         with mock.patch.object(tts_client, 'TTS_URL', 'http://127.0.0.1:1'):
-            with self.assertRaises(requests.RequestException):
-                tts_client.synthesize('t', '/abs/path/ref.wav')
+            with mock.patch.object(tts_client, '_edge_synthesize_sync', return_value=b'EDGE-MP3') as edge:
+                out = tts_client.synthesize('t', '/abs/path/ref.wav')
+        self.assertEqual(out, b'EDGE-MP3')
+        edge.assert_called_once()
+
+    def test_moss_connection_error_raises_when_edge_also_fails(self):
+        from unittest import mock
+        with mock.patch.object(tts_client, 'TTS_URL', 'http://127.0.0.1:1'):
+            with mock.patch.object(tts_client, '_edge_synthesize_sync', side_effect=RuntimeError('edge down')):
+                with self.assertRaises(requests.RequestException):
+                    tts_client.synthesize('t', '/abs/path/ref.wav')
+
+    def test_rejects_unknown_voice_engine(self):
+        with self.assertRaises(ValueError):
+            tts_client.synthesize('t', '/abs/path/ref.wav', voice_engine='klingon')
 
 
 class TestTTSURLNormalization(unittest.TestCase):
