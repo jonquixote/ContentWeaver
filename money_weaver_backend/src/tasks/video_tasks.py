@@ -14,6 +14,7 @@ import asyncio
 import time
 import json
 import os
+import subprocess
 import tempfile
 import uuid
 from flask import Flask
@@ -824,5 +825,113 @@ def reframe_for_vertical(self, project_id, video_key, mode='general'):
             if temp_input and input_path and os.path.exists(input_path):
                 try:
                     os.unlink(input_path)
+                except OSError:
+                    pass
+
+
+@celery_app.task(bind=True, name='src.tasks.video_tasks.detect_viral_clips')
+def detect_viral_clips_task(self, project_id, video_key, count=5):
+    """Detect viral moments, cut + reframe each into a vertical clip, upload.
+
+    video_key is a storage key (fetched via get_storage) or a local file path.
+    Each detected moment is extracted with ffmpeg (-ss/-to), reframed to
+    9:16 via reframe_service.reframe(mode="general"), and uploaded to
+    clips/{uid}/{pid}/clip_{i}.mp4. Returns {'clips': [...]}.
+    """
+    print(f"Starting detect_viral_clips with project_id: {project_id}, count: {count}")
+    app = create_app_context()
+
+    temp_files = []
+    work_dir = None
+    with app.app_context():
+        try:
+            task_record = find_task_record(self.request.id, project_id, 'viral_clip_detection')
+            if task_record:
+                task_record.status = 'running'
+                task_record.progress = 10
+                db.session.commit()
+
+            self.update_state(state='PROGRESS', meta={'current': 20, 'total': 100, 'status': 'Detecting viral moments...'})
+
+            project = db.session.get(Project, project_id)
+
+            # Resolve the source video: local path wins, otherwise materialize
+            # the storage object into a temp .mp4 (same as reframe_for_vertical).
+            if os.path.exists(video_key):
+                src = video_key
+            else:
+                data = get_storage().get_object(video_key)
+                fd, src = tempfile.mkstemp(suffix='.mp4', prefix=f'viral_{project_id}_')
+                temp_files.append(src)
+                with os.fdopen(fd, 'wb') as fh:
+                    fh.write(data)
+
+            from src.services.video.viral_detector import detect_viral_moments
+            moments = detect_viral_moments(src, count=count)
+
+            self.update_state(state='PROGRESS', meta={'current': 40, 'total': 100, 'status': f'Cutting {len(moments)} clips...'})
+
+            from src.services.video.reframe_service import reframe
+
+            work_dir = tempfile.mkdtemp(prefix=f'viralclips_{project_id}_')
+            uid = project.user_id if project else None
+            clips = []
+            for i, moment in enumerate(moments):
+                raw = os.path.join(work_dir, f'clip_{i}_raw.mp4')
+                subprocess.run([
+                    'ffmpeg', '-y',
+                    '-i', src,
+                    '-ss', str(float(moment['start'])),
+                    '-to', str(float(moment['end'])),
+                    '-c:v', 'libx264', '-preset', 'veryfast',
+                    '-c:a', 'aac',
+                    raw,
+                ], check=True)
+                vertical = reframe(raw, mode='general')
+                temp_files.extend([raw, vertical])
+
+                key = f'clips/{uid}/{project_id}/clip_{i}.mp4'
+                with open(vertical, 'rb') as fh:
+                    get_storage().put_object(key, fh.read(), 'video/mp4')
+                clips.append({**moment, 'key': key})
+
+            result = {'clips': clips, 'status': 'completed'}
+
+            if task_record:
+                task_record.status = 'completed'
+                task_record.progress = 100
+                task_record.result = json.dumps(result)
+                db.session.commit()
+
+            return {
+                'current': 100,
+                'total': 100,
+                'status': 'Viral clip detection completed!',
+                'result': result
+            }
+
+        except Exception as exc:
+            try:
+                db.session.rollback()
+                task_record = find_task_record(self.request.id, project_id, 'viral_clip_detection')
+                if task_record:
+                    task_record.status = 'failed'
+                    task_record.error_message = str(exc)
+                    task_record.result = json.dumps({'error': str(exc), 'status': 'failed'})
+                db.session.commit()
+            except:
+                pass  # Ignore errors in error handling
+
+            raise exc
+        finally:
+            for path in temp_files:
+                if path and os.path.exists(path):
+                    try:
+                        os.unlink(path)
+                    except OSError:
+                        pass
+            if work_dir and os.path.isdir(work_dir):
+                try:
+                    os.rmdir(work_dir)
                 except OSError:
                     pass

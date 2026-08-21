@@ -13,6 +13,7 @@ from src.models.voice import Voice
 from src.tasks.video_tasks import (
     batch_mix_videos_task,
     clone_voice_task,
+    detect_viral_clips_task,
     generate_assembler_video_task,
     generate_generative_video_task,
 )
@@ -49,6 +50,12 @@ class GenerativeRequest(BaseModel):
 class BatchMixRequest(BaseModel):
     project_id: int
     variations: list
+
+
+class ClipDetectRequest(BaseModel):
+    video_key: str
+    count: Optional[int] = None
+    project_id: Optional[int] = None
 
 
 def _resolve_owned_voice(session, voice_id, user_id):
@@ -337,6 +344,58 @@ def generate_surprise_video(
         session.commit()
         body['project_id'] = project.id
     return _enqueue_assembler({**body, 'prompt': prompt}, user, session, model=model)
+
+
+@router.post('/clips/detect', status_code=202)
+def detect_clips(body: ClipDetectRequest,
+                 user=Depends(current_user),
+                 session=Depends(get_db)):
+    """Queue viral-moment detection + clip extraction for an uploaded video."""
+    data = body.model_dump(exclude_unset=True)
+
+    try:
+        require_fields(data, ['video_key', 'project_id'])
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+
+    project = session.get(Project, data['project_id'])
+    if not project:
+        raise HTTPException(404, 'Project not found')
+    if project.user_id != user.id:
+        raise HTTPException(403, 'Forbidden')
+
+    count = data.get('count') or 5
+    if not isinstance(count, int) or count <= 0:
+        count = 5
+
+    # Create a task for tracking before queueing the Celery task
+    task = Task(
+        project_id=project.id,
+        task_type='viral_clip_detection',
+        status='pending'
+    )
+    session.add(task)
+    session.commit()
+
+    try:
+        celery_task = detect_viral_clips_task.delay(
+            project_id=project.id, video_key=data['video_key'], count=count)
+    except Exception as e:
+        session.delete(task)
+        session.commit()
+        raise HTTPException(503, f'Task queue unavailable: {e}')
+
+    # Associate the Celery task id with the tracking task
+    task.celery_task_id = celery_task.id
+    session.commit()
+
+    return {
+        'message': 'Viral clip detection started',
+        'task_id': task.id,
+        'celery_task_id': celery_task.id,
+        'project_id': project.id,
+        'count': count
+    }
 
 
 @router.get('/task-status/{task_id}')
