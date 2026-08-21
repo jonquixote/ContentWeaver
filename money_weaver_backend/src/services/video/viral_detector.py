@@ -7,7 +7,11 @@ detect_viral_moments NEVER raises to the caller: on any failure it degrades to
 raw scene cuts, then to [].
 """
 
+import json
+import logging
 import os
+
+logger = logging.getLogger(__name__)
 
 
 def transcribe(path):
@@ -69,14 +73,21 @@ def call_gemini(transcript, scenes):
         model="gemini-2.5-flash",
         contents=prompt,
     )
-    import json
-    import re
-
     text = (response.text or "").strip()
-    match = re.search(r"\[.*\]", text, re.DOTALL)
-    if not match:
+    # Non-greedy extraction: decode the FIRST complete JSON array instead of
+    # regex-greedy matching, which can swallow prose between two arrays.
+    decoder = json.JSONDecoder()
+    moments = None
+    for idx, char in enumerate(text):
+        if char != "[":
+            continue
+        try:
+            moments, _ = decoder.raw_decode(text[idx:])
+            break
+        except json.JSONDecodeError:
+            continue
+    if not isinstance(moments, list):
         raise RuntimeError(f"Gemini returned no JSON array: {text[:200]}")
-    moments = json.loads(match.group(0))
     return [
         {
             "start": float(m["start"]),
@@ -103,16 +114,19 @@ def detect_viral_moments(video_path, count=5):
     failure (missing key, missing dep, API error) it degrades to scene cuts,
     then to [].
     """
+    # Detect scene cuts once, up front, so the fallback path reuses them
+    # instead of re-running detection after a Gemini failure.
+    try:
+        scenes = detect_scenes(video_path)
+    except Exception:  # noqa: BLE001 - deliberate catch-all fallback
+        scenes = []
     try:
         transcript = transcribe(video_path)
-        scenes = detect_scenes(video_path)
         moments = call_gemini(transcript, scenes)
         if moments:
             return moments[:count]
         raise RuntimeError("Gemini returned no viral moments")
     except Exception as exc:  # noqa: BLE001 - deliberate catch-all fallback
-        print(f"viral detection degraded ({exc}); falling back to scene cuts")
-        try:
-            return _scene_cut_fallback(detect_scenes(video_path), count)
-        except Exception:  # noqa: BLE001
-            return []
+        logger.warning(
+            "viral detection degraded (%s); falling back to scene cuts", exc)
+        return _scene_cut_fallback(scenes, count)

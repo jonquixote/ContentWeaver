@@ -854,6 +854,8 @@ def detect_viral_clips_task(self, project_id, video_key, count=5):
             self.update_state(state='PROGRESS', meta={'current': 20, 'total': 100, 'status': 'Detecting viral moments...'})
 
             project = db.session.get(Project, project_id)
+            if project is None:
+                raise ValueError(f'Project {project_id} not found')
 
             # Resolve the source video: local path wins, otherwise materialize
             # the storage object into a temp .mp4 (same as reframe_for_vertical).
@@ -874,19 +876,24 @@ def detect_viral_clips_task(self, project_id, video_key, count=5):
             from src.services.video.reframe_service import reframe
 
             work_dir = tempfile.mkdtemp(prefix=f'viralclips_{project_id}_')
-            uid = project.user_id if project else None
+            uid = project.user_id
             clips = []
             for i, moment in enumerate(moments):
                 raw = os.path.join(work_dir, f'clip_{i}_raw.mp4')
-                subprocess.run([
-                    'ffmpeg', '-y',
-                    '-i', src,
-                    '-ss', str(float(moment['start'])),
-                    '-to', str(float(moment['end'])),
-                    '-c:v', 'libx264', '-preset', 'veryfast',
-                    '-c:a', 'aac',
-                    raw,
-                ], check=True)
+                try:
+                    subprocess.run([
+                        'ffmpeg', '-y',
+                        '-i', src,
+                        '-ss', str(float(moment['start'])),
+                        '-to', str(float(moment['end'])),
+                        '-c:v', 'libx264', '-preset', 'veryfast',
+                        '-c:a', 'aac',
+                        raw,
+                    ], check=True, capture_output=True, text=True)
+                except subprocess.CalledProcessError as exc:
+                    stderr = (exc.stderr or '')[-500:]
+                    raise RuntimeError(
+                        f'ffmpeg clip extraction failed: {stderr}') from exc
                 vertical = reframe(raw, mode='general')
                 temp_files.extend([raw, vertical])
 
@@ -919,7 +926,7 @@ def detect_viral_clips_task(self, project_id, video_key, count=5):
                     task_record.error_message = str(exc)
                     task_record.result = json.dumps({'error': str(exc), 'status': 'failed'})
                 db.session.commit()
-            except:
+            except Exception:
                 pass  # Ignore errors in error handling
 
             raise exc

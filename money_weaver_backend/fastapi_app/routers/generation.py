@@ -2,7 +2,7 @@ import os
 from typing import Optional
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 from werkzeug.utils import secure_filename
 
 from fastapi_app.db import get_db
@@ -56,6 +56,28 @@ class ClipDetectRequest(BaseModel):
     video_key: str
     count: Optional[int] = None
     project_id: Optional[int] = None
+
+    @field_validator('count', mode='before')
+    @classmethod
+    def _reject_bool_count(cls, v):
+        # Pydantic lax mode coerces True -> 1 for int fields, so a JSON
+        # `true` would silently become count=1. Reject bools up front (422).
+        if isinstance(v, bool):
+            raise ValueError('count must be a positive integer')
+        return v
+
+
+def _coerce_clip_count(value):
+    """Return a positive-int clip count (default 5) or raise ValueError.
+
+    Rejects bools explicitly: isinstance(True, int) is True in Python, so a
+    JSON `true` would otherwise slip through as count=1.
+    """
+    if value is None:
+        return 5
+    if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
+        raise ValueError('count must be a positive integer')
+    return value
 
 
 def _resolve_owned_voice(session, voice_id, user_id):
@@ -364,9 +386,10 @@ def detect_clips(body: ClipDetectRequest,
     if project.user_id != user.id:
         raise HTTPException(403, 'Forbidden')
 
-    count = data.get('count') or 5
-    if not isinstance(count, int) or count <= 0:
-        count = 5
+    try:
+        count = _coerce_clip_count(data.get('count'))
+    except ValueError as e:
+        raise HTTPException(400, str(e))
 
     # Create a task for tracking before queueing the Celery task
     task = Task(
