@@ -8,9 +8,11 @@ import os
 
 import requests
 
+from src.services.providers import chatterbox_tts as chatterbox_mod
+
 TTS_URL = os.getenv('TTS_URL', 'http://localhost:8001')
 
-VALID_ENGINES = {"moss", "edge", "kokoro", "gtts"}
+VALID_ENGINES = {"moss", "edge", "kokoro", "gtts", "chatterbox"}
 
 
 def _edge_synthesize_sync(text: str, voice: str = "en-US-AriaNeural") -> bytes:
@@ -73,6 +75,11 @@ def synthesize(text, reference_audio_url=None, voice_id=None, timeout=300, voice
         raise ValueError(
             f"Unknown voice_engine: {voice_engine!r}. Valid: {sorted(VALID_ENGINES)}"
         )
+    if voice_engine == "chatterbox" and not chatterbox_mod.CHATTERBOX_ENABLED:
+        raise ValueError(
+            "voice_engine 'chatterbox' requires CHATTERBOX_ENABLED=true "
+            "and pip install chatterbox-tts"
+        )
 
     def _edge():
         try:
@@ -107,11 +114,21 @@ def synthesize(text, reference_audio_url=None, voice_id=None, timeout=300, voice
         except requests.HTTPError as exc:
             if exc.response is not None and 400 <= exc.response.status_code < 500:
                 raise  # 4xx: bad input/ref contract — do not fall back
+            if chatterbox_mod.CHATTERBOX_ENABLED:
+                try:
+                    return chatterbox_mod.synthesize(text, reference_audio_url)
+                except Exception:
+                    pass  # fall through to Edge
             out = _edge()
             if out is not None:
                 return out
             raise  # Edge also failed → surface the MOSS 5xx
         except requests.RequestException:
+            if chatterbox_mod.CHATTERBOX_ENABLED:
+                try:
+                    return chatterbox_mod.synthesize(text, reference_audio_url)
+                except Exception:
+                    pass  # fall through to Edge
             out = _edge()
             if out is not None:
                 return out

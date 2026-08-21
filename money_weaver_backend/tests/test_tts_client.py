@@ -150,6 +150,37 @@ class TestSynthesize(TTSCientTestBase):
             tts_client.synthesize('t', '/abs/path/ref.wav', voice_engine='klingon')
 
 
+class TestChatterboxSlot(unittest.TestCase):
+    def test_cloned_voice_uses_chatterbox_when_enabled(self):
+        from unittest import mock
+        with mock.patch.object(tts_client.chatterbox_mod, 'CHATTERBOX_ENABLED', True), \
+                mock.patch.object(tts_client.chatterbox_mod, 'synthesize', return_value=b'RIFFcb') as cb_synth, \
+                mock.patch.object(tts_client, 'TTS_URL', 'http://127.0.0.1:1'), \
+                mock.patch.object(tts_client, '_edge_synthesize_sync',
+                                  side_effect=RuntimeError('edge down')) as edge:
+            out = tts_client.synthesize('t', '/abs/path/ref.wav')
+        self.assertEqual(out, b'RIFFcb')
+        cb_synth.assert_called_once_with('t', '/abs/path/ref.wav')
+        edge.assert_not_called()
+
+    def test_chatterbox_failure_falls_back_to_edge(self):
+        from unittest import mock
+        with mock.patch.object(tts_client.chatterbox_mod, 'CHATTERBOX_ENABLED', True), \
+                mock.patch.object(tts_client.chatterbox_mod, 'synthesize',
+                                  side_effect=RuntimeError('model boom')), \
+                mock.patch.object(tts_client, 'TTS_URL', 'http://127.0.0.1:1'), \
+                mock.patch.object(tts_client, '_edge_synthesize_sync', return_value=b'EDGE-MP3') as edge:
+            out = tts_client.synthesize('t', '/abs/path/ref.wav')
+        self.assertEqual(out, b'EDGE-MP3')
+        edge.assert_called_once()
+
+    def test_engine_chatterbox_rejected_when_disabled(self):
+        from unittest import mock
+        with mock.patch.object(tts_client.chatterbox_mod, 'CHATTERBOX_ENABLED', False):
+            with self.assertRaisesRegex(ValueError, 'CHATTERBOX_ENABLED'):
+                tts_client.synthesize('t', voice_engine='chatterbox')
+
+
 class TestTTSURLNormalization(unittest.TestCase):
     def test_trailing_slash_is_stripped(self):
         with unittest.mock.patch.object(tts_client, 'TTS_URL', 'http://example.test:9999/'):
