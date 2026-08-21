@@ -243,6 +243,12 @@ def upload_video(project_id, privacy='private', video_path=None, transcript=None
 
         words = transcript if transcript is not None else getattr(
             project, 'transcript', None)
+        # project.transcript is stored as a JSON string; parse before SRT build.
+        if isinstance(words, str):
+            try:
+                words = json.loads(words)
+            except (ValueError, TypeError):
+                words = None
         if words:
             try:
                 _upload_captions(youtube, video_id, words)

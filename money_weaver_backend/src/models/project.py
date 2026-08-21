@@ -15,6 +15,7 @@ class Project(get_db().Model):
     status = get_db().Column(get_db().String(50), default='draft')  # draft, processing, completed, failed
     workflow_type = get_db().Column(get_db().String(50), default='assembler')  # assembler, generative
     script = get_db().Column(get_db().Text)
+    transcript = get_db().Column(get_db().Text)  # JSON list of {word,start,end}
     video_url = get_db().Column(get_db().String(500))
     voice_type = get_db().Column(get_db().String(50), default='female')  # female, male, neutral
     created_at = get_db().Column(get_db().DateTime, default=datetime.utcnow)

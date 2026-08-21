@@ -97,6 +97,32 @@ def write_voice_audio(audio_bytes, prefix='voice', work_dir=None):
         fh.write(audio_bytes)
     return path
 
+def extract_transcript_words(audio_path):
+    """Word-level transcript via faster-whisper; [] on any failure."""
+    try:
+        from src.services.video.viral_detector import transcribe
+        return transcribe(audio_path)
+    except Exception:
+        return []
+
+
+def persist_transcript(project_id, words):
+    """Best-effort transcript persistence; never raises.
+
+    Uses its own fastapi_app.db session (same DATABASE_URL as the app) so it
+    works from a Celery worker without a Flask app context.
+    """
+    try:
+        from fastapi_app.db import db_session
+        with db_session() as session:
+            proj = session.get(Project, project_id)
+            if proj is not None:
+                proj.transcript = json.dumps(words)
+                session.commit()
+    except Exception as e:
+        print(f"Transcript persistence for project {project_id} failed: {e}")
+
+
 def find_task_record(task_id, project_id, task_type):
     """Find the DB task record for a Celery task, tolerating the dispatch race.
 
@@ -307,7 +333,13 @@ def generate_assembler_video_task(self, project_id, prompt, duration=30, orienta
             
             if not audio_file:
                 raise Exception("Failed to generate voiceover")
-            
+
+            # Persist the word-level transcript for YouTube captions and
+            # viral re-detection (covers both cloned-voice and Kokoro paths).
+            words = extract_transcript_words(audio_file)
+            if words:
+                persist_transcript(project_id, words)
+
             # Update task record in database
             if task_record:
                 task_record.progress = 40
