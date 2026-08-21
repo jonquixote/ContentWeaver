@@ -3,6 +3,8 @@
 Covers health(), queue_workflow(), poll_result(), get_view() plus the workflow
 template renderer. No real httpx/websocket traffic ever leaves the test.
 """
+import json
+
 import httpx
 import pytest
 from unittest import mock
@@ -131,3 +133,36 @@ def test_render_workflow_injects_prompt_preserves_defaults():
     assert wf["1"]["inputs"]["width"] == 832
     assert wf["1"]["inputs"]["height"] == 480
     assert template["1"]["inputs"]["prompt"] == "__PROMPT__"  # original untouched
+
+
+def test_render_workflow_substitutes_all_params():
+    from src.services import comfy_client as cc
+
+    template = {
+        "1": {"class_type": "WanVideoTextEncode", "inputs": {"text": "__PROMPT__"}},
+        "2": {"class_type": "EmptyHunyuanLatentVideo", "inputs": {"width": "__WIDTH__", "height": "__HEIGHT__"}},
+        "3": {"class_type": "KSampler", "inputs": {"seed": "__SEED__"}},
+    }
+    meta = {"params": {"prompt": "1", "width": "2", "height": "2", "seed": "3"}}
+
+    wf = cc.render_workflow(template, prompt="a cat", width=480, height=832, seed=42, meta=meta)
+    assert wf["1"]["inputs"]["text"] == "a cat"
+    assert wf["2"]["inputs"]["width"] == 480
+    assert wf["2"]["inputs"]["height"] == 832
+    assert wf["3"]["inputs"]["seed"] == 42
+
+
+def test_render_workflow_token_scan_without_meta():
+    from src.services import comfy_client as cc
+
+    template = {"1": {"class_type": "X", "inputs": {"text": "__PROMPT__"}}}
+    wf = cc.render_workflow(template, prompt="p", width=None, height=None, seed=None)
+    assert wf["1"]["inputs"]["text"] == "p"
+
+
+def test_render_workflow_does_not_mutate_template():
+    from src.services import comfy_client as cc
+    template = {"1": {"class_type": "X", "inputs": {"text": "__PROMPT__"}}}
+    snapshot = json.dumps(template)
+    cc.render_workflow(template, prompt="p", width=1, height=1, seed=1)
+    assert json.dumps(template) == snapshot

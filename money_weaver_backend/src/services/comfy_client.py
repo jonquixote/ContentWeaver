@@ -29,6 +29,12 @@ _WORKFLOWS_DIR = os.path.join(
 )
 DEFAULT_WORKFLOW_FILE = "wan22_t2v_api.json"
 PROMPT_PLACEHOLDER = "__PROMPT__"
+_TOKENS = {
+    "prompt": "__PROMPT__",
+    "width": "__WIDTH__",
+    "height": "__HEIGHT__",
+    "seed": "__SEED__",
+}
 
 
 def health():
@@ -89,16 +95,63 @@ def load_workflow(filename: str = None) -> dict:
         return json.load(fh)
 
 
-def render_workflow(template: dict, prompt: str) -> dict:
-    """Return a deep copy of the template with __PROMPT__ substituted.
+def _load_template_meta(template_name: str) -> dict:
+    """Load the <name>.meta.json sidecar for a workflow template.
 
-    The caller's template dict is never mutated.
+    Maps logical params (prompt/width/height/seed) to ComfyUI node ids.
+    Missing file or malformed JSON yields {} so callers can fall back to
+    token scanning.
+    """
+    base = template_name.replace(".json", "")
+    try:
+        with open(os.path.join(_WORKFLOWS_DIR, f"{base}.meta.json"), encoding="utf-8") as fh:
+            return json.load(fh)
+    except (FileNotFoundError, ValueError):
+        return {}
+
+
+# Public alias so callers avoid importing a private name.
+load_template_meta = _load_template_meta
+
+
+def render_workflow(
+    template: dict,
+    prompt=None,
+    width=None,
+    height=None,
+    seed=None,
+    meta: dict = None,
+) -> dict:
+    """Return a deep copy of the template with parameter tokens substituted.
+
+    Tokens: __PROMPT__/__WIDTH__/__HEIGHT__/__SEED__. Node ids come from
+    ``meta['params']`` (e.g. {"params": {"prompt": "6"}}); any param without
+    a meta entry falls back to scanning the graph for the token value. The
+    caller's template dict is never mutated.
     """
     workflow = copy.deepcopy(template)
-    for node in workflow.values():
-        inputs = node.get("inputs") if isinstance(node, dict) else None
-        if isinstance(inputs, dict) and inputs.get("prompt") == PROMPT_PLACEHOLDER:
-            inputs["prompt"] = prompt
+    params = {"prompt": prompt, "width": width, "height": height, "seed": seed}
+    meta_params = (meta or {}).get("params") or {}
+    for key, value in params.items():
+        if value is None:
+            continue
+        token = _TOKENS[key]
+        if meta_params.get(key):
+            node_ids = [str(meta_params[key])]
+        else:
+            node_ids = [
+                nid
+                for nid, node in workflow.items()
+                if isinstance(node, dict)
+                and token in (node.get("inputs") or {}).values()
+            ]
+        for nid in node_ids:
+            inputs = workflow.get(nid, {}).get("inputs")
+            if not isinstance(inputs, dict):
+                continue
+            for input_key, input_value in inputs.items():
+                if input_value == token:
+                    inputs[input_key] = value
     return workflow
 
 
