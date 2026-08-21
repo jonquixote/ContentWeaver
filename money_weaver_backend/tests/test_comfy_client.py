@@ -111,7 +111,12 @@ async def test_get_view_returns_bytes():
 def test_load_workflow_returns_template_dict():
     wf = comfy_client.load_workflow()
     assert isinstance(wf, dict)
-    assert wf["1"]["class_type"] == "WanImageToVideo"
+    # Real Wan2.2 graph: positive prompt lives in the CLIPTextEncode node
+    assert any(
+        node["class_type"] == "CLIPTextEncode"
+        and node["inputs"].get("text") == "__PROMPT__"
+        for node in wf.values()
+    )
 
 
 def test_render_workflow_injects_prompt_preserves_defaults():
