@@ -53,13 +53,17 @@ def build_ass(transcript, niche=None) -> str:
     nc = niche.get('captions') or {}
     highlight = str(nc.get('highlight', niche.get('highlight', '#00FF88')))
     font = str(nc.get('font', niche.get('font', 'Arial')))
-    color = highlight.lstrip('#').upper() or '00FF88'
+    rgb = highlight.lstrip('#').upper() or '00FF88'
+    if len(rgb) != 6:
+        rgb = '00FF88'
+    # libass PrimaryColour is &HBBGGRR& (BGR byte order), not RGB hex.
+    color = rgb[4:6] + rgb[2:4] + rgb[0:2]
     lines = []
     for w in transcript:
         start = _ass_ts(w['start'])
         end = _ass_ts(w['end'])
         word = str(w['word']).replace('\n', ' ')
-        lines.append(f"Dialogue: 0,{start},{end},Default,,0,0,0,,{{\\c&{color}&}}{word}")
+        lines.append(f"Dialogue: 0,{start},{end},Default,,0,0,0,,{{\\c&H{color}&}}{word}")
     return ASS_HEADER.format(font=font) + "\n".join(lines) + "\n"
 
 

@@ -17,16 +17,23 @@ def test_build_ass_word_highlight():
 def test_build_ass_niche_defaults():
     ass = build_ass([{"word": "Hi", "start": 0, "end": 1}], {})
     assert "Arial" in ass
-    assert "00FF88" in ass
-    assert "\\c&00FF88&" in ass
+    assert "\\c&H88FF00&" in ass
 
 
 def test_build_ass_nested_captions_style():
     ass = build_ass([{"word": "Hi", "start": 0, "end": 1}],
                     {"captions": {"highlight": "#D32F2F", "font": "Courier"}})
-    assert "D32F2F" in ass
+    assert "\\c&H2F2FD3&" in ass
     assert "Courier" in ass
-    assert "\\c&D32F2F&" in ass
+
+
+def test_build_ass_highlight_is_bgr_for_libass():
+    from src.services.video.captions import build_ass
+    transcript = [{"word": "Hi", "start": 0.0, "end": 0.5}]
+    ass = build_ass(transcript, {"captions": {"highlight": "#D32F2F", "font": "Arial"}})
+    # RGB D32F2F -> libass &HBBGGRR& == 2F2FD3
+    assert "\\c&H2F2FD3&" in ass
+    assert "D32F2F" not in ass
 
 
 def test_build_ass_ass_timecode():
@@ -136,7 +143,7 @@ def test_burn_captions_passes_niche_to_ass(tmp_path, monkeypatch):
     result = svc._burn_captions(str(video), transcript, 30, niche=niche)
     assert result == str(video)
     assert "Courier" in captured['ass']
-    assert "\\c&D32F2F&" in captured['ass']
+    assert "\\c&H2F2FD3&" in captured['ass']
 
 
 def test_burn_captions_png_legacy_path_unaffected(tmp_path, monkeypatch):
