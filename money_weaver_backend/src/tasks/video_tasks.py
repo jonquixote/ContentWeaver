@@ -9,6 +9,8 @@ from src.services.video.advanced_tts_service import advanced_tts_service
 from src.services.video.assembly_service import assembly_service, generate_thumbnail
 from src.services.script_parsing_service import script_parsing_service
 from src.services.storage import get_storage
+from src.services import comfy_client
+import asyncio
 import time
 import json
 import os
@@ -395,7 +397,7 @@ def generate_assembler_video_task(self, project_id, prompt, duration=30, orienta
             raise exc
 
 @celery_app.task(bind=True, name='src.tasks.video_tasks.generate_generative_video_task')
-def generate_generative_video_task(self, project_id, prompt, voice_id=None):
+def generate_generative_video_task(self, project_id, prompt, voice_id=None, model=None):
     """
     Generate video using the generative workflow (ComfyUI).
 
@@ -456,35 +458,73 @@ def generate_generative_video_task(self, project_id, prompt, voice_id=None):
                 task_record.generation_type = 'assembler'
                 db.session.commit()
             
-            # Simulate ComfyUI workflow construction
-            self.update_state(state='PROGRESS', meta={'current': 20, 'total': 100, 'status': 'Constructing ComfyUI workflow...'})
-            time.sleep(1)
-            
-            # Simulate ComfyUI job submission
-            self.update_state(state='PROGRESS', meta={'current': 30, 'total': 100, 'status': 'Submitting to ComfyUI...'})
-            time.sleep(2)
-            
-            # Simulate generative video creation (this would be much longer in reality)
-            self.update_state(state='PROGRESS', meta={'current': 60, 'total': 100, 'status': 'Generating video with AI models...'})
-            time.sleep(5)  # Simulate long AI processing
-            
-            # Simulate post-processing
-            self.update_state(state='PROGRESS', meta={'current': 80, 'total': 100, 'status': 'Post-processing video...'})
-            time.sleep(2)
-            
+            # ComfyUI gateway: real generation only when COMFY_ENABLED=true AND
+            # the server answers /system_stats; otherwise fall back to the
+            # legacy simulated path unchanged (zero dev behavior change).
+            comfy_ready = False
+            if os.getenv('COMFY_ENABLED', 'false') == 'true':
+                try:
+                    comfy_ready = comfy_client.health()
+                except Exception as e:
+                    print(f"ComfyUI health check failed, using simulated path: {e}")
+
+            output_filename = f"project_{project_id}_generative.mp4"
+
+            if comfy_ready:
+                # Construct the Wan2.2 API-format workflow with the enhanced prompt
+                self.update_state(state='PROGRESS', meta={'current': 20, 'total': 100, 'status': 'Constructing ComfyUI workflow...'})
+                workflow = comfy_client.render_workflow(
+                    comfy_client.load_workflow(), enhanced_prompt)
+
+                # Submit to ComfyUI and wait for completion
+                self.update_state(state='PROGRESS', meta={'current': 30, 'total': 100, 'status': 'Submitting to ComfyUI...'})
+                prompt_id = asyncio.run(comfy_client.queue_workflow(workflow, str(uuid.uuid4())))
+
+                self.update_state(state='PROGRESS', meta={'current': 60, 'total': 100, 'status': 'Generating video with AI models...'})
+                polled = asyncio.run(comfy_client.poll_result(prompt_id))
+
+                # Download the rendered artifact via /view and store it
+                self.update_state(state='PROGRESS', meta={'current': 80, 'total': 100, 'status': 'Post-processing video...'})
+                artifact = comfy_client.extract_output_filename(polled) or f"{prompt_id}.mp4"
+                video_bytes = asyncio.run(comfy_client.get_view(artifact))
+                os.makedirs(FINAL_DIR, exist_ok=True)
+                with open(os.path.join(FINAL_DIR, output_filename), 'wb') as fh:
+                    fh.write(video_bytes)
+                try:
+                    get_storage().put_object(
+                        f"generative/{project_id}/{output_filename}",
+                        video_bytes, 'video/mp4')
+                except Exception as e:
+                    print(f"Generative storage upload failed (local copy kept): {e}")
+            else:
+                # Simulate ComfyUI workflow construction
+                self.update_state(state='PROGRESS', meta={'current': 20, 'total': 100, 'status': 'Constructing ComfyUI workflow...'})
+                time.sleep(1)
+
+                # Simulate ComfyUI job submission
+                self.update_state(state='PROGRESS', meta={'current': 30, 'total': 100, 'status': 'Submitting to ComfyUI...'})
+                time.sleep(2)
+
+                # Simulate generative video creation (this would be much longer in reality)
+                self.update_state(state='PROGRESS', meta={'current': 60, 'total': 100, 'status': 'Generating video with AI models...'})
+                time.sleep(5)  # Simulate long AI processing
+
+                # Simulate post-processing
+                self.update_state(state='PROGRESS', meta={'current': 80, 'total': 100, 'status': 'Post-processing video...'})
+                time.sleep(2)
+
             # Update task record in database
             if task_record:
                 task_record.progress = 80
                 db.session.commit()
-            
+
             # Final result
-            output_filename = f"project_{project_id}_generative.mp4"
             video_url = f'/final/{output_filename}' if os.path.exists(os.path.join(FINAL_DIR, output_filename)) else None
             result = {
                 'video_url': video_url,
                 'prompt': enhanced_prompt,
                 'duration': 15,
-                'model_used': 'Wan2.2',
+                'model_used': model or 'Wan2.2',
                 'status': 'completed'
             }
             

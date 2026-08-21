@@ -1,0 +1,17 @@
+{
+  "_meta": {
+    "title": "Wan 2.2 Text-to-Video (API format)",
+    "description": "Minimal Wan2.2 t2v API-format graph. __PROMPT__ is substituted by src.services.comfy_client.render_workflow before submission.",
+    "version": "1.0"
+  },
+  "1": {
+    "class_type": "WanImageToVideo",
+    "inputs": {
+      "prompt": "__PROMPT__",
+      "width": 832,
+      "height": 480,
+      "length": 81,
+      "batch_size": 1
+    }
+  }
+}

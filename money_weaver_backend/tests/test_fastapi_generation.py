@@ -103,6 +103,17 @@ def test_generative_happy_path(client, auth_headers):
     assert r.json()['message'] == 'Generative video generation started'
 
 
+def test_generative_accepts_optional_model(client, auth_headers):
+    pid = _create_project(client, auth_headers)
+    with mock.patch.object(generation.generate_generative_video_task, 'delay',
+                           return_value=mock.Mock(id='cel-3b')) as delay:
+        r = client.post('/api/generate/generative',
+                        json={'project_id': pid, 'prompt': 'p', 'model': 'wan22-fp8'},
+                        headers=auth_headers)
+    assert r.status_code == 202
+    assert delay.call_args.kwargs['model'] == 'wan22-fp8'
+
+
 def test_batch_mix_happy_path(client, auth_headers):
     pid = _create_project(client, auth_headers)
     with mock.patch.object(generation.batch_mix_videos_task, 'delay',

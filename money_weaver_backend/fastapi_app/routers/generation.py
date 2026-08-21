@@ -43,6 +43,7 @@ class GenerativeRequest(BaseModel):
     project_id: int
     prompt: str
     voice_id: Optional[int] = None
+    model: Optional[str] = None
 
 
 class BatchMixRequest(BaseModel):
@@ -225,7 +226,8 @@ def generate_generative_video(body: GenerativeRequest,
         celery_task = generate_generative_video_task.delay(
             project_id=project.id,
             prompt=data['prompt'],
-            voice_id=voice.id if voice else None
+            voice_id=voice.id if voice else None,
+            model=data.get('model')
         )
     except Exception as e:
         session.delete(task)
