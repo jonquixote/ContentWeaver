@@ -1,6 +1,6 @@
 """HTTP client for the MOSS-TTS voice-cloning microservice + Edge fallback chain.
 
-Chain: MOSS-ONNX (8001) → Edge TTS (free, 300 voices, CPU) → Kokoro 82M → gTTS.
+Chain: MOSS-ONNX (8001) → Chatterbox (flag on) → Edge TTS (free, 300 voices, CPU) → Kokoro 82M → gTTS.
 Edge path: `Voice.voice_engine=='edge'` or MOSS failure (connection/5xx).
 """
 import asyncio
