@@ -14,6 +14,7 @@ import asyncio
 import time
 import json
 import os
+import tempfile
 import uuid
 from flask import Flask
 
@@ -736,6 +737,80 @@ def clone_voice_task(self, reference_audio_path, text, project_id):
                 project = db.session.get(Project, project_id)
                 if project:
                     project.status = 'failed'
+                db.session.commit()
+            except:
+                pass  # Ignore errors in error handling
+
+            # Re-raise so Celery propagates a real FAILURE state
+            raise exc
+
+
+@celery_app.task(bind=True, name='src.tasks.video_tasks.reframe_for_vertical')
+def reframe_for_vertical(self, project_id, video_key, mode='general'):
+    """
+    Reframe an existing video into vertical 1080x1920 (smart crop).
+
+    GENERAL mode runs an ffmpeg blur-background composite; TRACK mode falls
+    back to GENERAL until the YOLO/MediaPipe pipeline is ported. video_key is
+    a storage key (fetched via get_storage) or a local file path.
+    """
+    print(f"Starting reframe_for_vertical with project_id: {project_id}, mode: {mode}")
+    app = create_app_context()
+
+    input_path = None
+    with app.app_context():
+        try:
+            task_record = find_task_record(self.request.id, project_id, 'reframe_vertical')
+            if task_record:
+                task_record.status = 'running'
+                task_record.progress = 10
+                db.session.commit()
+
+            self.update_state(state='PROGRESS', meta={'current': 30, 'total': 100, 'status': 'Fetching source video...'})
+
+            # Resolve the source video: local path wins, otherwise treat the
+            # key as a storage object and materialize it into a temp .mp4.
+            if os.path.exists(video_key):
+                input_path = video_key
+            else:
+                data = get_storage().get_object(video_key)
+                fd, input_path = tempfile.mkstemp(suffix='.mp4', prefix=f'reframe_{project_id}_')
+                with os.fdopen(fd, 'wb') as fh:
+                    fh.write(data)
+
+            self.update_state(state='PROGRESS', meta={'current': 50, 'total': 100, 'status': f'Reframing to 9:16 ({mode})...'})
+
+            from src.services.video.reframe_service import reframe
+            vertical_path = reframe(input_path, mode=mode)
+
+            result = {
+                'video_path': vertical_path,
+                'mode': mode,
+                'status': 'completed'
+            }
+
+            if task_record:
+                task_record.status = 'completed'
+                task_record.progress = 100
+                task_record.result = json.dumps(result)
+                db.session.commit()
+
+            return {
+                'current': 100,
+                'total': 100,
+                'status': 'Reframe completed!',
+                'result': result
+            }
+
+        except Exception as exc:
+            # Update task record status to failed
+            try:
+                db.session.rollback()
+                task_record = find_task_record(self.request.id, project_id, 'reframe_vertical')
+                if task_record:
+                    task_record.status = 'failed'
+                    task_record.error_message = str(exc)
+                    task_record.result = json.dumps({'error': str(exc), 'status': 'failed'})
                 db.session.commit()
             except:
                 pass  # Ignore errors in error handling
