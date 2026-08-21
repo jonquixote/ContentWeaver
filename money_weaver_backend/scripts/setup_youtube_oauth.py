@@ -10,6 +10,7 @@ Usage:
 """
 import argparse
 import os
+import re
 import sys
 
 BACKEND_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -25,6 +26,9 @@ def main(argv=None):
     parser.add_argument('--label', default='dev',
                         help='token label; stored as token_<label>.json')
     args = parser.parse_args(argv)
+
+    if not re.fullmatch(r'[A-Za-z0-9_-]{1,32}', args.label):
+        sys.exit('--label must match [A-Za-z0-9_-]{1,32}')
 
     secret = args.secret_file or input('Path to client_secret.json: ').strip()
     if not os.path.exists(secret):

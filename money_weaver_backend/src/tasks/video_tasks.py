@@ -29,7 +29,7 @@ def send_webhook(webhook_url, webhook_secret, payload):
     The signature covers the exact bytes sent (X-Signature header). Delivery
     failures are logged and swallowed so they never fail the Celery task.
     """
-    if not webhook_url:
+    if not webhook_url or not webhook_secret:
         return
     import hashlib
     import hmac
@@ -1009,20 +1009,15 @@ def youtube_upload_task(self, project_id, privacy='private'):
             if project is None:
                 raise ValueError(f'Project {project_id} not found')
 
-            # Resolve the rendered video: local path wins, otherwise fetch
-            # the storage object into a temp file for the resumable upload.
-            video_path = None
-            ref = project.video_url
-            if ref and os.path.exists(ref):
-                video_path = ref
-            elif ref:
-                data = get_storage().get_object(ref)
-                fd, video_path = tempfile.mkstemp(suffix='.mp4', prefix=f'yt_{project_id}_')
-                temp_path = video_path
-                with os.fdopen(fd, 'wb') as fh:
-                    fh.write(data)
-
+            # Resolve the rendered video via the uploader's shared helper:
+            # local path wins, /final/<name> maps into backend final/,
+            # storage keys are materialized to a temp .mp4 for the upload.
             from src.services.providers import youtube_uploader
+            video_path, is_temp = youtube_uploader._resolve_video_file(
+                project.video_url)
+            if is_temp:
+                temp_path = video_path
+
             result = youtube_uploader.upload_video(
                 project_id, privacy=privacy, video_path=video_path)
 

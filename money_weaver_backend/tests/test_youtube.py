@@ -141,6 +141,10 @@ def test_get_auth_url_returns_authorization_url(tmp_path, monkeypatch, clean_cap
     assert url.startswith('https://accounts.google.com/o/oauth2/auth')
     assert youtube_uploader.SCOPES == ('https://www.googleapis.com/auth/youtube.upload',)
     assert CAPTURED['flow_scopes'] == youtube_uploader.SCOPES
+    # user_id must travel as a signed OAuth state (router verifies it)
+    state = CAPTURED['auth_url_kwargs']['state']
+    assert str(42) in state
+    assert youtube_uploader.verify_state(state) == 42
 
 
 def test_get_auth_url_sets_redirect_uri_from_env(tmp_path, monkeypatch, clean_captured):
@@ -191,6 +195,30 @@ def test_lazy_import_missing_lib_raises_clear_error(tmp_path, monkeypatch):
     monkeypatch.setitem(sys.modules, 'google_auth_oauthlib.flow', None)
     with pytest.raises(RuntimeError, match='google-auth-oauthlib'):
         youtube_uploader.get_auth_url(1)
+
+
+# ---------------------------------------------------------------------------
+# Signed OAuth state (HMAC over user_id with SECRET_KEY)
+# ---------------------------------------------------------------------------
+
+def test_sign_and_verify_state_roundtrip(monkeypatch):
+    monkeypatch.setenv('SECRET_KEY', 'state-secret')
+    state = youtube_uploader.sign_state(42)
+    assert state.startswith('42.')
+    assert youtube_uploader.verify_state(state) == 42
+
+
+def test_verify_state_rejects_tampered_or_foreign(monkeypatch):
+    monkeypatch.setenv('SECRET_KEY', 'state-secret')
+    # attacker swaps in another user id under a valid signature
+    with pytest.raises(ValueError):
+        youtube_uploader.verify_state(f'43.{youtube_uploader._state_sig(42)}')
+    # forged signature
+    with pytest.raises(ValueError):
+        youtube_uploader.verify_state('42.0123456789abcdef')
+    # malformed
+    with pytest.raises(ValueError):
+        youtube_uploader.verify_state('nonsense')
 
 
 # ---------------------------------------------------------------------------
@@ -331,6 +359,14 @@ def test_send_webhook_noop_without_url(monkeypatch):
     assert calls == []
 
 
+def test_send_webhook_noop_without_secret(monkeypatch):
+    """url set but secret None must not crash (encode() would AttributeError)."""
+    from src.tasks.video_tasks import send_webhook
+    calls = _capture_httpx(monkeypatch)
+    send_webhook('https://hooks.example/x', None, {'a': 1})
+    assert calls == []
+
+
 def test_send_webhook_delivery_failure_never_raises(monkeypatch):
     from src.tasks.video_tasks import send_webhook
     fake_httpx = types.ModuleType('httpx')
@@ -435,9 +471,12 @@ def test_youtube_callback_connects_account(client, auth_headers, db_session, mon
 
     monkeypatch.setattr(youtube_uploader, 'handle_callback', fake_handle)
     r = client.get('/api/youtube/callback',
-                   params={'code': 'oauth-code', 'state': user.id})
+                   params={'code': 'oauth-code',
+                           'state': youtube_uploader.sign_state(user.id)})
     assert r.status_code == 200
     assert seen == {'code': 'oauth-code', 'uid': user.id}
+    # token path must not leak in the response body
+    assert r.json() == {'message': 'YouTube connected'}
 
 
 def test_youtube_callback_unknown_state_rejected(client, monkeypatch):
@@ -446,6 +485,16 @@ def test_youtube_callback_unknown_state_rejected(client, monkeypatch):
     r = client.get('/api/youtube/callback',
                    params={'code': 'c', 'state': 424242})
     assert r.status_code == 401
+
+
+def test_youtube_callback_tampered_signature_rejected(client, monkeypatch):
+    """Valid user id + forged signature must never reach handle_callback."""
+    handle = mock.Mock(return_value='/x')
+    monkeypatch.setattr(youtube_uploader, 'handle_callback', handle)
+    r = client.get('/api/youtube/callback',
+                   params={'code': 'c', 'state': '1.0123456789abcdef'})
+    assert r.status_code == 401
+    assert handle.call_args is None
 
 
 # ---------------------------------------------------------------------------
@@ -521,7 +570,9 @@ def test_youtube_upload_task_completes_and_records_result(tmp_path, monkeypatch)
         def get_object(self, key):
             return b'\x00\x00\x00\x18ftypmp42'
 
-    monkeypatch.setattr(vt, 'get_storage', lambda: FakeStorage())
+    # _resolve_video_file imports get_storage from src.services.storage
+    monkeypatch.setattr('src.services.storage.get_storage',
+                        lambda: FakeStorage())
 
     video_blob = {}
 
@@ -539,9 +590,9 @@ def test_youtube_upload_task_completes_and_records_result(tmp_path, monkeypatch)
         done = vt.find_task_record('fake-yt-celery-id', pid, 'youtube_upload')
         assert done.status == 'completed'
         assert json.loads(done.result)['video_id'] == 'xyz789'
-    # materialized temp copy cleaned up
+    # materialized temp copy cleaned up (_resolve_video_file prefix)
     leftovers = [f for f in os.listdir(tempfile.gettempdir())
-                 if f.startswith(f'yt_{pid}_')]
+                 if f.startswith('yt_upload_')]
     assert leftovers == []
 
 
@@ -561,7 +612,8 @@ def test_youtube_upload_task_failure_records_error(tmp_path, monkeypatch):
         def get_object(self, key):
             return b'data'
 
-    monkeypatch.setattr(vt, 'get_storage', lambda: FakeStorage())
+    monkeypatch.setattr('src.services.storage.get_storage',
+                        lambda: FakeStorage())
     monkeypatch.setattr(
         youtube_uploader, 'upload_video',
         mock.Mock(side_effect=RuntimeError('quota exceeded')))

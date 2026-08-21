@@ -9,6 +9,8 @@ Env:
     YOUTUBE_OAUTH_REDIRECT_URI  redirect URI registered in Google Cloud console
     YOUTUBE_TOKEN_DIR           token storage dir (default instance/tokens)
 """
+import hashlib
+import hmac
 import json
 import os
 import tempfile
@@ -104,10 +106,31 @@ def _media_upload_cls():
 
 # --- OAuth -----------------------------------------------------------------
 
+def _state_sig(user_id):
+    secret = os.environ['SECRET_KEY']
+    return hmac.new(secret.encode(), str(user_id).encode(),
+                    hashlib.sha256).hexdigest()[:16]
+
+
+def sign_state(user_id):
+    """HMAC-signed OAuth state so a callback cannot plant a foreign user id."""
+    return f'{user_id}.{_state_sig(user_id)}'
+
+
+def verify_state(state):
+    """Return the user_id embedded in a signed state; ValueError if invalid."""
+    user_id, sep, sig = str(state).partition('.')
+    if (not sep or not user_id.isdigit()
+            or not hmac.compare_digest(sig, _state_sig(user_id))):
+        raise ValueError('invalid OAuth state signature')
+    return int(user_id)
+
+
 def get_auth_url(user_id):
     """Return the Google consent URL for the installed-app flow."""
     flow = _make_flow()
-    url, _ = flow.authorization_url(access_type='offline', prompt='consent')
+    url, _ = flow.authorization_url(access_type='offline', prompt='consent',
+                                    state=sign_state(user_id))
     return url
 
 

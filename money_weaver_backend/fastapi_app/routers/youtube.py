@@ -41,22 +41,28 @@ def youtube_auth_url(user=Depends(current_user)):
 
 @router.get('/callback')
 def youtube_callback(code: str,
-                     state: int,
+                     state: str,
                      session=Depends(get_db)):
     """OAuth redirect target.
 
     Google's browser redirect carries no bearer header, so current_user
-    cannot gate this endpoint; the signed-in user id travels as the OAuth
-    `state` parameter (standard CSRF guard) and must reference a real user.
+    cannot gate this endpoint. The signed-in user id travels as an
+    HMAC-signed OAuth `state` value (CSRF guard); the signature is verified
+    before the embedded user id is trusted, then it must reference a real
+    user.
     """
+    try:
+        user_id = youtube_uploader.verify_state(state)
+    except ValueError:
+        raise HTTPException(401, 'Invalid state')
     from src.models.user import User
-    if session.get(User, state) is None:
+    if session.get(User, user_id) is None:
         raise HTTPException(401, 'Unknown state')
     try:
-        path = youtube_uploader.handle_callback(code, state)
+        youtube_uploader.handle_callback(code, user_id)
     except RuntimeError as exc:
         raise HTTPException(503, str(exc))
-    return {'message': 'YouTube connected', 'token_path': path}
+    return {'message': 'YouTube connected'}
 
 
 @router.post('/upload', status_code=202)
