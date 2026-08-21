@@ -17,3 +17,9 @@ def test_inject_appends_hooks():
 def test_api_list_niches(client, auth_headers):
     r = client.get("/api/niches", headers=auth_headers)
     assert r.status_code == 200 and "tech" in r.json()["niches"]
+
+
+def test_list_niches_ignores_hidden_files():
+    from src.services.providers import niche_profile
+    names = niche_profile.list_niches()
+    assert all(not n.startswith('.') for n in names)

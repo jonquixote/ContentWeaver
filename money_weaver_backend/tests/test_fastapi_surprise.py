@@ -59,3 +59,14 @@ def test_surprise_generation_type_set(client, auth_headers, db_session):
         task = db_session.get(Task, task_id)
         assert task is not None
         assert task.generation_type == "assembler"
+
+def test_surprise_provider_failure_is_503(client, auth_headers):
+    from fastapi_app.routers import generation as gen_mod
+
+    def boom(*a, **k):
+        raise RuntimeError('openrouter 401: missing key')
+
+    with patch.object(gen_mod.llm_service, 'generate_idea', side_effect=boom):
+        r = client.post('/api/generate/surprise?seed=1', headers=auth_headers)
+    assert r.status_code == 503
+    assert 'unavailable' in r.json()['error']

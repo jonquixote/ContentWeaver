@@ -15,7 +15,11 @@ _NICHE_ID_RE = re.compile(r"[a-z0-9_-]{1,32}")
 def list_niches():
     if not os.path.isdir(_NICHE_DIR):
         return []
-    return sorted([f[:-5] for f in os.listdir(_NICHE_DIR) if f.endswith(".yaml")])
+    return sorted(
+        f[:-5]
+        for f in os.listdir(_NICHE_DIR)
+        if f.endswith(".yaml") and not f.startswith(".")
+    )
 
 
 def load(niche_id: str) -> dict:
