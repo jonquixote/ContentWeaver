@@ -16,4 +16,11 @@ export const handlers = [
   http.delete(`${base}/api-keys/:apiKeyId`, () => HttpResponse.json({ ok: true })),
   http.post(`${base}/api-keys/test`, () => HttpResponse.json({ ok: true, valid: true })),
   http.get(`${base}/tasks/:taskId/status`, () => HttpResponse.json({ task_id: 1, status: 'completed', progress: 100 })),
+  http.get(`${base}/niches`, () => HttpResponse.json({ niches: ['personal_finance', 'fitness'] })),
+  http.get(`${base}/topics`, () => HttpResponse.json({
+    topics: [
+      { title: 'How to budget on a low income', source: 'reddit', url: 'https://example.com/t/1' },
+      { title: 'Emergency fund basics', source: 'youtube', url: 'https://example.com/t/2' },
+    ],
+  })),
 ]

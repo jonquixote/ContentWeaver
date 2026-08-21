@@ -327,6 +327,37 @@ class ApiService {
       body: payload,
     })
   }
+
+  // Niche endpoints
+  async getNiches() {
+    return this.request('/niches')
+  }
+
+  // Topic discovery endpoints
+  async fetchTopics(niche, limit = 20) {
+    const query = `?niche=${encodeURIComponent(niche)}&limit=${limit}`
+    return this.request(`/topics${query}`)
+  }
+
+  // Viral clip detection
+  async detectClips(projectId, videoKey, count) {
+    return this.request('/clips/detect', {
+      method: 'POST',
+      body: { project_id: projectId, video_key: videoKey, count },
+    })
+  }
+
+  // YouTube OAuth + private upload
+  async getYoutubeAuthUrl() {
+    return this.request('/youtube/auth-url')
+  }
+
+  async uploadToYoutube(projectId, privacy = 'private') {
+    return this.request('/youtube/upload', {
+      method: 'POST',
+      body: { project_id: projectId, privacy },
+    })
+  }
 }
 
 export default new ApiService()

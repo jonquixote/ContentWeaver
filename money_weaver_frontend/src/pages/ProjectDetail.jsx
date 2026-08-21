@@ -5,10 +5,11 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge'
 import { Progress } from '@/components/ui/progress'
 import { ScrollArea } from '@/components/ui/scroll-area'
-import { ArrowLeft, Clock, Play, RefreshCw, Video } from 'lucide-react'
+import { ArrowLeft, Clock, Play, RefreshCw, Video, Scissors, Youtube } from 'lucide-react'
 import VideoPlayer from '@/components/VideoPlayer'
 // eslint-disable-next-line no-unused-vars
 import { motion } from 'framer-motion'
+import { toast } from 'sonner'
 import api, { resolveMediaUrl } from '@/services/api'
 import '../App.css'
 
@@ -34,6 +35,13 @@ const parseTaskResult = (task) => {
   }
 }
 
+// clips/detect expects a storage key; the project stores a backend-relative
+// URL (/final/..., videos/...) — strip scheme/path prefix and query.
+const toVideoKey = (url) => {
+  if (!url) return null
+  return url.split('?')[0].replace(/^\//, '') || null
+}
+
 const ProjectDetail = () => {
   const { id } = useParams()
   const navigate = useNavigate()
@@ -41,6 +49,11 @@ const ProjectDetail = () => {
   const [tasks, setTasks] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  const [isDetectingClips, setIsDetectingClips] = useState(false)
+  const [isUploadingYoutube, setIsUploadingYoutube] = useState(false)
+  const [youtubeTaskId, setYoutubeTaskId] = useState(null)
+  const [youtubeStatus, setYoutubeStatus] = useState(null)
+  const [youtubeUrl, setYoutubeUrl] = useState(null)
 
   useEffect(() => {
     const fetchData = async () => {
@@ -93,6 +106,61 @@ const ProjectDetail = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTask?.id])
 
+  const handleGenerateClips = async () => {
+    if (!videoKey) {
+      toast.error('No rendered video available for clip detection yet.')
+      return
+    }
+    setIsDetectingClips(true)
+    try {
+      const result = await api.detectClips(project.id, videoKey)
+      setTasks(prev => [{ id: result.task_id, task_type: 'viral_clip_detection', status: 'pending', progress: 0 }, ...prev])
+      toast.success('Viral clip detection started')
+    } catch (err) {
+      console.error('Failed to start clip detection:', err)
+      toast.error(err.message || 'Failed to start viral clip detection.')
+    } finally {
+      setIsDetectingClips(false)
+    }
+  }
+
+  const pollYoutubeTask = async (taskId) => {
+    try {
+      const task = await api.getTask(taskId)
+      setYoutubeStatus(task.status)
+      if (task.status === 'completed') {
+        const result = parseTaskResult(task)
+        if (result.youtube_url) setYoutubeUrl(result.youtube_url)
+        toast.success('YouTube upload completed!')
+        return true
+      }
+      if (task.status === 'failed') {
+        toast.error(task.error_message || 'YouTube upload failed.')
+        return true
+      }
+    } catch (err) {
+      console.error('Failed to fetch YouTube task status:', err)
+    }
+    return false
+  }
+
+  const handleYoutubeUpload = async () => {
+    setIsUploadingYoutube(true)
+    try {
+      const result = await api.uploadToYoutube(project.id, 'private')
+      setYoutubeTaskId(result.task_id)
+      setYoutubeStatus('pending')
+      const interval = setInterval(async () => {
+        const done = await pollYoutubeTask(result.task_id)
+        if (done) clearInterval(interval)
+      }, 3000)
+    } catch (err) {
+      console.error('Failed to start YouTube upload:', err)
+      toast.error(err.message || 'Failed to start YouTube upload.')
+      setIsUploadingYoutube(false)
+    }
+  }
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 flex items-center justify-center">
@@ -129,6 +197,7 @@ const ProjectDetail = () => {
   const videoUrl = resolveMediaUrl(taskResult.video_url || project.video_url)
   const thumbnailUrl = resolveMediaUrl(taskResult.thumbnail_url)
   const progress = latestTask?.progress ?? 0
+  const videoKey = toVideoKey(taskResult.video_url || project.video_url)
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900">
@@ -321,6 +390,62 @@ const ProjectDetail = () => {
                         Re-generate Video
                       </Button>
                     </div>
+                  )}
+                </CardContent>
+              </Card>
+            </motion.div>
+
+            {/* Distribution & Clips */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.4 }}
+            >
+              <Card className="bg-slate-800/50 border-slate-700">
+                <CardHeader>
+                  <CardTitle className="text-white">Distribution & Clips</CardTitle>
+                  <CardDescription className="text-slate-400">
+                    Find viral moments or publish privately to YouTube.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <Button
+                    variant="outline"
+                    className="w-full border-slate-600 text-slate-300 hover:bg-slate-700"
+                    onClick={handleGenerateClips}
+                    disabled={isDetectingClips || !videoKey}
+                  >
+                    <Scissors className="h-4 w-4 mr-2" />
+                    {isDetectingClips ? 'Starting...' : 'Generate viral clips'}
+                  </Button>
+                  {!videoKey && (
+                    <p className="text-xs text-slate-500">
+                      Render a video first — clip detection needs a source video.
+                    </p>
+                    )}
+                  <Button
+                    variant="outline"
+                    className="w-full border-red-500/40 text-red-400 hover:bg-red-500/10 hover:text-red-300"
+                    onClick={handleYoutubeUpload}
+                    disabled={isUploadingYoutube || Boolean(youtubeTaskId && youtubeStatus !== 'failed')}
+                  >
+                    <Youtube className="h-4 w-4 mr-2" />
+                    {isUploadingYoutube ? 'Starting...' : 'Upload to YouTube (private)'}
+                  </Button>
+                  {youtubeTaskId && !youtubeUrl && (
+                    <p className="text-xs text-slate-400">
+                      Upload task #{youtubeTaskId} — {youtubeStatus || 'pending'}...
+                    </p>
+                  )}
+                  {youtubeUrl && (
+                    <a
+                      href={youtubeUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-sm text-purple-300 hover:text-purple-200 underline break-all"
+                    >
+                      {youtubeUrl}
+                    </a>
                   )}
                 </CardContent>
               </Card>

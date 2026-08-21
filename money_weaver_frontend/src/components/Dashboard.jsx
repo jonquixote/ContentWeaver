@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -15,6 +15,8 @@ import { useAuthStore } from '@/store/authStore'
 import { useProjects } from '@/hooks/useProjects'
 import { useTasks } from '@/hooks/useTasks'
 import { usePresets } from '@/hooks/usePresets'
+import { useNiches } from '@/hooks/useNiches'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import '../App.css'
 
 const POLL_INTERVAL_MS = 5000
@@ -110,10 +112,12 @@ const Dashboard = ({ onCreateVideo }) => {
     },
   })
   const presetsQuery = usePresets()
+  const nichesQuery = useNiches()
 
   const projects = projectsQuery.data ?? []
   const tasks = tasksQuery.data ?? []
   const presets = presetsQuery.data ?? []
+  const niches = nichesQuery.data ?? []
 
   const projectsLoading = projectsQuery.isLoading
   const tasksLoading = tasksQuery.isLoading
@@ -122,6 +126,17 @@ const Dashboard = ({ onCreateVideo }) => {
   const [seedInput, setSeedInput] = useState('')
   const [isGeneratingSurprise, setIsGeneratingSurprise] = useState(false)
   const [surpriseTaskId, setSurpriseTaskId] = useState(null)
+  const [nicheFilter, setNicheFilter] = useState('all')
+
+  // Projects carry no niche column yet — filter client-side by matching the
+  // niche name against title/description until the backend adds one.
+  const filteredProjects = nicheFilter === 'all'
+    ? projects
+    : projects.filter((p) => {
+        const needle = nicheFilter.replace(/_/g, ' ').toLowerCase()
+        const haystack = `${p.title ?? ''} ${p.description ?? ''}`.toLowerCase()
+        return haystack.includes(needle) || haystack.includes(nicheFilter.toLowerCase())
+      })
 
   const completedCount = projects.filter((p) => p.status === 'completed').length
   const successRate = projects.length ? Math.round((completedCount / projects.length) * 100) : 0
@@ -320,12 +335,27 @@ const Dashboard = ({ onCreateVideo }) => {
               </TabsList>
 
               <TabsContent value="projects" className="space-y-4">
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between gap-4 flex-wrap">
                   <h2 className="text-xl font-semibold text-white">Your Projects</h2>
-                  <Button className="bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600" onClick={onCreateVideo}>
-                    <Plus className="h-4 w-4 mr-2" />
-                    New Project
-                  </Button>
+                  <div className="flex items-center gap-3">
+                    <Select value={nicheFilter} onValueChange={setNicheFilter}>
+                      <SelectTrigger className="bg-slate-700 border-slate-600 text-white w-[180px]">
+                        <SelectValue placeholder="Filter by niche..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All niches</SelectItem>
+                        {niches.map((niche) => (
+                          <SelectItem key={niche} value={niche}>
+                            {niche}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <Button className="bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600" onClick={onCreateVideo}>
+                      <Plus className="h-4 w-4 mr-2" />
+                      New Project
+                    </Button>
+                  </div>
                 </div>
 
                 {projectsQuery.isError ? (
@@ -336,9 +366,9 @@ const Dashboard = ({ onCreateVideo }) => {
                   />
                 ) : projectsLoading ? (
                   <ProjectListSkeleton />
-                ) : projects.length > 0 ? (
+                ) : filteredProjects.length > 0 ? (
                   <div className="grid gap-4">
-                    {projects.map((project, index) => (
+                    {filteredProjects.map((project, index) => (
                       <motion.div
                         key={project.id}
                         initial={{ opacity: 0, x: -20 }}
@@ -530,14 +560,12 @@ const Dashboard = ({ onCreateVideo }) => {
                 <div className="flex gap-2">
                   <input
                     type="text"
-                    ref={seedRef}
                     value={seedInput}
                     onChange={(e) => setSeedInput(e.target.value)}
                     placeholder="Optional seed..."
                     className="bg-slate-700 border-slate-600 text-white rounded px-3 py-2 flex-1"
                   />
                   <Button
-                    variant="primary"
                     onClick={handleSurpriseMe}
                     disabled={isGeneratingSurprise}
                   >

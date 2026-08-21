@@ -8,8 +8,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
-import { ArrowLeft, ArrowRight, Video, Zap, Play, Settings, PenLine, Film, Mic, Check } from 'lucide-react'
-// eslint-disable-next-line no-unused-imports
+import { ArrowLeft, ArrowRight, Video, Zap, Play, Settings, PenLine, Film, Mic, Check, Dices, Search } from 'lucide-react'
+// eslint-disable-next-line no-unused-vars
 import { motion, AnimatePresence } from 'framer-motion'
 import { toast } from 'sonner'
 import ApiService from '../services/api'
@@ -19,8 +19,8 @@ import ScriptEditor from './ScriptEditor'
 import Storyboard from './Storyboard'
 import { usePresets } from '@/hooks/usePresets'
 import { useVoices } from '@/hooks/useVoices'
+import { useNiches } from '@/hooks/useNiches'
 import { parseScriptText } from '@/lib/scriptParser'
-import { randomIdea } from '@/services/api'
 import '../App.css'
 
 const STEPS = [
@@ -46,16 +46,21 @@ const VideoCreationWizard = ({ onBack }) => {
     language: 'en',
     orientation: 'landscape',
     width: '1920',
-    height: '1080'
+    height: '1080',
+    nicheId: ''
   })
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [taskId, setTaskId] = useState(null)
   const [randomIdea, setRandomIdea] = useState(null)
+  const [discoveredTopics, setDiscoveredTopics] = useState([])
+  const [isDiscovering, setIsDiscovering] = useState(false)
 
   const presetsQuery = usePresets()
   const voicesQuery = useVoices()
+  const nichesQuery = useNiches()
   const presets = presetsQuery.data ?? []
   const voices = voicesQuery.data ?? []
+  const niches = nichesQuery.data ?? []
   const presetsLoading = presetsQuery.isLoading
   const voicesLoading = voicesQuery.isLoading
 
@@ -79,6 +84,37 @@ const VideoCreationWizard = ({ onBack }) => {
       })
     }
   }, [voicesQuery.isError, voicesQuery.error])
+
+  useEffect(() => {
+    if (nichesQuery.isError) {
+      toast.error('Failed to load niches', {
+        id: 'wizard-niches-error',
+        description: nichesQuery.error?.message,
+      })
+    }
+  }, [nichesQuery.isError, nichesQuery.error])
+
+  const handleDiscoverTopics = async () => {
+    if (!formData.nicheId) return
+    setIsDiscovering(true)
+    try {
+      const result = await ApiService.fetchTopics(formData.nicheId, 20)
+      setDiscoveredTopics(result?.topics ?? [])
+    } catch (error) {
+      console.error('Failed to discover topics:', error)
+      toast.error('Failed to discover topics. Please try again.')
+    } finally {
+      setIsDiscovering(false)
+    }
+  }
+
+  const handleTopicSelect = (topic) => {
+    setFormData(prev => ({
+      ...prev,
+      title: prev.title || topic.title,
+      prompt: topic.title,
+    }))
+  }
 
   const totalSteps = STEPS.length
 
@@ -387,7 +423,7 @@ const VideoCreationWizard = ({ onBack }) => {
                 <Card className="bg-slate-800/50 border-slate-700">
                   <CardHeader>
                     <CardTitle className="text-white flex items-center">
-                      <Dice1ToTwo className="h-5 w-5 mr-2" />
+                      <Dices className="h-5 w-5 mr-2" />
                       Randomize Topic
                     </CardTitle>
                   </CardHeader>
@@ -418,6 +454,80 @@ const VideoCreationWizard = ({ onBack }) => {
                     >
                       Randomize
                     </Button>
+                  </CardContent>
+                </Card>
+              </motion.div>
+            )}
+
+            {/* Niche + topic discovery in step 1 */}
+            {currentStep === 1 && (
+              <motion.div
+                key="topic-discovery"
+                variants={stepVariants}
+                initial="hidden"
+                animate="visible"
+                exit="exit"
+                transition={{ duration: 0.3 }}
+              >
+                <Card className="bg-slate-800/50 border-slate-700">
+                  <CardHeader>
+                    <CardTitle className="text-white flex items-center">
+                      <Search className="h-5 w-5 mr-2" />
+                      Discover Topics
+                    </CardTitle>
+                    <CardDescription className="text-slate-400">
+                      Pick a niche and discover trending topics to write about.
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="space-y-2">
+                      <Label className="text-white">Niche</Label>
+                      <Select
+                        value={formData.nicheId || 'none'}
+                        onValueChange={(value) => {
+                          handleInputChange('nicheId', value === 'none' ? '' : value)
+                          setDiscoveredTopics([])
+                        }}
+                      >
+                        <SelectTrigger className="bg-slate-700 border-slate-600 text-white">
+                          <SelectValue placeholder="Select a niche..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">Select a niche...</SelectItem>
+                          {niches.map((niche) => (
+                            <SelectItem key={niche} value={niche}>
+                              {niche}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleDiscoverTopics}
+                      disabled={!formData.nicheId || isDiscovering}
+                    >
+                      {isDiscovering ? 'Discovering...' : 'Discover topics'}
+                    </Button>
+                    {discoveredTopics.length > 0 && (
+                      <div className="grid gap-2">
+                        {discoveredTopics.map((topic) => (
+                          <button
+                            key={`${topic.source}-${topic.url}`}
+                            type="button"
+                            onClick={() => handleTopicSelect(topic)}
+                            className="text-left p-3 rounded-lg bg-slate-700/40 border border-slate-600 hover:border-purple-500 transition-colors"
+                          >
+                            <p className="text-sm text-white font-medium">{topic.title}</p>
+                            <p className="text-xs text-slate-400 mt-1">
+                              {topic.source}
+                              {topic.url ? ` · ${topic.url}` : ''}
+                            </p>
+                          </button>
+                        ))}
+                      </div>
+                    )}
                   </CardContent>
                 </Card>
               </motion.div>
