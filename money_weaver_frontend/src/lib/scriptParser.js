@@ -7,7 +7,7 @@ const VOICEOVER_LINE_PATTERN = /^voiceover:\s*"?([^"]*)"?\s*$/i
 const BLOCK_TYPE_PATTERNS = {
   heading: /^\*\*[A-Z].*$/m,
   action: /^[A-Z][A-Za-z\s]{10,}$/m,
-  character: /^[A-Z][A-Za-z'.\-]+:\s*$/m,
+  character: /^[A-Z][A-Za-z'.-]+:\s*$/m,
   dialogue: /^["'][^"']*["']\s*:?\s*$/m,
   camera: /^(FADE IN|FADE OUT|FADE TO|CUT TO|BEGIN|END)$/i
 }
@@ -128,7 +128,7 @@ export function parseBlocks(text) {
 
     let type = 'action'
     if (/^\*\*[A-Z].*$/.test(line)) type = 'heading'
-    else if (/^[A-Z][A-Za-z'.\-]+:\s*$/.test(line)) type = 'character'
+    else if (/^[A-Z][A-Za-z'.-]+:\s*$/.test(line)) type = 'character'
     else if (/^["'][^"']*["']\s*:?\s*$/.test(line)) type = 'dialogue'
     else if (/^(FADE IN|FADE OUT|FADE TO|CUT TO|BEGIN|END)$/i.test(line)) type = 'camera'
 
@@ -141,7 +141,7 @@ export function parseBlocks(text) {
         break
       }
       if (/^\*\*[A-Z].*$/.test(nextLine) ||
-          /^[A-Z][A-Za-z'.\-]+:\s*$/.test(nextLine) ||
+          /^[A-Z][A-Za-z'.-]+:\s*$/.test(nextLine) ||
           /^(FADE IN|FADE OUT|FADE TO|CUT TO|BEGIN|END)$/i.test(nextLine) ||
           /^\*\*.*:\*\*/.test(nextLine)) {
         break

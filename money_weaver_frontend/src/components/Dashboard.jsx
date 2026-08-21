@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -126,7 +126,12 @@ const Dashboard = ({ onCreateVideo }) => {
   const [seedInput, setSeedInput] = useState('')
   const [isGeneratingSurprise, setIsGeneratingSurprise] = useState(false)
   const [surpriseTaskId, setSurpriseTaskId] = useState(null)
+  const surprisePollRef = useRef(null)
   const [nicheFilter, setNicheFilter] = useState('all')
+
+  useEffect(() => () => {
+    if (surprisePollRef.current) clearInterval(surprisePollRef.current)
+  }, [])
 
   // Projects carry no niche column yet — filter client-side by matching the
   // niche name against title/description until the backend adds one.
@@ -183,16 +188,26 @@ const Dashboard = ({ onCreateVideo }) => {
     setIsGeneratingSurprise(true)
     try {
       const result = await api.generateSurprise({ seed: seedInput || undefined })
-      setSurpriseTaskId(result.task_id)
+      const taskId = result.task_id
+      setSurpriseTaskId(taskId)
       // Poll task status
       const poll = setInterval(async () => {
-        const task = await api.request(`/tasks/${surpriseTaskId}`)
-        if (task.status !== 'running' && task.status !== 'processing') {
+        try {
+          const task = await api.request(`/tasks/${taskId}`)
+          if (task.status !== 'running' && task.status !== 'processing') {
+            clearInterval(poll)
+            surprisePollRef.current = null
+            setIsGeneratingSurprise(false)
+            toast.success('Surprise video generated!')
+          }
+        } catch {
           clearInterval(poll)
+          surprisePollRef.current = null
           setIsGeneratingSurprise(false)
-          toast.success('Surprise video generated!')
+          toast.error('Failed to check surprise generation status')
         }
       }, POLL_INTERVAL_MS)
+      surprisePollRef.current = poll
     } catch (error) {
       console.error('Surprise me error:', error)
       toast.error('Failed to generate surprise')
@@ -419,7 +434,11 @@ const Dashboard = ({ onCreateVideo }) => {
                   </div>
                 ) : (
                   <div className="p-8 bg-slate-800/50 rounded-lg border border-slate-700 text-center">
-                    <p className="text-slate-400">No projects yet. Create your first video project.</p>
+                    {projects.length > 0 && nicheFilter !== 'all' ? (
+                      <p className="text-slate-400">No projects match this niche.</p>
+                    ) : (
+                      <p className="text-slate-400">No projects yet. Create your first video project.</p>
+                    )}
                   </div>
                 )}
               </TabsContent>

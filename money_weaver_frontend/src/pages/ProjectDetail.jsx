@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -52,8 +52,13 @@ const ProjectDetail = () => {
   const [isDetectingClips, setIsDetectingClips] = useState(false)
   const [isUploadingYoutube, setIsUploadingYoutube] = useState(false)
   const [youtubeTaskId, setYoutubeTaskId] = useState(null)
+  const youtubePollRef = useRef(null)
   const [youtubeStatus, setYoutubeStatus] = useState(null)
   const [youtubeUrl, setYoutubeUrl] = useState(null)
+
+  useEffect(() => () => {
+    if (youtubePollRef.current) clearInterval(youtubePollRef.current)
+  }, [])
 
   useEffect(() => {
     const fetchData = async () => {
@@ -152,8 +157,12 @@ const ProjectDetail = () => {
       setYoutubeStatus('pending')
       const interval = setInterval(async () => {
         const done = await pollYoutubeTask(result.task_id)
-        if (done) clearInterval(interval)
+        if (done) {
+          clearInterval(interval)
+          youtubePollRef.current = null
+        }
       }, 3000)
+      youtubePollRef.current = interval
     } catch (err) {
       console.error('Failed to start YouTube upload:', err)
       toast.error(err.message || 'Failed to start YouTube upload.')

@@ -171,16 +171,11 @@ const SettingsPage = () => {
   const saveModelPreferences = async () => {
     setSavingDefaults(true)
     try {
-      await api.request("/settings/models", {
-        method: 'PUT',
-        body: {
-          defaults: modelDefaults,
-          fallbacks: modelFallbacks
-        }
+      await api.updateModelSettings({
+        defaults: modelDefaults,
+        fallbacks: modelFallbacks
       })
       toast.success('Model preferences saved successfully!')
-      setModelDefaults(prev => ({}))
-      setModelFallbacks(prev => [])
     } catch (error) {
       console.error('Failed to save model preferences:', error)
       toast.error(error.message || 'Failed to save model preferences')
@@ -468,14 +463,25 @@ const SettingsPage = () => {
                       <div className="grid grid-cols-2 gap-2">
                         <Input
                           value={JSON.stringify(modelDefaults, null, 2)}
-                          onChange={(e) => setModelDefaults(JSON.parse(e.target.value))}
+                          onChange={(e) => {
+                            try {
+                              setModelDefaults(JSON.parse(e.target.value))
+                            } catch {
+                              /* keep last valid */
+                            }
+                          }}
                           placeholder='{'
-                        />
                           className="bg-slate-700 border-slate-600 text-white w-full rounded p-2 text-xs resize-none min-h-[120px]"
                         />
                         <Input
                           value={JSON.stringify(modelFallbacks, null, 2)}
-                          onChange={(e) => setModelFallbacks(JSON.parse(e.target.value))}
+                          onChange={(e) => {
+                            try {
+                              setModelFallbacks(JSON.parse(e.target.value))
+                            } catch {
+                              /* keep last valid */
+                            }
+                          }}
                           placeholder='[ "model1", "model2" ]'
                           className="bg-slate-700 border-slate-600 text-white w-full rounded p-2 text-xs resize-none min-h-[120px]"
                         />

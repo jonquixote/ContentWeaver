@@ -314,6 +314,13 @@ class ApiService {
     return this.request('/models/default')
   }
 
+  async updateModelSettings(payload) {
+    return this.request('/settings/models', {
+      method: 'PUT',
+      body: payload,
+    })
+  }
+
   async randomIdea(payload) {
     return this.request('/ideas/random', {
       method: 'POST',
