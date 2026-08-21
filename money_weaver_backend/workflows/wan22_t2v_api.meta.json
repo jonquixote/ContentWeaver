@@ -1,0 +1,15 @@
+{
+  "source": "Comfy-Org ComfyUI_examples wan22/text_to_video_wan22_5B.json (UI format, converted to API; Apache-2.0 site content, graph by comfyanonymous). Upstream WanVideoWrapper example was controlnet-specialized; this is the official plain Wan2.2 T2V graph.",
+  "upstream_differences": [
+    "Dropped SaveAnimatedWEBP preview node 28 (redundant second encode for API usage)",
+    "start_image input omitted from Wan22ImageToVideoLatent (t2v: no image)",
+    "seed/width/height replaced with __SEED__/__WIDTH__/__HEIGHT__ tokens",
+    "filename_prefix set to moneyweaver_wan22"
+  ],
+  "params": {
+    "prompt": "6",
+    "width": "55",
+    "height": "55",
+    "seed": "3"
+  }
+}
