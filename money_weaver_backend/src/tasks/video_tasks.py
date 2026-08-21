@@ -758,6 +758,7 @@ def reframe_for_vertical(self, project_id, video_key, mode='general'):
     app = create_app_context()
 
     input_path = None
+    temp_input = False
     with app.app_context():
         try:
             task_record = find_task_record(self.request.id, project_id, 'reframe_vertical')
@@ -775,6 +776,7 @@ def reframe_for_vertical(self, project_id, video_key, mode='general'):
             else:
                 data = get_storage().get_object(video_key)
                 fd, input_path = tempfile.mkstemp(suffix='.mp4', prefix=f'reframe_{project_id}_')
+                temp_input = True
                 with os.fdopen(fd, 'wb') as fh:
                     fh.write(data)
 
@@ -817,3 +819,10 @@ def reframe_for_vertical(self, project_id, video_key, mode='general'):
 
             # Re-raise so Celery propagates a real FAILURE state
             raise exc
+        finally:
+            # Clean up the materialized temp copy (never the caller's file).
+            if temp_input and input_path and os.path.exists(input_path):
+                try:
+                    os.unlink(input_path)
+                except OSError:
+                    pass

@@ -5,7 +5,10 @@ no GPU. TRACK-mode ML deps (ultralytics/mediapipe) are simulated through
 sys.modules poisoning/injection so tests stay deterministic whether or not the
 heavy deps are installed in this venv.
 """
+import os
+import subprocess
 import sys
+import tempfile
 import types
 
 import pytest
@@ -98,3 +101,93 @@ def test_reframe_track_with_deps_present_still_degrades_to_general(
     assert out.endswith(".mp4")
     assert len(mock_run) == 1
     assert "boxblur" in _vf(mock_run[0])
+
+
+def test_reframe_output_lands_in_managed_final_dir(mock_run):
+    """Outputs go to the served backend/final dir, not a per-call mkdtemp."""
+    out = reframe_service.reframe("/tmp/in.mp4", "general")
+    assert out.startswith(reframe_service.OUTPUT_DIR)
+    assert os.path.basename(out).endswith("_9x16.mp4")
+
+
+def test_reframe_unknown_mode_raises_value_error(mock_run):
+    with pytest.raises(ValueError, match="unknown reframe mode"):
+        reframe_service.reframe("/tmp/in.mp4", "diagonal")
+    assert len(mock_run) == 0
+
+
+class _FakeTaskSelf:
+    """Stand-in for the Celery task instance (no broker/backend required)."""
+
+    def __init__(self, tid="fake-reframe-celery-id"):
+        self.request = types.SimpleNamespace(id=tid)
+
+    def update_state(self, *args, **kwargs):
+        pass
+
+
+def test_reframe_task_ffmpeg_failure_marks_failed_and_cleans_temp(
+    tmp_path, monkeypatch
+):
+    """CalledProcessError from ffmpeg -> Celery FAILURE, failed task record,
+    and the materialized temp input copy is unlinked (no leak)."""
+    os.environ.setdefault("SECRET_KEY", "test-secret-key")
+    # setenv (not raw assignment) so the temp DATABASE_URL is restored after
+    # the test instead of leaking a dead sqlite path into later modules.
+    monkeypatch.setenv(
+        "DATABASE_URL", f"sqlite:///{tmp_path / 'reframe.db'}")
+
+    vt = pytest.importorskip("src.tasks.video_tasks")
+    from src.database import db
+
+    app = vt.create_app_context()
+    with app.app_context():
+        db.create_all()
+        from src.models.project import Project
+        from src.models.task import Task
+        from src.models.user import User
+
+        owner = User(username="rf-owner", email="rf@t.com", password_hash="x")
+        db.session.add(owner)
+        db.session.flush()
+        project = Project(title="rf", user_id=owner.id,
+                          voice_type="female", status="draft")
+        db.session.add(project)
+        db.session.flush()
+        record = Task(project_id=project.id, task_type="reframe_vertical",
+                      status="pending", celery_task_id="fake-reframe-celery-id")
+        db.session.add(record)
+        db.session.commit()
+        project_id = project.id
+
+    class FakeStorage:
+        def get_object(self, key):
+            return b"\x00\x00\x00\x18ftypmp42"
+
+    monkeypatch.setattr(vt, "get_storage", lambda: FakeStorage())
+
+    def boom(cmd, *args, **kwargs):
+        raise subprocess.CalledProcessError(1, cmd)
+
+    monkeypatch.setattr(reframe_service.subprocess, "run", boom)
+
+    with app.app_context():
+        with pytest.raises(subprocess.CalledProcessError):
+            vt.reframe_for_vertical.run.__func__(
+                _FakeTaskSelf(), project_id, "storage/incoming.mp4",
+                mode="general",
+            )
+
+        # materialized temp input was cleaned up — no leak
+        leftovers = [
+            f for f in os.listdir(tempfile.gettempdir())
+            if f.startswith(f"reframe_{project_id}_")
+        ]
+        assert leftovers == []
+
+        # task record flipped to failed with the error captured
+        failed = vt.find_task_record(
+            "fake-reframe-celery-id", project_id, "reframe_vertical")
+        assert failed is not None
+        assert failed.status == "failed"
+        assert "returned non-zero exit status" in (failed.error_message or "")

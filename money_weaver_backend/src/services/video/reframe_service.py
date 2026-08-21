@@ -9,10 +9,18 @@ present, until the full openshorts TRACK port lands.
 
 import os
 import subprocess
-import tempfile
+import uuid
 
 TARGET_W = 1080
 TARGET_H = 1920
+
+# Outputs land in the served backend/final dir (same location sibling tasks
+# publish through), not a per-call mkdtemp that would accumulate forever.
+OUTPUT_DIR = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(
+        os.path.abspath(__file__))))),
+    'final',
+)
 
 # Blur-background composite filtergraph:
 #   bg: scale to fill 1080x1920, crop to frame, boxblur
@@ -29,8 +37,8 @@ _VF_BLUR_BG = (
 
 def _output_path(input_mp4):
     base = os.path.splitext(os.path.basename(input_mp4))[0]
-    out_dir = tempfile.mkdtemp(prefix="reframe_")
-    return os.path.join(out_dir, f"{base}_9x16.mp4")
+    os.makedirs(OUTPUT_DIR, exist_ok=True)
+    return os.path.join(OUTPUT_DIR, f"{base}_{uuid.uuid4().hex[:8]}_9x16.mp4")
 
 
 def _reframe_general(input_mp4):
@@ -55,6 +63,8 @@ def reframe(input_mp4, mode="general"):
     mode="track":   smart subject tracking; falls back to GENERAL when
                     ultralytics/mediapipe are not installed.
     """
+    if mode not in ("general", "track"):
+        raise ValueError(f"unknown reframe mode: {mode!r}")
     if mode == "track":
         try:
             from ultralytics import YOLO  # noqa: F401

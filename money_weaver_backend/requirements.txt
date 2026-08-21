@@ -54,7 +54,6 @@ wcwidth==0.2.13
 Werkzeug==3.1.3
 boto3==1.38.13
 numpy==2.2.6 
-opencv-python==4.12.0.88
 # LiteLLM proxy dependencies
 # NOTE: the LiteLLM PROXY runs from this same venv (see start_all_services.sh,
 # which activates `venv` and launches `litellm --config ... --port 8000`).
