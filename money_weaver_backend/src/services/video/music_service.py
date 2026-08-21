@@ -41,12 +41,14 @@ def pick_music(niche, duration=None):
         niche_profile = None
     mood = ((niche_profile or {}).get("music") or "neutral").lower()
     allowed = _MOOD_ALIASES.get(mood, {mood})
-    candidates = [
-        os.path.join(_MUSIC_DIR, t["file"])
-        for t in _load_tracks()
-        if str(t.get("mood", "")).lower() in allowed
-        and os.path.exists(os.path.join(_MUSIC_DIR, t.get("file", "")))
-    ]
+    candidates = []
+    for t in _load_tracks():
+        f = t.get("file")
+        if not f:
+            continue
+        if str(t.get("mood", "")).lower() in allowed and \
+                os.path.exists(os.path.join(_MUSIC_DIR, f)):
+            candidates.append(os.path.join(_MUSIC_DIR, f))
     return random.choice(candidates) if candidates else None
 
 
@@ -57,9 +59,9 @@ def mix_voice_music(voice_path, music_path, out_path, music_volume=0.3):
     """
     filter_complex = (
         f"[1:a]volume={music_volume}[m];"
-        f"[0:a]asplit=2[sc][mix];"
-        f"[sc][m]sidechaincompress=threshold=0.05:ratio=10:attack=5:release=300[comp];"
-        f"[comp][m]amix=inputs=2:duration=first:dropout_transition=2[aout]"
+        f"[m]asplit=2[mus][sc];"
+        f"[0:a][sc]sidechaincompress=threshold=0.05:ratio=10:attack=5:release=300[comp];"
+        f"[comp][mus]amix=inputs=2:duration=first:dropout_transition=2[aout]"
     )
     return [
         "ffmpeg", "-y",

@@ -56,11 +56,16 @@ def detect_scenes(path):
         sm.add_detector(ContentDetector(threshold=27.0))
         vm.set_downscale_factor()
         vm.start()
-        sm.detect_scenes(frame_source=vm)
-        scene_list = sm.get_scene_list()
+        try:
+            sm.detect_scenes(frame_source=vm)
+            scene_list = sm.get_scene_list()
+        finally:
+            release = getattr(vm, "release", None)
+            if callable(release):
+                release()
+        cuts = [(start.get_seconds(), end.get_seconds()) for start, end in scene_list]
     except Exception:
         return []
-    cuts = [(start.get_seconds(), end.get_seconds()) for start, end in scene_list]
     return _merge_short_scenes(cuts, min_len=1.0)
 
 

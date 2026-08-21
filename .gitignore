@@ -57,8 +57,11 @@ money_weaver_backend/tts_service/generated_audio/
 
 # Music bed audio is licensed per-install (CC0/Pixabay/FreePD); only
 # music/manifest.yaml + README ship in git. See money_weaver_backend/music/README.md.
-money_weaver_backend/music/*.mp3
-money_weaver_backend/music/*.wav
-money_weaver_backend/music/*.ogg
-money_weaver_backend/music/*.m4a
-money_weaver_backend/music/*.flac
+money_weaver_backend/music/*.[mM][pP]3
+money_weaver_backend/music/*.[wW][aA][vV]
+money_weaver_backend/music/*.[oO][gG][gG]
+money_weaver_backend/music/*.[mM]4[aA]
+money_weaver_backend/music/*.[fF][lL][aA][cC]
+money_weaver_backend/music/*.[aA][aA][cC]
+money_weaver_backend/music/*.[oO][pP][uU][sS]
+money_weaver_backend/music/*.[wW][mM][aA]

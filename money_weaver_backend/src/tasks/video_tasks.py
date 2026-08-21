@@ -101,8 +101,6 @@ def _maybe_mix_music(voice_path, niche_id, work_dir=None):
     """Mix a mood-matched music bed under the voice track. Never raises;
     returns mixed path or None (silent-video behavior preserved)."""
     try:
-        import os
-        import subprocess
         from src.services.video.music_service import mix_voice_music, pick_music
         music_path = pick_music(niche_id or "general")
         if not music_path:
