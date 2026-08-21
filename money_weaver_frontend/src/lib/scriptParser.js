@@ -4,6 +4,13 @@ const SCENE_PATTERN =
   /\*\*Scene\s+(\d+):\s*([^(]+)\s*\((\d+)s?-(\d+)s?\)\*\*\s*$(.*?)$\s*Voiceover:\s*[""]?(.*?)(?=[""]?$|$)/gims
 const SCENE_LINE_PATTERN = /^\*\*Scene\s+(\d+):\s*([^(\n]+)\s*\((\d+)s?-(\d+)s?\)\*\*(.*)$/i
 const VOICEOVER_LINE_PATTERN = /^voiceover:\s*"?([^"]*)"?\s*$/i
+const BLOCK_TYPE_PATTERNS = {
+  heading: /^\*\*[A-Z].*$/m,
+  action: /^[A-Z][A-Za-z\s]{10,}$/m,
+  character: /^[A-Z][A-Za-z'.\-]+:\s*$/m,
+  dialogue: /^["'][^"']*["']\s*:?\s*$/m,
+  camera: /^(FADE IN|FADE OUT|FADE TO|CUT TO|BEGIN|END)$/i
+}
 
 export function jsonToScriptText(json) {
   if (!json || !Array.isArray(json.content)) return ''
@@ -105,4 +112,49 @@ function parseFallback(text) {
 
   if (current) scenes.push(current)
   return scenes
+}
+
+export function parseBlocks(text) {
+  const blocks = []
+  const lines = text.split('\n')
+  let i = 0
+
+  while (i < lines.length) {
+    const line = lines[i].trim()
+    if (!line) {
+      i++
+      continue
+    }
+
+    let type = 'action'
+    if (/^\*\*[A-Z].*$/.test(line)) type = 'heading'
+    else if (/^[A-Z][A-Za-z'.\-]+:\s*$/.test(line)) type = 'character'
+    else if (/^["'][^"']*["']\s*:?\s*$/.test(line)) type = 'dialogue'
+    else if (/^(FADE IN|FADE OUT|FADE TO|CUT TO|BEGIN|END)$/i.test(line)) type = 'camera'
+
+    const contentLines = [line]
+    i++
+    while (i < lines.length) {
+      const nextLine = lines[i].trim()
+      if (!nextLine) {
+        i++
+        break
+      }
+      if (/^\*\*[A-Z].*$/.test(nextLine) ||
+          /^[A-Z][A-Za-z'.\-]+:\s*$/.test(nextLine) ||
+          /^(FADE IN|FADE OUT|FADE TO|CUT TO|BEGIN|END)$/i.test(nextLine) ||
+          /^\*\*.*:\*\*/.test(nextLine)) {
+        break
+      }
+      contentLines.push(nextLine)
+      i++
+    }
+
+    blocks.push({
+      type,
+      text: contentLines.join(' ').trim()
+    })
+  }
+
+  return blocks
 }

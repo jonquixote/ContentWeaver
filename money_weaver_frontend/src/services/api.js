@@ -313,6 +313,20 @@ class ApiService {
   async getDefaultModel() {
     return this.request('/models/default')
   }
+
+  async randomIdea(payload) {
+    return this.request('/ideas/random', {
+      method: 'POST',
+      body: payload,
+    })
+  }
+
+  async generateSurprise(payload) {
+    return this.request('/generate/surprise', {
+      method: 'POST',
+      body: payload,
+    })
+  }
 }
 
 export default new ApiService()

@@ -9,7 +9,7 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { ArrowLeft, ArrowRight, Video, Zap, Play, Settings, PenLine, Film, Mic, Check } from 'lucide-react'
-// eslint-disable-next-line no-unused-vars
+// eslint-disable-next-line no-unused-imports
 import { motion, AnimatePresence } from 'framer-motion'
 import { toast } from 'sonner'
 import ApiService from '../services/api'
@@ -20,6 +20,7 @@ import Storyboard from './Storyboard'
 import { usePresets } from '@/hooks/usePresets'
 import { useVoices } from '@/hooks/useVoices'
 import { parseScriptText } from '@/lib/scriptParser'
+import { randomIdea } from '@/services/api'
 import '../App.css'
 
 const STEPS = [
@@ -49,6 +50,7 @@ const VideoCreationWizard = ({ onBack }) => {
   })
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [taskId, setTaskId] = useState(null)
+  const [randomIdea, setRandomIdea] = useState(null)
 
   const presetsQuery = usePresets()
   const voicesQuery = useVoices()
@@ -372,6 +374,55 @@ const VideoCreationWizard = ({ onBack }) => {
               </motion.div>
             )}
 
+            {/* Randomize topic button in step 1 */}
+            {currentStep === 1 && (
+              <motion.div
+                key="randomize-topic"
+                variants={stepVariants}
+                initial="hidden"
+                animate="visible"
+                exit="exit"
+                transition={{ duration: 0.3 }}
+              >
+                <Card className="bg-slate-800/50 border-slate-700">
+                  <CardHeader>
+                    <CardTitle className="text-white flex items-center">
+                      <Dice1ToTwo className="h-5 w-5 mr-2" />
+                      Randomize Topic
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <p className="text-sm text-slate-400">
+                      Generate a random topic and script prompt.
+                    </p>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={async () => {
+                        setIsSubmitting(true)
+                        try {
+                          const result = await ApiService.randomIdea({})
+                          setRandomIdea(result)
+                          setFormData(prev => ({
+                            ...prev,
+                            title: result.title,
+                            prompt: result.topic
+                          }))
+                        } catch (error) {
+                          console.error('Failed to randomize topic:', error)
+                          toast.error('Failed to randomize topic')
+                        } finally {
+                          setIsSubmitting(false)
+                        }
+                      }}
+                    >
+                      Randomize
+                    </Button>
+                  </CardContent>
+                </Card>
+              </motion.div>
+            )}
+
             {/* Step 2: Storyboard */}
             {currentStep === 2 && (
               <motion.div
@@ -394,6 +445,11 @@ const VideoCreationWizard = ({ onBack }) => {
                   </CardHeader>
                   <CardContent className="space-y-4">
                     <Storyboard text={formData.prompt} />
+                    {randomIdea && (
+                      <p className="text-xs text-amber-400">
+                        Randomized idea: <strong>{randomIdea.title}</strong> — {randomIdea.topic}
+                      </p>
+                    )}
                     {scenes.length === 0 && (
                       <p className="text-xs text-amber-400">
                         No scenes parsed. Go back and add bold{' '}

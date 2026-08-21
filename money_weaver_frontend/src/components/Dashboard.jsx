@@ -119,6 +119,10 @@ const Dashboard = ({ onCreateVideo }) => {
   const tasksLoading = tasksQuery.isLoading
   const presetsLoading = presetsQuery.isLoading
 
+  const [seedInput, setSeedInput] = useState('')
+  const [isGeneratingSurprise, setIsGeneratingSurprise] = useState(false)
+  const [surpriseTaskId, setSurpriseTaskId] = useState(null)
+
   const completedCount = projects.filter((p) => p.status === 'completed').length
   const successRate = projects.length ? Math.round((completedCount / projects.length) * 100) : 0
 
@@ -157,6 +161,27 @@ const Dashboard = ({ onCreateVideo }) => {
     } finally {
       useAuthStore.getState().logout()
       navigate('/login')
+    }
+  }
+
+  const handleSurpriseMe = async () => {
+    setIsGeneratingSurprise(true)
+    try {
+      const result = await api.generateSurprise({ seed: seedInput || undefined })
+      setSurpriseTaskId(result.task_id)
+      // Poll task status
+      const poll = setInterval(async () => {
+        const task = await api.request(`/tasks/${surpriseTaskId}`)
+        if (task.status !== 'running' && task.status !== 'processing') {
+          clearInterval(poll)
+          setIsGeneratingSurprise(false)
+          toast.success('Surprise video generated!')
+        }
+      }, POLL_INTERVAL_MS)
+    } catch (error) {
+      console.error('Surprise me error:', error)
+      toast.error('Failed to generate surprise')
+      setIsGeneratingSurprise(false)
     }
   }
 
@@ -491,6 +516,44 @@ const Dashboard = ({ onCreateVideo }) => {
                   <span className="text-sm text-slate-400">ComfyUI</span>
                   <Badge className="bg-green-500 text-white">Ready</Badge>
                 </div>
+              </CardContent>
+            </Card>
+
+            <Card className="bg-slate-800/50 border-slate-700">
+              <CardHeader>
+                <CardTitle className="text-white">Surprise Me</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <p className="text-sm text-slate-400">
+                  Generate a random video idea and script.
+                </p>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    ref={seedRef}
+                    value={seedInput}
+                    onChange={(e) => setSeedInput(e.target.value)}
+                    placeholder="Optional seed..."
+                    className="bg-slate-700 border-slate-600 text-white rounded px-3 py-2 flex-1"
+                  />
+                  <Button
+                    variant="primary"
+                    onClick={handleSurpriseMe}
+                    disabled={isGeneratingSurprise}
+                  >
+                    {isGeneratingSurprise ? (
+                      <Skeleton className="h-4 w-4" />
+                    ) : (
+                      <Zap className="h-4 w-4 mr-2" />
+                    )}
+                    Surprise Me
+                  </Button>
+                </div>
+                {surpriseTaskId && (
+                  <div className="mt-3 text-xs text-slate-400">
+                    Task ID: {surpriseTaskId}
+                  </div>
+                )}
               </CardContent>
             </Card>
           </div>

@@ -73,6 +73,10 @@ const SettingsPage = () => {
   const modelsQuery = useModels({ retry: false })
   const defaultModelQuery = useDefaultModel({ retry: false })
 
+  const [modelDefaults, setModelDefaults] = useState({})
+  const [modelFallbacks, setModelFallbacks] = useState([])
+  const [savingDefaults, setSavingDefaults] = useState(false)
+
   useEffect(() => {
     if (apiKeysQuery.data?.api_keys) {
       setApiKeys(apiKeysQuery.data.api_keys)
@@ -91,6 +95,8 @@ const SettingsPage = () => {
   useEffect(() => {
     if (defaultModelQuery.data?.default_model) {
       setSettings(prev => ({ ...prev, defaultModel: defaultModelQuery.data.default_model }))
+      setModelDefaults(defaultModelQuery.data.defaults || {})
+      setModelFallbacks(defaultModelQuery.data.fallbacks || [])
     }
   }, [defaultModelQuery.data])
 
@@ -159,6 +165,27 @@ const SettingsPage = () => {
     } catch (error) {
       console.error('Failed to test API key:', error)
       setTestResult({ success: false, error: error.message || 'Failed to test API key' })
+    }
+  }
+
+  const saveModelPreferences = async () => {
+    setSavingDefaults(true)
+    try {
+      await api.request("/settings/models", {
+        method: 'PUT',
+        body: {
+          defaults: modelDefaults,
+          fallbacks: modelFallbacks
+        }
+      })
+      toast.success('Model preferences saved successfully!')
+      setModelDefaults(prev => ({}))
+      setModelFallbacks(prev => [])
+    } catch (error) {
+      console.error('Failed to save model preferences:', error)
+      toast.error(error.message || 'Failed to save model preferences')
+    } finally {
+      setSavingDefaults(false)
     }
   }
 
@@ -419,9 +446,42 @@ const SettingsPage = () => {
                     )}
                   </div>
                 </div>
-                <div className="text-sm text-slate-400">
+                <div className="space-y-4">
                   <p>The selected model will be used by default for all AI-powered content generation tasks.</p>
-                  <p className="mt-1">Models are fetched dynamically from your LiteLLM proxy configuration.</p>
+                </div>
+                <div className="border-t border-slate-700 pt-4">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-slate-400">Fallbacks</span>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      disabled={savingDefaults}
+                      onClick={saveModelPreferences}
+                    >
+                      {savingDefaults ? 'Saving...' : 'Save Preferences'}
+                    </Button>
+                  </div>
+                  {savingDefaults ? (
+                    <div className="mt-2 text-sm text-slate-400">Saving model preferences...</div>
+                  ) : (
+                    <div className="mt-2">
+                      <div className="grid grid-cols-2 gap-2">
+                        <Input
+                          value={JSON.stringify(modelDefaults, null, 2)}
+                          onChange={(e) => setModelDefaults(JSON.parse(e.target.value))}
+                          placeholder='{'
+                        />
+                          className="bg-slate-700 border-slate-600 text-white w-full rounded p-2 text-xs resize-none min-h-[120px]"
+                        />
+                        <Input
+                          value={JSON.stringify(modelFallbacks, null, 2)}
+                          onChange={(e) => setModelFallbacks(JSON.parse(e.target.value))}
+                          placeholder='[ "model1", "model2" ]'
+                          className="bg-slate-700 border-slate-600 text-white w-full rounded p-2 text-xs resize-none min-h-[120px]"
+                        />
+                      </div>
+                    </div>
+                  )}
                 </div>
               </CardContent>
             </Card>
