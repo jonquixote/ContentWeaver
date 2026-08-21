@@ -35,6 +35,10 @@ const parseTaskResult = (task) => {
   }
 }
 
+// Give up polling after this many consecutive status-check failures so a
+// persistently erroring endpoint can't keep the upload button stuck forever.
+const YOUTUBE_MAX_POLL_FAILURES = 10
+
 // clips/detect expects a storage key; the project stores a backend-relative
 // URL (/final/..., videos/...) — strip scheme/path prefix and query.
 const toVideoKey = (url) => {
@@ -53,6 +57,7 @@ const ProjectDetail = () => {
   const [isUploadingYoutube, setIsUploadingYoutube] = useState(false)
   const [youtubeTaskId, setYoutubeTaskId] = useState(null)
   const youtubePollRef = useRef(null)
+  const youtubeFailuresRef = useRef(0)
   const [youtubeStatus, setYoutubeStatus] = useState(null)
   const [youtubeUrl, setYoutubeUrl] = useState(null)
 
@@ -129,28 +134,45 @@ const ProjectDetail = () => {
     }
   }
 
+  const stopYoutubePolling = () => {
+    if (youtubePollRef.current) {
+      clearInterval(youtubePollRef.current)
+      youtubePollRef.current = null
+    }
+  }
+
   const pollYoutubeTask = async (taskId) => {
     try {
       const task = await api.getTask(taskId)
       setYoutubeStatus(task.status)
+      youtubeFailuresRef.current = 0
       if (task.status === 'completed') {
         const result = parseTaskResult(task)
         if (result.youtube_url) setYoutubeUrl(result.youtube_url)
         toast.success('YouTube upload completed!')
+        setIsUploadingYoutube(false)
         return true
       }
       if (task.status === 'failed') {
         toast.error(task.error_message || 'YouTube upload failed.')
+        setIsUploadingYoutube(false)
         return true
       }
     } catch (err) {
       console.error('Failed to fetch YouTube task status:', err)
+      youtubeFailuresRef.current += 1
+      if (youtubeFailuresRef.current >= YOUTUBE_MAX_POLL_FAILURES) {
+        toast.error('Lost track of the YouTube upload — stopped checking. Please retry.')
+        setIsUploadingYoutube(false)
+        return true
+      }
     }
     return false
   }
 
   const handleYoutubeUpload = async () => {
     setIsUploadingYoutube(true)
+    youtubeFailuresRef.current = 0
     try {
       const result = await api.uploadToYoutube(project.id, 'private')
       setYoutubeTaskId(result.task_id)
@@ -158,8 +180,7 @@ const ProjectDetail = () => {
       const interval = setInterval(async () => {
         const done = await pollYoutubeTask(result.task_id)
         if (done) {
-          clearInterval(interval)
-          youtubePollRef.current = null
+          stopYoutubePolling()
         }
       }, 3000)
       youtubePollRef.current = interval
@@ -167,6 +188,17 @@ const ProjectDetail = () => {
       console.error('Failed to start YouTube upload:', err)
       toast.error(err.message || 'Failed to start YouTube upload.')
       setIsUploadingYoutube(false)
+    }
+  }
+
+  const handleConnectYoutube = async () => {
+    try {
+      const data = await api.getYoutubeAuthUrl()
+      if (!data?.url) throw new Error('No authorization URL returned')
+      window.open(data.url, '_blank', 'noopener')
+    } catch (err) {
+      console.error('Failed to get YouTube auth URL:', err)
+      toast.error(err.message || 'YouTube connect is not available right now.')
     }
   }
 
@@ -440,6 +472,15 @@ const ProjectDetail = () => {
                   >
                     <Youtube className="h-4 w-4 mr-2" />
                     {isUploadingYoutube ? 'Starting...' : 'Upload to YouTube (private)'}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="w-full border-slate-600 text-slate-300 hover:bg-slate-700"
+                    onClick={handleConnectYoutube}
+                  >
+                    <Youtube className="h-4 w-4 mr-2" />
+                    Connect YouTube
                   </Button>
                   {youtubeTaskId && !youtubeUrl && (
                     <p className="text-xs text-slate-400">

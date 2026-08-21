@@ -4,13 +4,6 @@ const SCENE_PATTERN =
   /\*\*Scene\s+(\d+):\s*([^(]+)\s*\((\d+)s?-(\d+)s?\)\*\*\s*$(.*?)$\s*Voiceover:\s*[""]?(.*?)(?=[""]?$|$)/gims
 const SCENE_LINE_PATTERN = /^\*\*Scene\s+(\d+):\s*([^(\n]+)\s*\((\d+)s?-(\d+)s?\)\*\*(.*)$/i
 const VOICEOVER_LINE_PATTERN = /^voiceover:\s*"?([^"]*)"?\s*$/i
-const BLOCK_TYPE_PATTERNS = {
-  heading: /^\*\*[A-Z].*$/m,
-  action: /^[A-Z][A-Za-z\s]{10,}$/m,
-  character: /^[A-Z][A-Za-z'.-]+:\s*$/m,
-  dialogue: /^["'][^"']*["']\s*:?\s*$/m,
-  camera: /^(FADE IN|FADE OUT|FADE TO|CUT TO|BEGIN|END)$/i
-}
 
 export function jsonToScriptText(json) {
   if (!json || !Array.isArray(json.content)) return ''

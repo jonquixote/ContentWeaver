@@ -16,6 +16,10 @@ export const handlers = [
   http.delete(`${base}/api-keys/:apiKeyId`, () => HttpResponse.json({ ok: true })),
   http.post(`${base}/api-keys/test`, () => HttpResponse.json({ ok: true, valid: true })),
   http.get(`${base}/tasks/:taskId/status`, () => HttpResponse.json({ task_id: 1, status: 'completed', progress: 100 })),
+  http.get(`${base}/tasks/:taskId`, () => HttpResponse.json({ id: 77, status: 'completed', progress: 100 })),
+  http.post(`${base}/generate/surprise`, () => HttpResponse.json({ task_id: 77 }, { status: 202 })),
+  http.get(`${base}/settings/models`, () => HttpResponse.json({ defaults: {}, fallbacks: [] })),
+  http.get(`${base}/youtube/auth-url`, () => HttpResponse.json({ url: 'https://accounts.google.com/o/oauth2/auth?client_id=test' })),
   http.get(`${base}/niches`, () => HttpResponse.json({ niches: ['personal_finance', 'fitness'] })),
   http.get(`${base}/topics`, () => HttpResponse.json({
     topics: [

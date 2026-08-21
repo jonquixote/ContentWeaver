@@ -9,6 +9,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
+import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Separator } from '@/components/ui/separator'
 import { Save, Palette, Bell, Shield, Database, Cloud, Plus, Trash2, Check, X, Cpu, Key } from 'lucide-react'
@@ -75,6 +76,10 @@ const SettingsPage = () => {
 
   const [modelDefaults, setModelDefaults] = useState({})
   const [modelFallbacks, setModelFallbacks] = useState([])
+  // Raw editor strings — kept separate from parsed state so typing never snaps back.
+  const [defaultsRaw, setDefaultsRaw] = useState('{}')
+  const [fallbacksRaw, setFallbacksRaw] = useState('[]')
+  const [jsonError, setJsonError] = useState(null)
   const [savingDefaults, setSavingDefaults] = useState(false)
 
   useEffect(() => {
@@ -95,10 +100,58 @@ const SettingsPage = () => {
   useEffect(() => {
     if (defaultModelQuery.data?.default_model) {
       setSettings(prev => ({ ...prev, defaultModel: defaultModelQuery.data.default_model }))
-      setModelDefaults(defaultModelQuery.data.defaults || {})
-      setModelFallbacks(defaultModelQuery.data.fallbacks || [])
     }
   }, [defaultModelQuery.data])
+
+  // Hydrate defaults/fallbacks from the settings store — /models/default only
+  // returns { default_model } and would lose saved prefs on reload.
+  useEffect(() => {
+    let cancelled = false
+    api.getModelSettings()
+      .then((data) => {
+        if (cancelled) return
+        const defaults = data?.defaults ?? {}
+        const fallbacks = data?.fallbacks ?? []
+        setModelDefaults(defaults)
+        setModelFallbacks(fallbacks)
+        setDefaultsRaw(JSON.stringify(defaults, null, 2))
+        setFallbacksRaw(JSON.stringify(fallbacks, null, 2))
+      })
+      .catch((err) => {
+        console.error('Failed to load model settings:', err)
+      })
+    return () => { cancelled = true }
+  }, [])
+
+  const parseJsonField = (raw, fallbackValue) => {
+    try {
+      return { ok: true, value: JSON.parse(raw) }
+    } catch (err) {
+      return { ok: false, value: fallbackValue, error: err.message }
+    }
+  }
+
+  const handleJsonBlur = (field) => {
+    if (field === 'defaults') {
+      const res = parseJsonField(defaultsRaw, modelDefaults)
+      if (!res.ok || typeof res.value !== 'object' || Array.isArray(res.value) || res.value === null) {
+        setJsonError('Defaults must be a valid JSON object.')
+        return
+      }
+      setJsonError(null)
+      setModelDefaults(res.value)
+      setDefaultsRaw(JSON.stringify(res.value, null, 2))
+    } else {
+      const res = parseJsonField(fallbacksRaw, modelFallbacks)
+      if (!res.ok || !Array.isArray(res.value)) {
+        setJsonError('Fallbacks must be a valid JSON array.')
+        return
+      }
+      setJsonError(null)
+      setModelFallbacks(res.value)
+      setFallbacksRaw(JSON.stringify(res.value, null, 2))
+    }
+  }
 
   const passwordForm = useForm({
     resolver: zodResolver(passwordSchema),
@@ -169,12 +222,27 @@ const SettingsPage = () => {
   }
 
   const saveModelPreferences = async () => {
+    const defaultsRes = parseJsonField(defaultsRaw, null)
+    if (!defaultsRes.ok || typeof defaultsRes.value !== 'object' || Array.isArray(defaultsRes.value) || defaultsRes.value === null) {
+      setJsonError('Defaults must be a valid JSON object.')
+      toast.error('Fix the invalid JSON before saving.')
+      return
+    }
+    const fallbacksRes = parseJsonField(fallbacksRaw, null)
+    if (!fallbacksRes.ok || !Array.isArray(fallbacksRes.value)) {
+      setJsonError('Fallbacks must be a valid JSON array.')
+      toast.error('Fix the invalid JSON before saving.')
+      return
+    }
+    setJsonError(null)
     setSavingDefaults(true)
     try {
       await api.updateModelSettings({
-        defaults: modelDefaults,
-        fallbacks: modelFallbacks
+        defaults: defaultsRes.value,
+        fallbacks: fallbacksRes.value
       })
+      setModelDefaults(defaultsRes.value)
+      setModelFallbacks(fallbacksRes.value)
       toast.success('Model preferences saved successfully!')
     } catch (error) {
       console.error('Failed to save model preferences:', error)
@@ -461,31 +529,24 @@ const SettingsPage = () => {
                   ) : (
                     <div className="mt-2">
                       <div className="grid grid-cols-2 gap-2">
-                        <Input
-                          value={JSON.stringify(modelDefaults, null, 2)}
-                          onChange={(e) => {
-                            try {
-                              setModelDefaults(JSON.parse(e.target.value))
-                            } catch {
-                              /* keep last valid */
-                            }
-                          }}
-                          placeholder='{'
-                          className="bg-slate-700 border-slate-600 text-white w-full rounded p-2 text-xs resize-none min-h-[120px]"
+                        <Textarea
+                          value={defaultsRaw}
+                          onChange={(e) => setDefaultsRaw(e.target.value)}
+                          onBlur={() => handleJsonBlur('defaults')}
+                          placeholder='{ "script": "model-name" }'
+                          className="bg-slate-700 border-slate-600 text-white w-full rounded p-2 text-xs resize-none min-h-[120px] font-mono"
                         />
-                        <Input
-                          value={JSON.stringify(modelFallbacks, null, 2)}
-                          onChange={(e) => {
-                            try {
-                              setModelFallbacks(JSON.parse(e.target.value))
-                            } catch {
-                              /* keep last valid */
-                            }
-                          }}
+                        <Textarea
+                          value={fallbacksRaw}
+                          onChange={(e) => setFallbacksRaw(e.target.value)}
+                          onBlur={() => handleJsonBlur('fallbacks')}
                           placeholder='[ "model1", "model2" ]'
-                          className="bg-slate-700 border-slate-600 text-white w-full rounded p-2 text-xs resize-none min-h-[120px]"
+                          className="bg-slate-700 border-slate-600 text-white w-full rounded p-2 text-xs resize-none min-h-[120px] font-mono"
                         />
                       </div>
+                      {jsonError && (
+                        <p className="mt-2 text-sm text-red-400">{jsonError}</p>
+                      )}
                     </div>
                   )}
                 </div>

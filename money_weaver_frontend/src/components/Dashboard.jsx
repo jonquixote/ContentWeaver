@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -101,6 +102,7 @@ const TaskListSkeleton = () => (
 
 const Dashboard = ({ onCreateVideo }) => {
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
 
   const projectsQuery = useProjects()
   const tasksQuery = useTasks({
@@ -199,6 +201,8 @@ const Dashboard = ({ onCreateVideo }) => {
             surprisePollRef.current = null
             setIsGeneratingSurprise(false)
             toast.success('Surprise video generated!')
+            queryClient.invalidateQueries({ queryKey: ['projects'] })
+            queryClient.invalidateQueries({ queryKey: ['tasks'] })
           }
         } catch {
           clearInterval(poll)

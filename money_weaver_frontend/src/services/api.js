@@ -314,6 +314,10 @@ class ApiService {
     return this.request('/models/default')
   }
 
+  async getModelSettings() {
+    return this.request('/settings/models')
+  }
+
   async updateModelSettings(payload) {
     return this.request('/settings/models', {
       method: 'PUT',
@@ -328,10 +332,14 @@ class ApiService {
     })
   }
 
-  async generateSurprise(payload) {
-    return this.request('/generate/surprise', {
+  // Backend reads seed as an Optional[int] query param; non-numeric seeds are omitted.
+  async generateSurprise({ seed } = {}) {
+    const params = new URLSearchParams()
+    const trimmed = seed === undefined || seed === null ? '' : String(seed).trim()
+    if (/^-?\d+$/.test(trimmed)) params.set('seed', trimmed)
+    const query = params.toString() ? `?${params.toString()}` : ''
+    return this.request(`/generate/surprise${query}`, {
       method: 'POST',
-      body: payload,
     })
   }
 
