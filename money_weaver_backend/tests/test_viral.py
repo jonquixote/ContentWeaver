@@ -106,9 +106,88 @@ def test_total_failure_returns_empty_list(monkeypatch):
 # Stage stubs
 # ---------------------------------------------------------------------------
 
-def test_detect_scenes_stub_returns_list():
-    # Stub until the scenedetect port lands; must not raise on any input.
+def test_detect_scenes_unreadable_file_returns_list():
+    # Real detector must degrade to [] on any unreadable input, never raise.
     assert viral_detector.detect_scenes("/nonexistent.mp4") == []
+
+
+# ---------------------------------------------------------------------------
+# Real scene detection — PySceneDetect ContentDetector (Phase D Task 4)
+# ---------------------------------------------------------------------------
+
+class _FakeFrameTime:
+    def __init__(self, seconds):
+        self._s = seconds
+
+    def get_seconds(self):
+        return self._s
+
+
+def test_detect_scenes_runs_content_detector(monkeypatch):
+    from src.services.video import viral_detector as vd
+
+    class FakeVM:
+        def __init__(self, paths):
+            pass
+
+        def set_downscale_factor(self):
+            pass
+
+        def start(self):
+            pass
+
+    class FakeSM:
+        def __init__(self):
+            self.added = []
+
+        def add_detector(self, d):
+            self.added.append(d)
+
+        def detect_scenes(self, frame_source):
+            pass
+
+        def get_scene_list(self):
+            return [
+                (_FakeFrameTime(0.0), _FakeFrameTime(4.0)),
+                (_FakeFrameTime(4.0), _FakeFrameTime(9.5)),
+            ]
+
+    calls = {}
+
+    def fake_sm():
+        calls['sm'] = FakeSM()
+        return calls['sm']
+
+    monkeypatch.setattr(vd, "_VideoManager", FakeVM)
+    monkeypatch.setattr(vd, "_SceneManager", fake_sm)
+    scenes = vd.detect_scenes("/tmp/fake.mp4")
+    assert scenes == [(0.0, 4.0), (4.0, 9.5)]
+
+
+def test_detect_scenes_merges_short_scenes(monkeypatch):
+    from src.services.video import viral_detector as vd
+    merged = vd._merge_short_scenes(
+        [(0.0, 0.4), (0.4, 2.0), (2.0, 6.0)], min_len=1.0)
+    assert merged[0][0] == 0.0 and merged[-1] == (2.0, 6.0)
+    assert all((e - s) >= 1.0 or i == len(merged) - 1
+               for i, (s, e) in enumerate(merged))
+
+
+def test_no_key_fallback_now_returns_scene_cuts(monkeypatch):
+    from src.services.video import viral_detector as vd
+    monkeypatch.setattr(vd, "transcribe", lambda p: [])
+    monkeypatch.setattr(vd, "detect_scenes",
+                        lambda p: [(0.0, 5.0), (5.0, 10.0)])
+
+    def gemini_fail(t, s):
+        raise RuntimeError("no key")
+
+    monkeypatch.setattr(vd, "call_gemini", gemini_fail)
+    clips = vd.detect_viral_moments("/tmp/v.mp4", count=2)
+    assert clips == [
+        {"start": 0.0, "end": 5.0, "score": 0.0, "hook": ""},
+        {"start": 5.0, "end": 10.0, "score": 0.0, "hook": ""},
+    ]
 
 
 # ---------------------------------------------------------------------------

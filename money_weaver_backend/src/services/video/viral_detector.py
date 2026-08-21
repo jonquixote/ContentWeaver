@@ -31,21 +31,54 @@ def transcribe(path):
     ]
 
 
-def detect_scenes(path):
-    """Scene cut boundaries via scenedetect.
+# Indirection points so tests can patch scenedetect classes without
+# sys.modules hacks.
+def _VideoManager(*args, **kwargs):
+    from scenedetect import VideoManager
+    return VideoManager(*args, **kwargs)
 
-    Returns [(start_sec, end_sec), ...]. STUB for now (mirrors the openshorts
-    port state): the scenedetect import is exercised lazily but the analysis
-    pass is not wired up yet, so this always returns [] until the full port
-    lands.
-    """
+
+def _SceneManager(*args, **kwargs):
+    from scenedetect import SceneManager
+    return SceneManager(*args, **kwargs)
+
+
+def detect_scenes(path):
+    """Scene cut boundaries [(start_sec, end_sec), ...] via PySceneDetect
+    ContentDetector (BSD-3). Returns [] on missing dep or unreadable file."""
     try:
-        from scenedetect import ContentDetector, SceneManager, VideoManager  # noqa: F401
+        from scenedetect import ContentDetector
     except ImportError:
         return []
-    # TODO(port): run VideoManager/SceneManager with ContentDetector and
-    # return the cut list like openshorts scene_worker.
-    return []
+    try:
+        vm = _VideoManager([path])
+        sm = _SceneManager()
+        sm.add_detector(ContentDetector(threshold=27.0))
+        vm.set_downscale_factor()
+        vm.start()
+        sm.detect_scenes(frame_source=vm)
+        scene_list = sm.get_scene_list()
+    except Exception:
+        return []
+    cuts = [(start.get_seconds(), end.get_seconds()) for start, end in scene_list]
+    return _merge_short_scenes(cuts, min_len=1.0)
+
+
+def _merge_short_scenes(scenes, min_len=1.0):
+    """Merge scenes shorter than min_len into their neighbor (openshorts
+    scene_worker behavior). A leading fragment merges forward."""
+    if not scenes:
+        return []
+    merged = []
+    for start, end in scenes:
+        if merged and (end - start) < min_len:
+            merged[-1][1] = max(merged[-1][1], end)
+        else:
+            merged.append([start, end])
+    if len(merged) > 1 and (merged[0][1] - merged[0][0]) < min_len:
+        merged[1][0] = merged[0][0]
+        merged.pop(0)
+    return [(s, e) for s, e in merged]
 
 
 def call_gemini(transcript, scenes):
