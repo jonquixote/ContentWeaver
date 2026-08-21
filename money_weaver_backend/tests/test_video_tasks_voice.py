@@ -150,6 +150,19 @@ class VideoTaskVoiceTest(unittest.TestCase):
         with open(audio, 'rb') as fh:
             self.assertEqual(fh.read(), FAKE_CLONED_WAV)
 
+    def test_assembler_passes_voice_engine_to_synthesize(self):
+        with self.app.app_context():
+            from src.models.voice import Voice
+            voice_model = db.session.get(Voice, self.voice_id)
+            voice_model.voice_engine = 'edge'
+            db.session.commit()
+        with mock.patch('src.services.tts_client.synthesize', return_value=FAKE_CLONED_WAV) as synth:
+            result = self._run_assembler(voice_id=self.voice_id)
+        self.assertEqual(result['status'], 'Video generation completed!')
+        synth.assert_called_once()
+        self.assertEqual(synth.call_args.kwargs.get('voice_engine'), 'edge')
+        vt.advanced_tts_service.generate_tts.assert_not_called()
+
     def test_fallback_when_tts_service_down(self):
         with mock.patch('src.services.tts_client.synthesize',
                         side_effect=RuntimeError('connection refused')):

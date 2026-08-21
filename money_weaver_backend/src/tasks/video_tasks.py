@@ -335,6 +335,7 @@ def generate_assembler_video_task(self, project_id, prompt, duration=30, orienta
                             voiceover_text,
                             ref,
                             voice_id=str(voice_model.id),
+                            voice_engine=getattr(voice_model, "voice_engine", None),
                         )
                         audio_file = write_voice_audio(wav_bytes, prefix=f'voice_{voice_model.id}')
                     else:
