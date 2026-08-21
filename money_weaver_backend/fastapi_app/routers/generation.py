@@ -38,6 +38,8 @@ class AssemblerRequest(BaseModel):
     voice_type: Optional[str] = None
     voice_id: Optional[int] = None
     niche_id: Optional[str] = None
+    webhook_url: Optional[str] = None
+    webhook_secret: Optional[str] = None
 
 
 class GenerativeRequest(BaseModel):
@@ -167,6 +169,13 @@ def _enqueue_assembler(body: dict, user, db, model=None):
         if not re.fullmatch(r"[a-z0-9_-]{1,32}", str(niche_id)):
             raise HTTPException(status_code=400, detail="invalid niche_id")
 
+    # Optional completion webhook. A URL without a signing secret would let
+    # anyone spoof callbacks, so the secret is mandatory when a URL is set.
+    webhook_url = data.get('webhook_url')
+    webhook_secret = data.get('webhook_secret')
+    if webhook_url and not webhook_secret:
+        raise HTTPException(400, 'webhook_secret is required when webhook_url is set')
+
     # Queue Celery task for assembler workflow with video settings
     try:
         celery_task = generate_assembler_video_task.delay(
@@ -179,6 +188,8 @@ def _enqueue_assembler(body: dict, user, db, model=None):
             voice_id=voice.id if voice else None,
             model=model,
             niche_id=niche_id,
+            webhook_url=webhook_url,
+            webhook_secret=webhook_secret,
         )
     except Exception as e:
         db.delete(task)

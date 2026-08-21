@@ -23,6 +23,31 @@ from flask import Flask
 FINAL_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), 'final')
 
 
+def send_webhook(webhook_url, webhook_secret, payload):
+    """POST a task notification signed with hmac_sha256(secret, body).
+
+    The signature covers the exact bytes sent (X-Signature header). Delivery
+    failures are logged and swallowed so they never fail the Celery task.
+    """
+    if not webhook_url:
+        return
+    import hashlib
+    import hmac
+    import httpx
+    body = json.dumps(payload)
+    signature = hmac.new(
+        webhook_secret.encode(), body.encode(), hashlib.sha256).hexdigest()
+    try:
+        httpx.post(
+            webhook_url,
+            content=body,
+            headers={'Content-Type': 'application/json', 'X-Signature': signature},
+            timeout=10,
+        )
+    except Exception as e:
+        print(f"Webhook delivery to {webhook_url} failed: {e}")
+
+
 def write_voice_audio(audio_bytes, prefix='voice', work_dir=None):
     """Persist synthesized audio bytes into the shared work/ dir.
 
@@ -130,7 +155,7 @@ def get_default_model():
     return "groq/llama-3.3-70b-versatile"
 
 @celery_app.task(bind=True, name='src.tasks.video_tasks.generate_assembler_video_task')
-def generate_assembler_video_task(self, project_id, prompt, duration=30, orientation="landscape", width=1920, height=1080, voice_id=None, model=None, niche_id=None):
+def generate_assembler_video_task(self, project_id, prompt, duration=30, orientation="landscape", width=1920, height=1080, voice_id=None, model=None, niche_id=None, webhook_url=None, webhook_secret=None):
     """
     Generate video using the assembler workflow (stock footage + TTS).
 
@@ -371,14 +396,21 @@ def generate_assembler_video_task(self, project_id, prompt, duration=30, orienta
                 task_record.generation_type = 'assembler'
                 task_record.result = json.dumps(result)
                 db.session.commit()
-            
+
+            send_webhook(webhook_url, webhook_secret, {
+                'event': 'task_completed',
+                'task_type': 'assembler_video_generation',
+                'project_id': project_id,
+                'result': result,
+            })
+
             return {
                 'current': 100,
                 'total': 100,
                 'status': 'Video generation completed!',
                 'result': result
             }
-            
+
         except Exception as exc:
             # Update task record and project status to failed
             try:
@@ -394,7 +426,14 @@ def generate_assembler_video_task(self, project_id, prompt, duration=30, orienta
                 db.session.commit()
             except:
                 pass  # Ignore errors in error handling
-                
+
+            send_webhook(webhook_url, webhook_secret, {
+                'event': 'task_failed',
+                'task_type': 'assembler_video_generation',
+                'project_id': project_id,
+                'error': str(exc),
+            })
+
             # Re-raise so Celery marks the task as FAILURE
             raise exc
 
@@ -940,5 +979,83 @@ def detect_viral_clips_task(self, project_id, video_key, count=5):
             if work_dir and os.path.isdir(work_dir):
                 try:
                     os.rmdir(work_dir)
+                except OSError:
+                    pass
+
+
+@celery_app.task(bind=True, name='src.tasks.video_tasks.youtube_upload_task')
+def youtube_upload_task(self, project_id, privacy='private'):
+    """Upload the project's rendered video to YouTube (private by default).
+
+    Resolves project.video_url the same way as reframe_for_vertical (local
+    path wins, storage keys are materialized to a temp .mp4), then delegates
+    to youtube_uploader.upload_video for OAuth credentials + Data API calls.
+    """
+    print(f"Starting youtube_upload with project_id: {project_id}, privacy: {privacy}")
+    app = create_app_context()
+
+    temp_path = None
+    with app.app_context():
+        try:
+            task_record = find_task_record(self.request.id, project_id, 'youtube_upload')
+            if task_record:
+                task_record.status = 'running'
+                task_record.progress = 10
+                db.session.commit()
+
+            self.update_state(state='PROGRESS', meta={'current': 20, 'total': 100, 'status': 'Uploading to YouTube...'})
+
+            project = db.session.get(Project, project_id)
+            if project is None:
+                raise ValueError(f'Project {project_id} not found')
+
+            # Resolve the rendered video: local path wins, otherwise fetch
+            # the storage object into a temp file for the resumable upload.
+            video_path = None
+            ref = project.video_url
+            if ref and os.path.exists(ref):
+                video_path = ref
+            elif ref:
+                data = get_storage().get_object(ref)
+                fd, video_path = tempfile.mkstemp(suffix='.mp4', prefix=f'yt_{project_id}_')
+                temp_path = video_path
+                with os.fdopen(fd, 'wb') as fh:
+                    fh.write(data)
+
+            from src.services.providers import youtube_uploader
+            result = youtube_uploader.upload_video(
+                project_id, privacy=privacy, video_path=video_path)
+
+            if task_record:
+                task_record.status = 'completed'
+                task_record.progress = 100
+                task_record.result = json.dumps(result)
+                db.session.commit()
+
+            return {
+                'current': 100,
+                'total': 100,
+                'status': 'YouTube upload completed!',
+                'result': result
+            }
+
+        except Exception as exc:
+            try:
+                db.session.rollback()
+                task_record = find_task_record(self.request.id, project_id, 'youtube_upload')
+                if task_record:
+                    task_record.status = 'failed'
+                    task_record.error_message = str(exc)
+                    task_record.result = json.dumps({'error': str(exc), 'status': 'failed'})
+                db.session.commit()
+            except Exception:
+                pass  # Ignore errors in error handling
+
+            # Re-raise so Celery propagates a real FAILURE state
+            raise exc
+        finally:
+            if temp_path and os.path.exists(temp_path):
+                try:
+                    os.unlink(temp_path)
                 except OSError:
                     pass

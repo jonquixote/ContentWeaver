@@ -28,6 +28,7 @@ from fastapi_app.routers import (
     uploads,
     users,
     voices,
+    youtube,
 )
 from src.database import db
 
@@ -112,6 +113,7 @@ app.include_router(voices.router)
 app.include_router(uploads.router)
 app.include_router(niches.router)
 app.include_router(topics.router)
+app.include_router(youtube.router)
 
 
 @app.get('/', include_in_schema=False)
