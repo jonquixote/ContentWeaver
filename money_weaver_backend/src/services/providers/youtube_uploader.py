@@ -156,7 +156,7 @@ def handle_callback(code, user_id):
 
 # --- Upload ----------------------------------------------------------------
 
-def _resolve_video_file(video_ref):
+def resolve_video_file(video_ref):
     """Map project.video_url to a local file path.
 
     Local paths pass through; /final/<name> maps into backend final/;
@@ -220,7 +220,7 @@ def upload_video(project_id, privacy='private', video_path=None, transcript=None
     if video_path:
         resolved, temp = video_path, False
     else:
-        resolved, temp = _resolve_video_file(project.video_url)
+        resolved, temp = resolve_video_file(project.video_url)
 
     try:
         media = _media_upload_cls()(

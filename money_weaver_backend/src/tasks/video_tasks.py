@@ -11,6 +11,7 @@ from src.services.script_parsing_service import script_parsing_service
 from src.services.storage import get_storage
 from src.services import comfy_client
 import asyncio
+import re
 import time
 import json
 import os
@@ -21,6 +22,35 @@ from flask import Flask
 
 # Directory where final output videos are stored (served by main.py /final route)
 FINAL_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), 'final')
+
+# Storage namespaces a client-supplied video_key may reference. Mirrors the
+# prefixes the app itself writes (uploads.py, video_tasks.py, generation.py).
+VIDEO_KEY_PATTERN = re.compile(
+    r'^(?:videos|clips|thumbs|voices|generative|uploads|storage)/'
+    r'[A-Za-z0-9._/-]+$'
+)
+
+
+def validate_video_key(video_key):
+    """Return video_key when it is a safe relative storage key; else ValueError.
+
+    Guards the worker against authed users pointing ffmpeg/get_storage at
+    arbitrary local paths: absolute paths, '~', '..' (or empty) segments, and
+    keys outside the app's storage namespaces are all rejected.
+    """
+    if not isinstance(video_key, str) or not video_key:
+        raise ValueError('video_key must be a non-empty string')
+    if os.path.isabs(video_key) or video_key.startswith(('\\', '~')):
+        raise ValueError(
+            f'video_key must be a storage key, not a filesystem path: {video_key!r}')
+    segments = video_key.split('/')
+    if any(seg in ('', '.', '..') for seg in segments):
+        raise ValueError(
+            f'video_key contains an empty or traversal segment: {video_key!r}')
+    if not VIDEO_KEY_PATTERN.match(video_key):
+        raise ValueError(
+            f'video_key is not in an allowed storage namespace: {video_key!r}')
+    return video_key
 
 
 def send_webhook(webhook_url, webhook_secret, payload):
@@ -792,7 +822,8 @@ def reframe_for_vertical(self, project_id, video_key, mode='general'):
 
     GENERAL mode runs an ffmpeg blur-background composite; TRACK mode falls
     back to GENERAL until the YOLO/MediaPipe pipeline is ported. video_key is
-    a storage key (fetched via get_storage) or a local file path.
+    a validated storage key (fetched via get_storage); absolute/traversal
+    paths are rejected by validate_video_key.
     """
     print(f"Starting reframe_for_vertical with project_id: {project_id}, mode: {mode}")
     app = create_app_context()
@@ -808,6 +839,10 @@ def reframe_for_vertical(self, project_id, video_key, mode='general'):
                 db.session.commit()
 
             self.update_state(state='PROGRESS', meta={'current': 30, 'total': 100, 'status': 'Fetching source video...'})
+
+            # Reject path-traversal / absolute / off-namespace keys before
+            # they reach os.path.exists or the storage provider.
+            validate_video_key(video_key)
 
             # Resolve the source video: local path wins, otherwise treat the
             # key as a storage object and materialize it into a temp .mp4.
@@ -872,7 +907,8 @@ def reframe_for_vertical(self, project_id, video_key, mode='general'):
 def detect_viral_clips_task(self, project_id, video_key, count=5):
     """Detect viral moments, cut + reframe each into a vertical clip, upload.
 
-    video_key is a storage key (fetched via get_storage) or a local file path.
+    video_key is a validated storage key (fetched via get_storage);
+    absolute/traversal paths are rejected by validate_video_key.
     Each detected moment is extracted with ffmpeg (-ss/-to), reframed to
     9:16 via reframe_service.reframe(mode="general"), and uploaded to
     clips/{uid}/{pid}/clip_{i}.mp4. Returns {'clips': [...]}.
@@ -895,6 +931,10 @@ def detect_viral_clips_task(self, project_id, video_key, count=5):
             project = db.session.get(Project, project_id)
             if project is None:
                 raise ValueError(f'Project {project_id} not found')
+
+            # Reject path-traversal / absolute / off-namespace keys before
+            # they reach os.path.exists or the storage provider.
+            validate_video_key(video_key)
 
             # Resolve the source video: local path wins, otherwise materialize
             # the storage object into a temp .mp4 (same as reframe_for_vertical).
@@ -1013,7 +1053,7 @@ def youtube_upload_task(self, project_id, privacy='private'):
             # local path wins, /final/<name> maps into backend final/,
             # storage keys are materialized to a temp .mp4 for the upload.
             from src.services.providers import youtube_uploader
-            video_path, is_temp = youtube_uploader._resolve_video_file(
+            video_path, is_temp = youtube_uploader.resolve_video_file(
                 project.video_url)
             if is_temp:
                 temp_path = video_path

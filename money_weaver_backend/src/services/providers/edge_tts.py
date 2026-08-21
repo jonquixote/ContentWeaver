@@ -1,4 +1,7 @@
-"""Edge TTS provider — free, CPU, 300 voices, MIT.
+"""Edge TTS provider — free, CPU, 300 voices.
+
+License: LGPL-3.0 — commercial use permitted as unmodified pip dependency;
+pending owner sign-off.
 
 Wraps `edge-tts==7.x` Communicate API. Returns raw audio bytes (mp3 container
 for MVP; caller `assembly_service` already handles mp3 refs). Provides static

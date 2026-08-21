@@ -350,3 +350,58 @@ def test_viral_task_ffmpeg_failure_records_stderr(tmp_path, monkeypatch):
             if f.startswith(f"viral_{project_id}_")
         ]
         assert leftovers == []
+
+
+def test_viral_task_rejects_invalid_video_key(tmp_path, monkeypatch):
+    """Traversal video_key -> ValueError, failed task record, storage and
+    ffmpeg are never reached."""
+    os.environ.setdefault("SECRET_KEY", "test-secret-key")
+    monkeypatch.setenv("DATABASE_URL", f"sqlite:///{tmp_path / 'viral-guard.db'}")
+
+    vt = pytest.importorskip("src.tasks.video_tasks")
+    from src.database import db
+
+    app = vt.create_app_context()
+    with app.app_context():
+        db.create_all()
+        from src.models.project import Project
+        from src.models.task import Task
+        from src.models.user import User
+
+        owner = User(username="viral-guard", email="viral-guard@t.com",
+                     password_hash="x")
+        db.session.add(owner)
+        db.session.flush()
+        project = Project(title="viral-guard", user_id=owner.id,
+                          voice_type="female", status="draft")
+        db.session.add(project)
+        db.session.flush()
+        record = Task(project_id=project.id,
+                      task_type="viral_clip_detection",
+                      status="pending",
+                      celery_task_id="fake-viral-guard-id")
+        db.session.add(record)
+        db.session.commit()
+        project_id = project.id
+
+    class _BoomStorage:
+        def get_object(self, key):
+            raise AssertionError("storage must not be reached for bad keys")
+
+    monkeypatch.setattr(vt, "get_storage", lambda: _BoomStorage())
+
+    def no_ffmpeg(cmd, *args, **kwargs):
+        raise AssertionError("ffmpeg must not run for bad keys")
+
+    monkeypatch.setattr(vt.subprocess, "run", no_ffmpeg)
+
+    with app.app_context():
+        with pytest.raises(ValueError, match="traversal segment"):
+            vt.detect_viral_clips_task.run.__func__(
+                _FakeTaskSelf("fake-viral-guard-id"), project_id,
+                "videos/../../etc/passwd", count=1)
+
+        failed = vt.find_task_record(
+            "fake-viral-guard-id", project_id, "viral_clip_detection")
+        assert failed.status == "failed"
+        assert "traversal segment" in (failed.error_message or "")

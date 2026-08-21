@@ -16,6 +16,7 @@ import asyncio
 import copy
 import json
 import os
+import uuid
 
 import httpx
 
@@ -40,7 +41,7 @@ def health():
 
 async def queue_workflow(workflow: dict, client_id: str = None):
     """Submit an API-format workflow graph; returns the ComfyUI prompt_id."""
-    client_id = client_id or str(__import__("uuid").uuid4())
+    client_id = client_id or str(uuid.uuid4())
     async with httpx.AsyncClient(timeout=30) as c:
         r = await c.post(
             f"{COMFY_URL}/prompt",
@@ -53,19 +54,21 @@ async def queue_workflow(workflow: dict, client_id: str = None):
 async def poll_result(prompt_id: str, timeout=300):
     """Poll /history until the prompt has outputs or the timeout elapses.
 
-    Returns {"status": "success", "outputs": {node_id: {...}}} on success;
-    raises TimeoutError otherwise.
+    A history entry with status_str == "error" raises immediately (before the
+    outputs check) so failed jobs fail fast instead of hanging for the full
+    timeout. Returns {"status": "success", "outputs": {node_id: {...}}} on
+    success; raises TimeoutError otherwise.
     """
     async with httpx.AsyncClient(timeout=timeout) as c:
         for _ in range(max(1, timeout // 2)):
             r = await c.get(f"{COMFY_URL}/history/{prompt_id}")
             if r.status_code == 200:
                 entry = r.json().get(prompt_id, {})
+                status = entry.get("status", {})
+                if status.get("status_str") == "error":
+                    raise RuntimeError(f"ComfyUI execution failed: {prompt_id}")
                 outputs = entry.get("outputs")
                 if outputs:
-                    status = entry.get("status", {})
-                    if status.get("status_str") == "error":
-                        raise RuntimeError(f"ComfyUI execution failed: {prompt_id}")
                     return {"status": "success", "outputs": outputs}
             await asyncio.sleep(2)
     raise TimeoutError(prompt_id)

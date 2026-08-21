@@ -570,7 +570,7 @@ def test_youtube_upload_task_completes_and_records_result(tmp_path, monkeypatch)
         def get_object(self, key):
             return b'\x00\x00\x00\x18ftypmp42'
 
-    # _resolve_video_file imports get_storage from src.services.storage
+    # resolve_video_file imports get_storage from src.services.storage
     monkeypatch.setattr('src.services.storage.get_storage',
                         lambda: FakeStorage())
 
@@ -590,7 +590,7 @@ def test_youtube_upload_task_completes_and_records_result(tmp_path, monkeypatch)
         done = vt.find_task_record('fake-yt-celery-id', pid, 'youtube_upload')
         assert done.status == 'completed'
         assert json.loads(done.result)['video_id'] == 'xyz789'
-    # materialized temp copy cleaned up (_resolve_video_file prefix)
+    # materialized temp copy cleaned up (resolve_video_file prefix)
     leftovers = [f for f in os.listdir(tempfile.gettempdir())
                  if f.startswith('yt_upload_')]
     assert leftovers == []

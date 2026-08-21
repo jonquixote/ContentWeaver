@@ -191,3 +191,82 @@ def test_reframe_task_ffmpeg_failure_marks_failed_and_cleans_temp(
         assert failed is not None
         assert failed.status == "failed"
         assert "returned non-zero exit status" in (failed.error_message or "")
+
+
+# ---------------------------------------------------------------------------
+# video_key path guard (final review fix)
+# ---------------------------------------------------------------------------
+
+def test_validate_video_key_accepts_namespaced_keys():
+    vt = pytest.importorskip("src.tasks.video_tasks")
+    assert vt.validate_video_key("videos/1/2/9.mp4") == "videos/1/2/9.mp4"
+    assert vt.validate_video_key("clips/1/2/clip_0.mp4")
+    assert vt.validate_video_key("storage/incoming.mp4")
+
+
+@pytest.mark.parametrize("bad", [
+    "/etc/passwd",
+    "../../etc/passwd",
+    "videos/../../etc/passwd",
+    "videos/../secret.mp4",
+    "~/secret.mp4",
+    "C:\\windows\\system32\\config.sys",
+    "",
+    None,
+    123,
+    "not-a-namespace/key.mp4",
+])
+def test_validate_video_key_rejects_unsafe(bad):
+    vt = pytest.importorskip("src.tasks.video_tasks")
+    with pytest.raises(ValueError):
+        vt.validate_video_key(bad)
+
+
+def test_reframe_task_rejects_invalid_video_key(tmp_path, monkeypatch):
+    """Absolute path video_key -> ValueError, failed task record, and the
+    storage provider is never consulted."""
+    os.environ.setdefault("SECRET_KEY", "test-secret-key")
+    monkeypatch.setenv(
+        "DATABASE_URL", f"sqlite:///{tmp_path / 'reframe-guard.db'}")
+
+    vt = pytest.importorskip("src.tasks.video_tasks")
+    from src.database import db
+
+    app = vt.create_app_context()
+    with app.app_context():
+        db.create_all()
+        from src.models.project import Project
+        from src.models.task import Task
+        from src.models.user import User
+
+        owner = User(username="rf-guard", email="rf-guard@t.com",
+                     password_hash="x")
+        db.session.add(owner)
+        db.session.flush()
+        project = Project(title="rf-guard", user_id=owner.id,
+                          voice_type="female", status="draft")
+        db.session.add(project)
+        db.session.flush()
+        record = Task(project_id=project.id, task_type="reframe_vertical",
+                      status="pending",
+                      celery_task_id="fake-reframe-guard-id")
+        db.session.add(record)
+        db.session.commit()
+        project_id = project.id
+
+    class _BoomStorage:
+        def get_object(self, key):
+            raise AssertionError("storage must not be reached for bad keys")
+
+    monkeypatch.setattr(vt, "get_storage", lambda: _BoomStorage())
+
+    with app.app_context():
+        with pytest.raises(ValueError, match="filesystem path"):
+            vt.reframe_for_vertical.run.__func__(
+                _FakeTaskSelf("fake-reframe-guard-id"), project_id,
+                "/etc/passwd", mode="general")
+
+        failed = vt.find_task_record(
+            "fake-reframe-guard-id", project_id, "reframe_vertical")
+        assert failed.status == "failed"
+        assert "filesystem path" in (failed.error_message or "")

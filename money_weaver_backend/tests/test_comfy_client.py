@@ -84,6 +84,23 @@ async def test_poll_result_times_out():
 
 
 @pytest.mark.asyncio
+async def test_poll_result_error_status_raises_promptly():
+    """status_str == 'error' must raise on the FIRST poll even when outputs
+    are present — failed jobs fail fast instead of hanging out the timeout."""
+    fake = {
+        "abc": {
+            "outputs": {"9": {"videos": [{"filename": "out.mp4"}]}},
+            "status": {"status_str": "error"},
+        }
+    }
+    with patch("httpx.AsyncClient.get") as mock_get:
+        mock_get.return_value = _http_response(json_data=fake)
+        with pytest.raises(RuntimeError, match="ComfyUI execution failed"):
+            await comfy_client.poll_result("abc", timeout=300)
+    assert mock_get.call_count == 1  # raised before any retry/sleep cycle
+
+
+@pytest.mark.asyncio
 async def test_get_view_returns_bytes():
     with patch("httpx.AsyncClient.get") as mock_get:
         mock_get.return_value = _http_response(content=b"MP4BYTES")
