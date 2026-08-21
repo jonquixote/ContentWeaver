@@ -166,3 +166,10 @@ def test_render_workflow_does_not_mutate_template():
     snapshot = json.dumps(template)
     cc.render_workflow(template, prompt="p", width=1, height=1, seed=1)
     assert json.dumps(template) == snapshot
+
+def test_template_name_for_model():
+    from src.tasks.video_tasks import _template_name_for_model
+    assert _template_name_for_model("wan22-fp8") == "wan22_fp8_api.json"
+    assert _template_name_for_model("WAN22-FP8-SCALED") == "wan22_fp8_api.json"
+    assert _template_name_for_model(None) == "wan22_t2v_api.json"
+    assert _template_name_for_model("wan22") == "wan22_t2v_api.json"

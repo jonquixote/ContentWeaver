@@ -11,6 +11,7 @@ from src.services.script_parsing_service import script_parsing_service
 from src.services.storage import get_storage
 from src.services import comfy_client
 import asyncio
+import random
 import re
 import time
 import json
@@ -525,6 +526,17 @@ def generate_assembler_video_task(self, project_id, prompt, duration=30, orienta
             # Re-raise so Celery marks the task as FAILURE
             raise exc
 
+def _template_name_for_model(model):
+    """Map the generation `model` param to a ComfyUI workflow template.
+
+    'fp8' anywhere in the (case-insensitive) model string selects the fp8
+    Wan2.2 variant; anything else (including None) uses the default t2v graph.
+    """
+    if model and "fp8" in str(model).lower():
+        return "wan22_fp8_api.json"
+    return "wan22_t2v_api.json"
+
+
 @celery_app.task(bind=True, name='src.tasks.video_tasks.generate_generative_video_task')
 def generate_generative_video_task(self, project_id, prompt, voice_id=None, model=None):
     """
@@ -602,8 +614,14 @@ def generate_generative_video_task(self, project_id, prompt, voice_id=None, mode
             if comfy_ready:
                 # Construct the Wan2.2 API-format workflow with the enhanced prompt
                 self.update_state(state='PROGRESS', meta={'current': 20, 'total': 100, 'status': 'Constructing ComfyUI workflow...'})
+                template_name = _template_name_for_model(model)
                 workflow = comfy_client.render_workflow(
-                    comfy_client.load_workflow(), enhanced_prompt)
+                    comfy_client.load_workflow(template_name),
+                    prompt=enhanced_prompt,
+                    width=1280, height=704,
+                    seed=random.randint(0, 2**32 - 1),
+                    meta=comfy_client.load_template_meta(template_name),
+                )
 
                 # Submit to ComfyUI and wait for completion
                 self.update_state(state='PROGRESS', meta={'current': 30, 'total': 100, 'status': 'Submitting to ComfyUI...'})
