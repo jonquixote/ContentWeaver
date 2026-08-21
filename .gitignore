@@ -54,3 +54,11 @@ test_work/
 money_weaver_backend/tts_service/MOSS-TTS-Nano/
 money_weaver_backend/tts_service/models/
 money_weaver_backend/tts_service/generated_audio/
+
+# Music bed audio is licensed per-install (CC0/Pixabay/FreePD); only
+# music/manifest.yaml + README ship in git. See money_weaver_backend/music/README.md.
+money_weaver_backend/music/*.mp3
+money_weaver_backend/music/*.wav
+money_weaver_backend/music/*.ogg
+money_weaver_backend/music/*.m4a
+money_weaver_backend/music/*.flac

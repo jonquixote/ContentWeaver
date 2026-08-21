@@ -97,6 +97,25 @@ def write_voice_audio(audio_bytes, prefix='voice', work_dir=None):
         fh.write(audio_bytes)
     return path
 
+def _maybe_mix_music(voice_path, niche_id, work_dir=None):
+    """Mix a mood-matched music bed under the voice track. Never raises;
+    returns mixed path or None (silent-video behavior preserved)."""
+    try:
+        import os
+        import subprocess
+        from src.services.video.music_service import mix_voice_music, pick_music
+        music_path = pick_music(niche_id or "general")
+        if not music_path:
+            return None
+        out = os.path.join(work_dir or os.path.dirname(voice_path),
+                           f"mixed_{os.path.basename(voice_path)}")
+        subprocess.run(mix_voice_music(voice_path, music_path, out),
+                       check=True, capture_output=True, timeout=300)
+        return out
+    except Exception:
+        return None
+
+
 def extract_transcript_words(audio_path):
     """Word-level transcript via faster-whisper; [] on any failure."""
     try:
@@ -339,6 +358,14 @@ def generate_assembler_video_task(self, project_id, prompt, duration=30, orienta
             words = extract_transcript_words(audio_file)
             if words:
                 persist_transcript(project_id, words)
+
+            # Mood-matched music bed, ducked under the voice track. No music
+            # library installed => pick_music returns None => silent-video
+            # behavior preserved exactly.
+            mixed_audio = _maybe_mix_music(audio_file, niche_id,
+                                           work_dir=advanced_tts_service.working_dir)
+            if mixed_audio:
+                audio_file = mixed_audio
 
             # Update task record in database
             if task_record:

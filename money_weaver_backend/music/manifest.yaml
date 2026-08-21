@@ -1,0 +1,4 @@
+# Royalty-free music library manifest. Files are NOT in git — drop CC0/
+# licensed tracks next to this file (Pixabay Audio, FreePD) and list them here.
+# moods must match niches/*.yaml `music:` keys (aliases in music_service).
+tracks: []
