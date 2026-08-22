@@ -173,3 +173,82 @@ def test_template_name_for_model():
     assert _template_name_for_model("WAN22-FP8-SCALED") == "wan22_fp8_api.json"
     assert _template_name_for_model(None) == "wan22_t2v_api.json"
     assert _template_name_for_model("wan22") == "wan22_t2v_api.json"
+
+
+def test_enabled_generative_task_full_path(monkeypatch, client, auth_headers, db_session, tmp_path):
+    """COMFY_ENABLED=true + healthy Comfy: task queues, polls, downloads,
+    stores output locally + via storage.put_object, marks record completed.
+    All network faked; Celery invoked synchronously via FakeTaskSelf."""
+    import types
+    from unittest import mock
+
+    from src.models.task import Task
+    from src.tasks import video_tasks as vt
+
+    # -- DB rows: project + pending task record (route normally creates it) --
+    r = client.post('/api/projects', json={'title': 'Gen e2e'},
+                    headers=auth_headers)
+    project_id = r.json()['id']
+
+    with mock.patch.object(vt.generate_generative_video_task, 'delay',
+                           return_value=mock.Mock(id='fake-celery-id')):
+        task_id = client.post('/api/generate/generative',
+                              json={'project_id': project_id, 'prompt': 'cat'},
+                              headers=auth_headers).json()['task_id']
+
+    # -- Flag + gateway mocks -------------------------------------------------
+    monkeypatch.setenv('COMFY_ENABLED', 'true')
+    monkeypatch.setattr(vt, 'FINAL_DIR', str(tmp_path))
+
+    poll_calls = {'n': 0}
+
+    async def fake_queue(wf, cid=None):
+        return 'prompt-1'
+
+    async def fake_poll(pid, timeout=300):
+        # poll_result is the blocking loop inside comfy_client; the task calls
+        # it once and expects a terminal payload back.
+        poll_calls['n'] += 1
+        return {'status': 'success',
+                'outputs': {'9': {'gifs': [{'filename': 'wan_00001.mp4'}]}}}
+
+    async def fake_view(fn):
+        return b'MP4DATA'
+
+    stored = {}
+    fake_storage = mock.Mock()
+    fake_storage.put_object = lambda key, data, content_type=None: stored.setdefault(key, data)
+
+    pipeline = [
+        mock.patch.object(vt.comfy_client, 'health', lambda: True),
+        mock.patch.object(vt.comfy_client, 'queue_workflow', fake_queue),
+        mock.patch.object(vt.comfy_client, 'poll_result', fake_poll),
+        mock.patch.object(vt.comfy_client, 'get_view', fake_view),
+        mock.patch.object(vt.llm_service, 'generate_script',
+                          lambda *a, **k: 'enhanced prompt'),
+        mock.patch.object(vt, 'get_storage', lambda: fake_storage),
+    ]
+    for p in pipeline:
+        p.start()
+    try:
+        fake_self = types.SimpleNamespace(
+            request=types.SimpleNamespace(id='fake-celery-id'))
+        fake_self.update_state = lambda *a, **k: None
+        vt.generate_generative_video_task.run.__func__(fake_self,
+                                                       project_id=project_id,
+                                                       prompt='cat')
+    finally:
+        for p in pipeline:
+            p.stop()
+
+    # -- Assertions -----------------------------------------------------------
+    assert poll_calls['n'] == 1
+
+    local_file = tmp_path / f'project_{project_id}_generative.mp4'
+    assert local_file.exists() and local_file.read_bytes() == b'MP4DATA'
+
+    expected_key = f'generative/{project_id}/project_{project_id}_generative.mp4'
+    assert stored.get(expected_key) == b'MP4DATA'
+
+    task = db_session.get(Task, task_id)
+    assert task is not None and task.status == 'completed'
