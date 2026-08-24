@@ -499,11 +499,16 @@ const SettingsPage = () => {
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                          {availableModels.map((model) => (
-                            <SelectItem key={model} value={model}>
-                              {model}
-                            </SelectItem>
-                          ))}
+                          {availableModels.map((model) => {
+                            const id = typeof model === 'string' ? model : model?.id
+                            const label = typeof model === 'string' ? model : (model?.display_name || model?.id)
+                            if (!id) return null
+                            return (
+                              <SelectItem key={id} value={id}>
+                                {label}
+                              </SelectItem>
+                            )
+                          })}
                         </SelectContent>
                       </Select>
                     )}
