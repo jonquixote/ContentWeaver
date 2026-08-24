@@ -366,7 +366,8 @@ def generate_surprise_video(
         'height': height,
     }
     try:
-        prompt = llm_service.generate_idea(seed=body.get('seed'), model=model)['topic']
+        prompt = llm_service.generate_idea(seed=body.get('seed'), model=model,
+                                           user_id=user.id)['topic']
     except Exception as e:
         raise HTTPException(503, f'Idea generation unavailable: {e}')
     if 'project_id' not in body:

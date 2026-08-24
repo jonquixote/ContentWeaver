@@ -36,9 +36,18 @@ class LLMService:
 
     def api_key_for(self, user_id, provider):
         if user_id:
-            key = ApiKey.query.filter_by(user_id=user_id, provider=provider, is_active=True).first()
-            if key and key.key:
-                return key.key
+            try:
+                # Plain session (works in FastAPI request AND Celery context);
+                # ApiKey.query would require a Flask app context.
+                from fastapi_app.db import db_session
+                from src.services.key_encryption import decrypt_key
+                with db_session() as session:
+                    key = session.query(ApiKey).filter_by(
+                        user_id=user_id, provider=provider, is_active=True).first()
+                    if key and key.key:
+                        return decrypt_key(key.key)
+            except Exception as e:
+                print(f"api_key_for lookup failed for {provider}: {e}")
         env = os.getenv("OPENROUTER_API_KEY") if provider == "openrouter" else os.getenv("NVIDIA_API_KEY")
         return env
 
@@ -55,7 +64,7 @@ class LLMService:
         p.api_key = self.api_key_for(user_id, p.name)
         return p.chat(model, messages, **kwargs)
 
-    def generate_idea(self, seed=None, model=None, language="en"):
+    def generate_idea(self, seed=None, model=None, language="en", user_id=None):
         topic = seed if seed else "a surprising and original topic"
         prompt = ("Suggest one random, engaging short-video topic. "
                   "Return strict JSON with keys: title, topic, script. "
@@ -64,7 +73,7 @@ class LLMService:
                   f"Base it loosely on: {topic}")
         messages = [{"role": "user", "content": prompt}]
         model = model or _registry.best_free() or "openrouter/free"
-        raw = self._chat(None, model, messages, temperature=1.1, max_tokens=1500)
+        raw = self._chat(user_id, model, messages, temperature=1.1, max_tokens=1500)
         try:
             data = json.loads(raw)
             return {"title": data.get("title", "Untitled"),

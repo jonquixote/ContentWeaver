@@ -501,11 +501,12 @@ const SettingsPage = () => {
                         <SelectContent>
                           {availableModels.map((model) => {
                             const id = typeof model === 'string' ? model : model?.id
-                            const label = typeof model === 'string' ? model : (model?.display_name || model?.id)
+                            const name = typeof model === 'string' ? model : (model?.display_name || model?.id)
+                            const provider = typeof model === 'object' && model ? model?.provider : null
                             if (!id) return null
                             return (
                               <SelectItem key={id} value={id}>
-                                {label}
+                                {provider ? `${name} · ${provider}` : name}
                               </SelectItem>
                             )
                           })}

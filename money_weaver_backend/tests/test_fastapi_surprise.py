@@ -10,7 +10,7 @@ def test_surprise_enqueues_assembler(client, auth_headers):
         captured.update(kwargs)
         return type("T", (), {"id": "cel-1"})()
 
-    def fake_generate_idea(seed=None, model=None, language="en"):
+    def fake_generate_idea(seed=None, model=None, language="en", user_id=None):
         return {"title": "Surprise Title", "topic": "Space", "script": "SCENE 1..."}
 
     def fake_pick_model(user_id, prefs, task):
@@ -40,7 +40,7 @@ def test_surprise_generation_type_set(client, auth_headers, db_session):
         captured.update(kwargs)
         return type("T", (), {"id": "cel-1"})()
 
-    def fake_generate_idea(seed=None, model=None, language="en"):
+    def fake_generate_idea(seed=None, model=None, language="en", user_id=None):
         return {"title": "Surprise Title", "topic": "Space", "script": "SCENE 1..."}
 
     def fake_pick_model(user_id, prefs, task):

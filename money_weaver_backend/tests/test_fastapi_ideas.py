@@ -1,6 +1,6 @@
 def test_random_idea(monkeypatch, client, auth_headers):
     monkeypatch.setattr("fastapi_app.routers.ideas.llm_service.generate_idea",
-                        lambda seed=None, model=None, language="en": {"title": "T", "topic": "X", "script": "SCENE 1\n..."})
+                        lambda seed=None, model=None, language="en", user_id=None: {"title": "T", "topic": "X", "script": "SCENE 1\n..."})
     r = client.post("/api/ideas/random", json={"seed": "space"}, headers=auth_headers)
     assert r.status_code == 200
     assert r.json()["title"] == "T"

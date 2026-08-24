@@ -16,6 +16,7 @@ def random_idea(body: dict, user=Depends(current_user), db: Session = Depends(ge
     model = llm_service.pick_model(user.id, prefs_dict, 'idea')
     try:
         return llm_service.generate_idea(seed=body.get('seed'), model=model,
-                                         language=body.get('language', 'en'))
+                                         language=body.get('language', 'en'),
+                                         user_id=user.id)
     except Exception as e:
         raise HTTPException(503, f'Idea generation unavailable: {e}')
