@@ -17,6 +17,8 @@ import { useAuthStore } from '@/store/authStore'
 import VideoProgressTracker from './VideoProgressTracker'
 import ScriptEditor from './ScriptEditor'
 import Storyboard from './Storyboard'
+import ModelPicker from './ModelPicker'
+import { useModels } from '@/hooks/useModels'
 import { usePresets } from '@/hooks/usePresets'
 import { useVoices } from '@/hooks/useVoices'
 import { useNiches } from '@/hooks/useNiches'
@@ -54,13 +56,17 @@ const VideoCreationWizard = ({ onBack }) => {
   const [randomIdea, setRandomIdea] = useState(null)
   const [discoveredTopics, setDiscoveredTopics] = useState([])
   const [isDiscovering, setIsDiscovering] = useState(false)
+  const [showModelOverrides, setShowModelOverrides] = useState(false)
+  const [modelOverrides, setModelOverrides] = useState({ idea: null, script: null })
 
+  const modelsQuery = useModels()
   const presetsQuery = usePresets()
   const voicesQuery = useVoices()
   const nichesQuery = useNiches()
   const presets = presetsQuery.data ?? []
   const voices = voicesQuery.data ?? []
   const niches = nichesQuery.data ?? []
+  const models = modelsQuery.data?.models ?? []
   const presetsLoading = presetsQuery.isLoading
   const voicesLoading = voicesQuery.isLoading
 
@@ -93,6 +99,22 @@ const VideoCreationWizard = ({ onBack }) => {
       })
     }
   }, [nichesQuery.isError, nichesQuery.error])
+
+  useEffect(() => {
+    let cancelled = false
+    ApiService.getModelAssignments()
+      .then((data) => {
+        if (cancelled) return
+        setModelOverrides({
+          idea: data?.assignments?.idea ?? null,
+          script: data?.assignments?.script ?? null,
+        })
+      })
+      .catch((error) => console.error('Failed to load model assignments:', error))
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   const handleDiscoverTopics = async () => {
     if (!formData.nicheId) return
@@ -437,7 +459,9 @@ const VideoCreationWizard = ({ onBack }) => {
                       onClick={async () => {
                         setIsSubmitting(true)
                         try {
-                          const result = await ApiService.randomIdea({})
+                          const result = await ApiService.randomIdea(
+                            modelOverrides.idea ? { model: modelOverrides.idea } : {}
+                          )
                           setRandomIdea(result)
                           setFormData(prev => ({
                             ...prev,
@@ -454,6 +478,56 @@ const VideoCreationWizard = ({ onBack }) => {
                     >
                       Randomize
                     </Button>
+                  </CardContent>
+                </Card>
+              </motion.div>
+            )}
+
+            {/* Advanced: inline model overrides in step 1 */}
+            {currentStep === 1 && (
+              <motion.div
+                key="model-overrides"
+                variants={stepVariants}
+                initial="hidden"
+                animate="visible"
+                exit="exit"
+                transition={{ duration: 0.3 }}
+              >
+                <Card className="bg-slate-800/50 border-slate-700">
+                  <CardContent className="p-4 space-y-3">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setShowModelOverrides((v) => !v)}
+                    >
+                      <Settings className="h-4 w-4 mr-2" />
+                      Advanced: model overrides
+                    </Button>
+                    {showModelOverrides && (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div className="space-y-1">
+                          <Label htmlFor="idea-model" className="text-white">Idea model</Label>
+                          <ModelPicker
+                            models={models}
+                            value={modelOverrides.idea}
+                            onChange={(id) => setModelOverrides((prev) => ({ ...prev, idea: id }))}
+                            kinds={['text']}
+                            compact
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <Label htmlFor="script-model" className="text-white">Script model</Label>
+                          <ModelPicker
+                            models={models}
+                            value={modelOverrides.script}
+                            onChange={(id) => setModelOverrides((prev) => ({ ...prev, script: id }))}
+                            kinds={['text']}
+                            compact
+                          />
+                        </div>
+                      </div>
+                    )}
                   </CardContent>
                 </Card>
               </motion.div>
