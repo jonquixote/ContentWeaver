@@ -49,13 +49,13 @@ def render(endpoint, arguments, api_key=None, work_dir="/tmp", timeout_s=600):
     handle = fal_client.submit(endpoint, arguments, api_key=key)
     deadline = time.time() + timeout_s
     while time.time() < deadline:
-        status = fal_client.status(endpoint, handle.request_id)
+        status = fal_client.status(endpoint, handle.request_id, api_key=api_key)
         if getattr(status, "status", "") == "COMPLETED":
             break
         time.sleep(2)
     else:
         raise RuntimeError(f"fal render timed out after {timeout_s}s")
-    result = fal_client.result(endpoint, handle.request_id)
+    result = fal_client.result(endpoint, handle.request_id, api_key=api_key)
     url = _extract_url(result)
     if not url:
         raise RuntimeError(f"no media url in fal result: {str(result)[:200]}")

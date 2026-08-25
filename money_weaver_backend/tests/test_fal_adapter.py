@@ -10,7 +10,7 @@ def fake_fal(monkeypatch):
     mod.submit = lambda app, argument, api_key=None: calls.update(
         app=app, argument=argument, api_key=api_key) or types.SimpleNamespace(
         request_id="req-123")
-    def _status(app, request_id, logs=False):
+    def _status(app, request_id, logs=False, api_key=None):
         calls['status_polls'] = calls.get('status_polls', 0) + 1
         if calls['status_polls'] < 2:
             return types.SimpleNamespace(status="IN_QUEUE")
@@ -18,7 +18,7 @@ def fake_fal(monkeypatch):
             status = "COMPLETED"
         return Done()
     mod.status = _status
-    mod.result = lambda app, request_id: calls.update(result=True) or {
+    mod.result = lambda app, request_id, api_key=None: calls.update(result=True) or {
         "video": {"url": "https://fake.cdn/out.mp4"}}
     monkeypatch.setitem(sys.modules, "fal_client", mod)
     return calls
