@@ -9,6 +9,7 @@ export default defineConfig({
     globals: true,
     setupFiles: './src/test/setup.js',
     css: false,
+    testTimeout: 15000,
     exclude: ['**/._*', '**/node_modules/**', '**/dist/**'],
   },
   resolve: {

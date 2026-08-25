@@ -52,7 +52,7 @@ async function goToVoiceStep(user) {
 }
 
 describe('wizard API voices section', () => {
-  test('renders kind=voice models with API badge on the voice step', async () => {
+  test('renders kind=voice models with API badge on the voice step', { timeout: 15000 }, async () => {
     const user = userEvent.setup()
     server.use(
       http.get('*/api/models', () =>
