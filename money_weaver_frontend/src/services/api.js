@@ -350,6 +350,13 @@ class ApiService {
     })
   }
 
+  async enhancePrompt(text) {
+    return this.request('/enhance-prompt', {
+      method: 'POST',
+      body: { text },
+    })
+  }
+
   // Backend reads seed as an Optional[int] query param; non-numeric seeds are omitted.
   async generateSurprise({ seed } = {}) {
     const params = new URLSearchParams()

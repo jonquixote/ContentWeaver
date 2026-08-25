@@ -33,6 +33,8 @@ export const handlers = [
   http.get(`${base}/tasks/:taskId/status`, () => HttpResponse.json({ task_id: 1, status: 'completed', progress: 100 })),
   http.get(`${base}/tasks/:taskId`, () => HttpResponse.json({ id: 77, status: 'completed', progress: 100 })),
   http.post(`${base}/generate/surprise`, () => HttpResponse.json({ task_id: 77 }, { status: 202 })),
+  http.post(`${base}/enhance-prompt`, () =>
+    HttpResponse.json({ enhanced: 'An enhanced prompt with vivid detail' })),
   http.get(`${base}/settings/models`, () => HttpResponse.json({ defaults: {}, fallbacks: [] })),
   http.get(`${base}/model-assignments`, () => HttpResponse.json({ assignments: {} })),
   http.put(`${base}/model-assignments`, () => HttpResponse.json({ ok: true })),
