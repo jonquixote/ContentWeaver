@@ -4,7 +4,7 @@ import api from '@/services/api'
 export function useModels(options = {}) {
   return useQuery({
     queryKey: ['models'],
-    queryFn: () => api.getAvailableModels(),
+    queryFn: () => api.getModels(),
     ...options,
   })
 }

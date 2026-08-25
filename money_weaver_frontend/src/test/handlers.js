@@ -9,7 +9,21 @@ export const handlers = [
   http.get(`${base}/presets`, () => HttpResponse.json([{ id: 1, name: 'Preset A' }])),
   http.get(`${base}/voices`, () => HttpResponse.json([{ id: 1, name: 'Voice A' }])),
   http.get(`${base}/users/me`, () => HttpResponse.json({ id: 1, email: 'test@test.com' })),
-  http.get(`${base}/models`, () => HttpResponse.json([{ id: 'gpt-4', name: 'GPT-4' }])),
+  http.get(`${base}/models`, () =>
+    HttpResponse.json({
+      models: [
+        { id: 'poolside/laguna-s-2.1:free', label: 'Laguna S 2.1', provider: 'openrouter', kind: 'text', free: true },
+        {
+          id: 'nvidia/nemotron-3.5-lightning:free',
+          label: 'Nemotron Lightning',
+          provider: 'openrouter',
+          kind: 'text',
+          free: true,
+        },
+        { id: 'fal-ai/wan-t2v', label: 'Wan 2.2 T2V (fal)', provider: 'fal', kind: 'video', free: false },
+      ],
+    }),
+  ),
   http.get(`${base}/models/default`, () => HttpResponse.json({ id: 'gpt-4', name: 'GPT-4' })),
   http.get(`${base}/api-keys/user/:userId`, () => HttpResponse.json([{ id: 1, provider: 'openai' }])),
   http.post(`${base}/api-keys`, () => HttpResponse.json({ id: 2, provider: 'openai' }, { status: 201 })),

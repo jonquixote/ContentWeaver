@@ -6,8 +6,14 @@ import { useModels, useDefaultModel } from '../useModels'
 test('fetches available models', async () => {
   const qc = makeQueryClient()
   const { result } = renderHook(() => useModels(), { wrapper: makeWrapper(qc) })
-  await waitFor(() => expect(result.current.data).toHaveLength(1))
-  expect(result.current.data[0]).toEqual({ id: 'gpt-4', name: 'GPT-4' })
+  await waitFor(() => expect(result.current.data?.models).toHaveLength(3))
+  expect(result.current.data.models[0]).toEqual({
+    id: 'poolside/laguna-s-2.1:free',
+    label: 'Laguna S 2.1',
+    provider: 'openrouter',
+    kind: 'text',
+    free: true,
+  })
 })
 
 test('fetches the default model', async () => {

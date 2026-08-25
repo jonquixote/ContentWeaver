@@ -310,6 +310,13 @@ class ApiService {
     return this.request('/models')
   }
 
+  async getModels(params = {}) {
+    const qs = new URLSearchParams(
+      Object.entries(params).filter(([, v]) => v !== undefined && v !== null),
+    ).toString()
+    return this.request(`/models${qs ? `?${qs}` : ''}`)
+  }
+
   async getDefaultModel() {
     return this.request('/models/default')
   }
