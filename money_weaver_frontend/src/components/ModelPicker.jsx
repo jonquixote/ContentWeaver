@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { ChevronDown, X } from 'lucide-react'
 
 function normalize(model) {
@@ -18,6 +18,32 @@ export default function ModelPicker({ models = [], value, onChange, kinds = null
   const [open, setOpen] = useState(false)
   const [q, setQ] = useState('')
   const [providerFilter, setProviderFilter] = useState('')
+  const rootRef = useRef(null)
+
+  // Fresh search/filter state every time the picker opens.
+  useEffect(() => {
+    if (open) {
+      setQ('')
+      setProviderFilter('')
+    }
+  }, [open])
+
+  // Close on Escape or click outside the picker root.
+  useEffect(() => {
+    if (!open) return
+    const onKeyDown = (e) => {
+      if (e.key === 'Escape') setOpen(false)
+    }
+    const onMouseDown = (e) => {
+      if (rootRef.current && !rootRef.current.contains(e.target)) setOpen(false)
+    }
+    document.addEventListener('keydown', onKeyDown)
+    document.addEventListener('mousedown', onMouseDown)
+    return () => {
+      document.removeEventListener('keydown', onKeyDown)
+      document.removeEventListener('mousedown', onMouseDown)
+    }
+  }, [open])
 
   const allOptions = useMemo(() => models.map(normalize).filter(Boolean), [models])
   const kindFiltered = useMemo(
@@ -57,7 +83,7 @@ export default function ModelPicker({ models = [], value, onChange, kinds = null
     : 'px-3 py-1 text-sm rounded-full border transition-colors'
 
   return (
-    <div className="relative w-full">
+    <div ref={rootRef} className="relative w-full">
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -57,7 +57,10 @@ const VideoCreationWizard = ({ onBack }) => {
   const [discoveredTopics, setDiscoveredTopics] = useState([])
   const [isDiscovering, setIsDiscovering] = useState(false)
   const [showModelOverrides, setShowModelOverrides] = useState(false)
-  const [modelOverrides, setModelOverrides] = useState({ idea: null, script: null })
+  const [modelOverrides, setModelOverrides] = useState({ idea: null, script: null, videoGen: null })
+  // Wizard-session voice model override (fal model id). Display-only for now —
+  // backend task consumption of voice_tts assignments already exists.
+  const [voiceModelOverride, setVoiceModelOverride] = useState(null)
 
   const modelsQuery = useModels()
   const presetsQuery = usePresets()
@@ -72,6 +75,22 @@ const VideoCreationWizard = ({ onBack }) => {
 
   const { scenes } = parseScriptText(formData.prompt)
   const selectedPreset = presets.find((p) => p.id === formData.presetId) ?? null
+  const apiVoiceModels = useMemo(
+    () => (modelsQuery.data?.models ?? []).filter((m) => m?.kind === 'voice'),
+    [modelsQuery.data],
+  )
+
+  // Read-only label for the video_gen assignment (Settings > Model Assignments).
+  const formatVideoGenTarget = (assignmentId) => {
+    if (!assignmentId) return 'Auto'
+    if (assignmentId === 'comfy_local') return 'ComfyUI (local)'
+    if (assignmentId.startsWith('fal-ai/')) {
+      const match = models.find((m) => m?.id === assignmentId)
+      const label = match?.label || match?.display_name || assignmentId
+      return `fal · ${label}`
+    }
+    return 'Auto'
+  }
 
   useEffect(() => {
     if (presetsQuery.isError) {
@@ -108,6 +127,7 @@ const VideoCreationWizard = ({ onBack }) => {
         setModelOverrides({
           idea: data?.assignments?.idea ?? null,
           script: data?.assignments?.script ?? null,
+          videoGen: data?.assignments?.video_gen ?? null,
         })
       })
       .catch((error) => console.error('Failed to load model assignments:', error))
@@ -499,6 +519,7 @@ const VideoCreationWizard = ({ onBack }) => {
                       type="button"
                       variant="ghost"
                       size="sm"
+                      aria-expanded={showModelOverrides}
                       onClick={() => setShowModelOverrides((v) => !v)}
                     >
                       <Settings className="h-4 w-4 mr-2" />
@@ -705,6 +726,12 @@ const VideoCreationWizard = ({ onBack }) => {
                           </div>
                         </div>
                       </RadioGroup>
+                      <p
+                        data-testid="video-generation-target"
+                        className="text-xs text-slate-400"
+                      >
+                        Video generation: {formatVideoGenTarget(modelOverrides.videoGen)}
+                      </p>
                     </div>
 
                     <div className="space-y-2">
@@ -869,6 +896,44 @@ const VideoCreationWizard = ({ onBack }) => {
                           </Select>
                         )}
                       </div>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label className="text-white">API Voices</Label>
+                      {apiVoiceModels.length === 0 ? (
+                        <p className="text-sm text-slate-400 p-3 rounded-lg bg-slate-700/40 border border-slate-600">
+                          No API voices available from your configured providers.
+                        </p>
+                      ) : (
+                        <div className="grid gap-2">
+                          {apiVoiceModels.map((model) => {
+                            const active = voiceModelOverride === model.id
+                            return (
+                              <button
+                                key={model.id}
+                                type="button"
+                                aria-pressed={active}
+                                onClick={() => setVoiceModelOverride(active ? null : model.id)}
+                                className={`flex items-center justify-between gap-3 text-left p-3 rounded-lg border transition-colors ${
+                                  active
+                                    ? 'border-purple-500 bg-purple-900/30'
+                                    : 'border-slate-600 hover:border-slate-500'
+                                }`}
+                              >
+                                <span className="min-w-0">
+                                  <span className="block truncate text-sm text-white font-medium">
+                                    {model.label || model.display_name || model.id}
+                                  </span>
+                                  {model.provider && (
+                                    <span className="block truncate text-xs text-slate-400">{model.provider}</span>
+                                  )}
+                                </span>
+                                <Badge className="shrink-0 bg-indigo-500 text-white">API</Badge>
+                              </button>
+                            )
+                          })}
+                        </div>
+                      )}
                     </div>
                   </CardContent>
                 </Card>

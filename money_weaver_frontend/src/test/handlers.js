@@ -20,7 +20,8 @@ export const handlers = [
           kind: 'text',
           free: true,
         },
-        { id: 'fal-ai/wan-t2v', label: 'Wan 2.2 T2V (fal)', provider: 'fal', kind: 'video', free: false },
+        // display_name instead of label exercises the normalize bridge.
+        { id: 'fal-ai/wan-t2v', display_name: 'Wan 2.2 T2V (fal)', provider: 'fal', kind: 'video', free: false },
       ],
     }),
   ),
