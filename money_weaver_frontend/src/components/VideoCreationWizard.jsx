@@ -232,6 +232,7 @@ const VideoCreationWizard = ({ onBack }) => {
 
   // Keep editor + prompt in sync when the prompt text is replaced externally.
   const handleEnhancedPrompt = (text) => {
+    if (formData.scriptHtml && !window.confirm('Enhance will replace the current script. Continue?')) return
     handleScriptChange(scriptTextToHtml(text), text)
   }
 
