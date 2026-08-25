@@ -71,19 +71,25 @@ Every generative affordance works from every surface, respects assignments, and 
 Replace the raw-textarea script editing experience with block-based screenplay editing that serializes to exactly what `script_parsing_service` parses.
 
 ### Blocks (TipTap custom nodes)
+
+PLANNING DISCOVERY: two script parsers exist — frontend `src/lib/scriptParser.js` (storyboard
+step) and backend `script_parsing_service.py` — and BOTH accept the same core canon:
+`**Scene N: Name (Xs-Ys)**` headers + `Voiceover: "..."` lines (backend additionally accepts
+`[DIALOGUE: ...]`, UPPERCASE character names, transitions). G3 serializes to this
+dual-compatible canon so storyboard AND assembler keep working from one document:
+
 | Block | Serialized form | Prefill pattern |
 |---|---|---|
-| sceneHeading | `[SCENE: INT. LOCATION - DAY]` | `INT. / EXT. ... - DAY` |
-| action | `[ACTION: ...]` | free prose |
-| character | `NAME:` line | UPPERCASE name |
-| dialogue | indented line under character | prose |
-| transition | `[TRANSITION: CUT TO:]` | `CUT TO: / FADE OUT.` |
-| parenthetical | `(beat)` under character | short direction |
+| sceneHeader | `**Scene 1: INT. LOCATION - DAY (0s-5s)**` | auto-numbered; durations auto-sum |
+| voiceover | `Voiceover: "..."` | empty quotes to fill |
+| visual | plain prose line(s) under header | shot description |
+| dialogue | `CHARACTER NAME:` line + `[DIALOGUE: line]` | name autocomplete from doc |
+| transition | `CUT TO:` / `FADE OUT.` | dropdown of common transitions |
 
 - Palette above editor: one chip per block type. Each chip is HTML5-draggable (drop at caret position inserts node there) AND click-to-insert (inserts after the block containing the cursor).
-- Character autocomplete: TipTap suggestion utility sourcing distinct CHARACTER names already present in the document.
-- Load path: parse existing bracketed/plain screenplay text (reuse parsing rules from script_parsing_service patterns) into block nodes. Save path: serialize nodes back to canonical plain text before persisting to Project.script.
-- Empty editor defaults to one sceneHeading + one action block (never a bare textarea).
+- Character autocomplete: TipTap suggestion utility sourcing distinct character names already present in the document.
+- Load path: parse existing scene-format text (patterns above) into block nodes. Save path: serialize nodes back to canonical plain text before persisting to Project.script.
+- Empty editor defaults to one sceneHeader + one voiceover block (never a bare textarea).
 
 ### Testing
 - Unit: serializer round-trip (blocks→text→blocks stable); parser compatibility fixtures for every block type; autocomplete source extraction.
