@@ -82,6 +82,9 @@ edge-tts==7.2.1
 # Heavy (torch/torchaudio). Install manually on workers that need cloning:
 #   pip install chatterbox-tts==0.1.7   # verify latest via `pip index versions chatterbox-tts`
 # Then set CHATTERBOX_ENABLED=true.
+# --- Optional: fal.ai voice/video generation (fal-client, Apache-2.0) ---
+#   pip install fal-client==1.0.1   # verify latest via PyPI before enabling
+# Per-user keys via API keys page (provider 'fal') or env FAL_KEY.
 # --- DEV NOTE: MOSS-TTS inference microservice ---
 # The TTS microservice lives in money_weaver_backend/tts_service/ and runs in its
 # OWN venv (tts_service/.venv, python 3.12). Its deps (torch==2.2.2, torchaudio==2.2.2,
