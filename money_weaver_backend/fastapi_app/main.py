@@ -14,6 +14,7 @@ from fastapi_app.errors import register_error_handlers
 from fastapi_app.routers import (
     api_keys,
     auth,
+    enhance,
     generation,
     health,
     ideas,
@@ -98,6 +99,7 @@ app.add_middleware(
 
 app.include_router(health.router)
 app.include_router(auth.router)
+app.include_router(enhance.router)
 app.include_router(ideas.router)
 app.include_router(media.router)
 app.include_router(users.router)
