@@ -84,7 +84,9 @@ class LLMService:
                         return decrypt_key(key.key)
             except Exception as e:
                 print(f"api_key_for lookup failed for {provider}: {e}")
-        env = os.getenv("OPENROUTER_API_KEY") if provider == "openrouter" else os.getenv("NVIDIA_API_KEY")
+        env_names = {"openrouter": "OPENROUTER_API_KEY", "nvidia": "NVIDIA_API_KEY",
+                     "fal": "FAL_KEY"}
+        env = os.getenv(env_names[provider]) if provider in env_names else None
         return env
 
     def pick_model(self, user_id, prefs, task):
