@@ -12,11 +12,12 @@ import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Separator } from '@/components/ui/separator'
-import { Save, Palette, Bell, Shield, Database, Cloud, Plus, Trash2, Check, X, Cpu, Key } from 'lucide-react'
+import { Save, Palette, Bell, Shield, Database, Cloud, Plus, Trash2, Check, X, Cpu, Key, ListChecks } from 'lucide-react'
 import api from '@/services/api'
 import { useAuthStore } from '@/store/authStore'
 import { useApiKeys, useAddApiKey, useDeleteApiKey, useTestApiKey } from '@/hooks/useApiKeys'
 import { useModels, useDefaultModel } from '@/hooks/useModels'
+import ModelPicker from '@/components/ModelPicker'
 
 const FALLBACK_MODELS = [
   "gpt-4", "gpt-3.5-turbo",
@@ -27,6 +28,24 @@ const FALLBACK_MODELS = [
   "groq/llama-3.1-405b-reasoning",
   "groq/mixtral-8x7b-32768",
   "groq/gemma-7b-it"
+]
+
+const ASSIGNMENT_ROWS = [
+  { task: 'idea', label: 'Idea Generation', kinds: ['text'] },
+  { task: 'script', label: 'Script Writing', kinds: ['text'] },
+  { task: 'enhance', label: 'Prompt Enhance', kinds: ['text'] },
+  {
+    task: 'voice_tts',
+    label: 'Voice TTS',
+    kinds: ['voice'],
+    extra: [{ id: 'auto', label: 'Local chain (auto)', provider: 'local', kind: 'voice', free: true }],
+  },
+  {
+    task: 'video_gen',
+    label: 'Video Generation',
+    kinds: ['video'],
+    extra: [{ id: 'comfy_local', label: 'ComfyUI (local)', provider: 'local', kind: 'video', free: true }],
+  },
 ]
 
 const passwordSchema = z
@@ -81,6 +100,8 @@ const SettingsPage = () => {
   const [fallbacksRaw, setFallbacksRaw] = useState('[]')
   const [jsonError, setJsonError] = useState(null)
   const [savingDefaults, setSavingDefaults] = useState(false)
+  const [assignments, setAssignments] = useState({})
+  const [savingAssignments, setSavingAssignments] = useState(false)
 
   useEffect(() => {
     if (apiKeysQuery.data?.api_keys) {
@@ -122,6 +143,42 @@ const SettingsPage = () => {
       })
     return () => { cancelled = true }
   }, [])
+
+  // Load per-task model assignments for the Model Assignments card.
+  useEffect(() => {
+    let cancelled = false
+    api.getModelAssignments()
+      .then((data) => {
+        if (!cancelled) setAssignments(data?.assignments ?? {})
+      })
+      .catch((err) => {
+        console.error('Failed to load model assignments:', err)
+      })
+    return () => { cancelled = true }
+  }, [])
+
+  const handleAssignmentChange = (task, modelId) => {
+    setAssignments((prev) => ({ ...prev, [task]: modelId }))
+  }
+
+  const saveAssignments = async () => {
+    setSavingAssignments(true)
+    try {
+      await api.updateModelAssignments({
+        assignments: Object.fromEntries(
+          ASSIGNMENT_ROWS
+            .map(({ task }) => [task, assignments[task]])
+            .filter(([, modelId]) => Boolean(modelId)),
+        ),
+      })
+      toast.success('Model assignments saved successfully!')
+    } catch (error) {
+      console.error('Failed to save model assignments:', error)
+      toast.error(error.message || 'Failed to save model assignments')
+    } finally {
+      setSavingAssignments(false)
+    }
+  }
 
   const parseJsonField = (raw, fallbackValue) => {
     try {
@@ -556,6 +613,46 @@ const SettingsPage = () => {
                     </div>
                   )}
                 </div>
+              </CardContent>
+            </Card>
+
+            {/* Model Assignments */}
+            <Card className="bg-slate-800/50 border-slate-700">
+              <CardHeader>
+                <CardTitle className="text-white flex items-center">
+                  <ListChecks className="h-5 w-5 mr-2" />
+                  Model Assignments
+                </CardTitle>
+                <CardDescription className="text-slate-400">
+                  Choose which model each generative task uses
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                {ASSIGNMENT_ROWS.map((row) => (
+                  <div key={row.task} className="flex items-center justify-between gap-4">
+                    <div className="shrink-0">
+                      <Label className="text-white">{row.label}</Label>
+                      <p className="text-sm text-slate-400">Model used for {row.label.toLowerCase()}</p>
+                    </div>
+                    <div className="w-72">
+                      <ModelPicker
+                        models={[...(modelsQuery.data?.models ?? []), ...(row.extra ?? [])]}
+                        value={assignments[row.task] || null}
+                        onChange={(modelId) => handleAssignmentChange(row.task, modelId)}
+                        kinds={row.kinds}
+                        compact
+                      />
+                    </div>
+                  </div>
+                ))}
+                <Button
+                  onClick={saveAssignments}
+                  disabled={savingAssignments}
+                  className="bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600"
+                >
+                  <Save className="h-4 w-4 mr-2" />
+                  {savingAssignments ? 'Saving...' : 'Save Assignments'}
+                </Button>
               </CardContent>
             </Card>
 

@@ -33,6 +33,8 @@ export const handlers = [
   http.get(`${base}/tasks/:taskId`, () => HttpResponse.json({ id: 77, status: 'completed', progress: 100 })),
   http.post(`${base}/generate/surprise`, () => HttpResponse.json({ task_id: 77 }, { status: 202 })),
   http.get(`${base}/settings/models`, () => HttpResponse.json({ defaults: {}, fallbacks: [] })),
+  http.get(`${base}/model-assignments`, () => HttpResponse.json({ assignments: {} })),
+  http.put(`${base}/model-assignments`, () => HttpResponse.json({ ok: true })),
   http.get(`${base}/youtube/auth-url`, () => HttpResponse.json({ url: 'https://accounts.google.com/o/oauth2/auth?client_id=test' })),
   http.get(`${base}/niches`, () => HttpResponse.json({ niches: ['personal_finance', 'fitness'] })),
   http.get(`${base}/topics`, () => HttpResponse.json({

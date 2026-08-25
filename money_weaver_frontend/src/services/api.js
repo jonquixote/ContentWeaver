@@ -332,6 +332,17 @@ class ApiService {
     })
   }
 
+  async getModelAssignments() {
+    return this.request('/model-assignments')
+  }
+
+  async updateModelAssignments(payload) {
+    return this.request('/model-assignments', {
+      method: 'PUT',
+      body: payload,
+    })
+  }
+
   async randomIdea(payload) {
     return this.request('/ideas/random', {
       method: 'POST',
