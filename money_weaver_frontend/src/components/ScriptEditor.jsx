@@ -1,3 +1,4 @@
+import { useEffect } from 'react'
 import { useEditor, EditorContent } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
 import Placeholder from '@tiptap/extension-placeholder'
@@ -16,6 +17,15 @@ const ScriptEditor = ({ value = '', onChange, placeholder = 'Write your script. 
       },
     },
   })
+
+  // External value updates (e.g. Draft Script / Enhance) must reach the editor,
+  // which is otherwise only initialized once from the initial value.
+  useEffect(() => {
+    if (!editor) return
+    if ((value || '') !== editor.getHTML()) {
+      editor.commands.setContent(value || '')
+    }
+  }, [value, editor])
 
   return (
     <div className="bg-slate-700 border border-slate-600 rounded-md overflow-hidden">

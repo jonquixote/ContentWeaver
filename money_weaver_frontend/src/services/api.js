@@ -357,6 +357,13 @@ class ApiService {
     })
   }
 
+  async draftScript(payload) {
+    return this.request('/scripts/draft', {
+      method: 'POST',
+      body: payload,
+    })
+  }
+
   // Backend reads seed as an Optional[int] query param; non-numeric seeds are omitted.
   async generateSurprise({ seed } = {}) {
     const params = new URLSearchParams()

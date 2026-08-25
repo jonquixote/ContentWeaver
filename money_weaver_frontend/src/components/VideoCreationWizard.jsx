@@ -8,11 +8,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
-import { ArrowLeft, ArrowRight, Video, Zap, Play, Settings, PenLine, Film, Mic, Check, Dices, Search } from 'lucide-react'
+import { ArrowLeft, ArrowRight, Video, Zap, Play, Settings, PenLine, Film, Mic, Check, Dices, Search, Sparkles } from 'lucide-react'
 // eslint-disable-next-line no-unused-vars
 import { motion, AnimatePresence } from 'framer-motion'
 import { toast } from 'sonner'
 import ApiService from '../services/api'
+import EnhanceButton from './EnhanceButton'
 import { useAuthStore } from '@/store/authStore'
 import VideoProgressTracker from './VideoProgressTracker'
 import ScriptEditor from './ScriptEditor'
@@ -31,6 +32,22 @@ const STEPS = [
   { id: 3, label: 'Preset & Voice', icon: Mic },
   { id: 4, label: 'Review & Generate', icon: Play },
 ]
+
+// Plain-text script -> editor HTML. Bold **Scene N** lines become <strong> paragraphs;
+// everything else becomes a plain paragraph. Input is HTML-escaped.
+const scriptTextToHtml = (text) => {
+  const esc = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;')
+  const html = (text || '')
+    .split(/\n/)
+    .filter((line) => line.trim())
+    .map((line) =>
+      /^\*\*.*\*\*$/.test(line.trim())
+        ? `<p><strong>${line.trim().slice(2, -2)}</strong></p>`
+        : `<p>${line.trim()}</p>`,
+    )
+    .join('')
+  return html ? `<div>${html}</div>` : ''
+}
 
 const VideoCreationWizard = ({ onBack }) => {
   const [currentStep, setCurrentStep] = useState(1)
@@ -56,6 +73,7 @@ const VideoCreationWizard = ({ onBack }) => {
   const [randomIdea, setRandomIdea] = useState(null)
   const [discoveredTopics, setDiscoveredTopics] = useState([])
   const [isDiscovering, setIsDiscovering] = useState(false)
+  const [isDrafting, setIsDrafting] = useState(false)
   const [showModelOverrides, setShowModelOverrides] = useState(false)
   const [modelOverrides, setModelOverrides] = useState({ idea: null, script: null, videoGen: null })
   // Wizard-session voice model override (fal model id). Display-only for now —
@@ -209,6 +227,34 @@ const VideoCreationWizard = ({ onBack }) => {
 
   const handleScriptChange = (html, text) => {
     setFormData(prev => ({ ...prev, scriptHtml: html, prompt: text }))
+  }
+
+  // Keep editor + prompt in sync when the prompt text is replaced externally.
+  const handleEnhancedPrompt = (text) => {
+    handleScriptChange(scriptTextToHtml(text), text)
+  }
+
+  const hasTopic = Boolean(formData.prompt.trim() || formData.title.trim())
+
+  const handleDraftScript = async () => {
+    const topic = formData.prompt.trim() || formData.title.trim()
+    if (!topic || isDrafting) return
+    if (formData.scriptHtml && !window.confirm('Replace the current script with a generated draft?')) return
+    setIsDrafting(true)
+    try {
+      const result = await ApiService.draftScript({
+        topic,
+        duration: parseInt(formData.duration),
+        niche_id: formData.nicheId || undefined,
+      })
+      const script = result?.script ?? ''
+      handleScriptChange(scriptTextToHtml(script), script)
+    } catch (error) {
+      console.error('Failed to draft script:', error)
+      toast.error(error.message || 'Failed to draft script')
+    } finally {
+      setIsDrafting(false)
+    }
   }
 
   const canProceed = () => {
@@ -436,7 +482,14 @@ const VideoCreationWizard = ({ onBack }) => {
                       </div>
 
                       <div className="space-y-2">
-                        <Label htmlFor="script" className="text-white">Video Script</Label>
+                        <div className="flex items-center justify-between">
+                          <Label htmlFor="script" className="text-white">Video Script</Label>
+                          <EnhanceButton
+                            text={formData.prompt}
+                            onEnhanced={handleEnhancedPrompt}
+                            label="Enhance prompt"
+                          />
+                        </div>
                         <ScriptEditor
                           value={formData.scriptHtml}
                           onChange={handleScriptChange}
@@ -473,31 +526,42 @@ const VideoCreationWizard = ({ onBack }) => {
                     <p className="text-sm text-slate-400">
                       Generate a random topic and script prompt.
                     </p>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={async () => {
-                        setIsSubmitting(true)
-                        try {
-                          const result = await ApiService.randomIdea(
-                            modelOverrides.idea ? { model: modelOverrides.idea } : {}
-                          )
-                          setRandomIdea(result)
-                          setFormData(prev => ({
-                            ...prev,
-                            title: result.title,
-                            prompt: result.topic
-                          }))
-                        } catch (error) {
-                          console.error('Failed to randomize topic:', error)
-                          toast.error('Failed to randomize topic')
-                        } finally {
-                          setIsSubmitting(false)
-                        }
-                      }}
-                    >
-                      Randomize
-                    </Button>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={async () => {
+                          setIsSubmitting(true)
+                          try {
+                            const result = await ApiService.randomIdea(
+                              modelOverrides.idea ? { model: modelOverrides.idea } : {}
+                            )
+                            setRandomIdea(result)
+                            setFormData(prev => ({
+                              ...prev,
+                              title: result.title,
+                              prompt: result.topic
+                            }))
+                          } catch (error) {
+                            console.error('Failed to randomize topic:', error)
+                            toast.error('Failed to randomize topic')
+                          } finally {
+                            setIsSubmitting(false)
+                          }
+                        }}
+                      >
+                        Randomize
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={handleDraftScript}
+                        disabled={!hasTopic || isDrafting}
+                      >
+                        <Sparkles className="h-4 w-4 mr-2" />
+                        {isDrafting ? 'Drafting...' : 'Draft Script'}
+                      </Button>
+                    </div>
                   </CardContent>
                 </Card>
               </motion.div>
