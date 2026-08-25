@@ -249,7 +249,7 @@ def get_default_model():
     return "groq/llama-3.3-70b-versatile"
 
 @celery_app.task(bind=True, name='src.tasks.video_tasks.generate_assembler_video_task')
-def generate_assembler_video_task(self, project_id, prompt, duration=30, orientation="landscape", width=1920, height=1080, voice_id=None, model=None, niche_id=None, webhook_url=None, webhook_secret=None):
+def generate_assembler_video_task(self, project_id, prompt, duration=30, orientation="landscape", width=1920, height=1080, voice_id=None, model=None, voice_override=None, niche_id=None, webhook_url=None, webhook_secret=None):
     """
     Generate video using the assembler workflow (stock footage + TTS).
 
@@ -364,6 +364,22 @@ def generate_assembler_video_task(self, project_id, prompt, duration=30, orienta
                         print(f"Voice {voice_id} not found / not owned by user {user_id} / reference missing; falling back to Kokoro")
                 except Exception as e:
                     print(f"MOSS-TTS unavailable, falling back to Kokoro for voice_id={voice_id}: {e}")
+                    audio_file = None
+
+            # Wizard voice override: an explicit fal-ai/* endpoint chosen in
+            # the UI beats the stored voice_tts assignment.
+            if not audio_file and voice_override and str(voice_override).startswith('fal-ai/'):
+                try:
+                    wav_path = fal_adapter.render(
+                        voice_override,
+                        {'prompt': voiceover_text},
+                        api_key=llm_service.api_key_for(user_id, 'fal'),
+                        work_dir=advanced_tts_service.working_dir,
+                    )
+                    with open(wav_path, 'rb') as fh:
+                        audio_file = write_voice_audio(fh.read(), prefix='voice_fal')
+                except Exception as e:
+                    print(f"fal TTS unavailable for voice_override {voice_override}, falling back: {e}")
                     audio_file = None
 
             # Assignment-driven TTS: when the owned-voice path produced no

@@ -311,6 +311,7 @@ const VideoCreationWizard = ({ onBack }) => {
         response = await ApiService.generateAssemblerVideo(project.id, formData.prompt, {
           voice_type: formData.voiceType,
           voice_id: formData.voiceId,
+          voice_override: voiceModelOverride || undefined,
           duration: parseInt(formData.duration),
           orientation: formData.orientation,
           width: parseInt(formData.width),

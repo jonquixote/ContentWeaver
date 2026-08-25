@@ -37,6 +37,7 @@ class AssemblerRequest(BaseModel):
     height: Optional[int] = None
     voice_type: Optional[str] = None
     voice_id: Optional[int] = None
+    voice_override: Optional[str] = None
     niche_id: Optional[str] = None
     webhook_url: Optional[str] = None
     webhook_secret: Optional[str] = None
@@ -187,6 +188,7 @@ def _enqueue_assembler(body: dict, user, db, model=None):
             height=height,
             voice_id=voice.id if voice else None,
             model=model,
+            voice_override=data.get('voice_override'),
             niche_id=niche_id,
             webhook_url=webhook_url,
             webhook_secret=webhook_secret,

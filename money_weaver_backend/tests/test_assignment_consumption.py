@@ -171,7 +171,7 @@ _ASSEMBLER_MEDIA = dict(
 
 
 def _run_assembler_with_mocks(monkeypatch, tmp_path, project_id, assignments,
-                              explicit_model=None):
+                              explicit_model=None, voice_override=None):
     """Run generate_assembler_video_task with resolve_model_for returning
     `assignments` (task->model) and llm_service mocked. Returns the
     generate_script Mock for call assertions."""
@@ -194,6 +194,14 @@ def _run_assembler_with_mocks(monkeypatch, tmp_path, project_id, assignments,
     vt.assembly_service.assemble_video.return_value = str(tmp_path / 'out.mp4')
     (tmp_path / 'kokoro.wav').write_bytes(b'RIFF\x00')
     (tmp_path / 'out.mp4').write_bytes(b'\x00\x00\x00\x18ftypmp42')
+    fal_calls = []
+
+    def fake_fal_render(ep, args, api_key=None, work_dir=None):
+        fal_calls.append(ep)
+        return str(tmp_path / 'fal.wav')
+
+    monkeypatch.setattr(vt.fal_adapter, 'render', fake_fal_render)
+    (tmp_path / 'fal.wav').write_bytes(b'RIFF\x00')
     thumb_patch = mock.patch.object(vt, 'generate_thumbnail',
                                     return_value=str(tmp_path / 'thumb.jpg'))
     storage_patch = mock.patch.object(vt, 'get_storage',
@@ -205,12 +213,12 @@ def _run_assembler_with_mocks(monkeypatch, tmp_path, project_id, assignments,
             types.SimpleNamespace(request=types.SimpleNamespace(id='fake-celery-id'),
                                   update_state=lambda *a, **k: None),
             project_id=project_id, prompt='a prompt',
-            model=explicit_model)
+            model=explicit_model, voice_override=voice_override)
     finally:
         thumb_patch.stop()
         storage_patch.stop()
     assert result['status'] == 'Video generation completed!'
-    return vt.llm_service.generate_script
+    return vt.llm_service.generate_script, fal_calls
 
 
 def test_assembler_uses_script_assignment(client, db_session, auth_headers,
@@ -218,7 +226,7 @@ def test_assembler_uses_script_assignment(client, db_session, auth_headers,
     """script assignment must be consumed server-side by the assembler task."""
     project_id, task_id = _assembler_harness(client, auth_headers, tmp_path)
 
-    gen_script = _run_assembler_with_mocks(
+    gen_script, _fal_calls = _run_assembler_with_mocks(
         monkeypatch, tmp_path, project_id,
         {'script': 'groq/assigned-script-model', 'voice_tts': 'auto'},
         explicit_model=None)
@@ -235,9 +243,48 @@ def test_assembler_explicit_model_beats_assignment(client, auth_headers,
     """Wizard override (explicit task arg) > assignment."""
     project_id, _task_id = _assembler_harness(client, auth_headers, tmp_path)
 
-    gen_script = _run_assembler_with_mocks(
+    gen_script, _fal_calls = _run_assembler_with_mocks(
         monkeypatch, tmp_path, project_id,
         {'script': 'groq/assigned-script-model', 'voice_tts': 'auto'},
         explicit_model='openai/wizard-override')
 
     assert gen_script.call_args.kwargs['model'] == 'openai/wizard-override'
+
+
+def test_assembler_voice_override_beats_assignment(monkeypatch, client,
+                                                   auth_headers, tmp_path,
+                                                   db_session):
+    """Explicit fal voice id from wizard beats stored voice_tts assignment."""
+    from src.tasks.video_tasks import generate_assembler_video_task
+
+    r = client.post('/api/projects', json={'title': 'Voice override'},
+                    headers=auth_headers)
+    project_id = r.json()['id']
+
+    # Route must thread voice_override into the Celery task dispatch.
+    captured = {}
+
+    def fake_delay(**kwargs):
+        captured.update(kwargs)
+        return mock.Mock(id='fake-celery-id')
+
+    with mock.patch.object(generate_assembler_video_task, 'delay',
+                           side_effect=fake_delay):
+        task_id = client.post(
+            '/api/generate/assembler',
+            json={'project_id': project_id, 'prompt': 'a prompt',
+                  'voice_override': 'fal-ai/kokoro-tts'},
+            headers=auth_headers).json()['task_id']
+
+    assert captured.get('voice_override') == 'fal-ai/kokoro-tts'
+
+    # Task body: override wins over a fal-ai/* voice_tts assignment.
+    _gen_script, fal_calls = _run_assembler_with_mocks(
+        monkeypatch, tmp_path, project_id,
+        {'script': 'auto', 'voice_tts': 'fal-ai/assigned-voice-model'},
+        explicit_model=None, voice_override='fal-ai/kokoro-tts')
+
+    assert fal_calls == ['fal-ai/kokoro-tts']
+
+    task = db_session.get(Task, task_id)
+    assert task is not None and task.status == 'completed'
