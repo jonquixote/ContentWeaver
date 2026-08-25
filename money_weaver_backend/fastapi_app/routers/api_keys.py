@@ -162,9 +162,21 @@ def test_api_key(body: ApiKeyTest, user=Depends(current_user)):
 
 
 @models_router.get('/models')
-def get_available_models(user=Depends(current_user)):
-    """Get available models from the registry (live, cache-backed)"""
-    return {"models": registry.list_models()}
+def get_available_models(kind: str = None, q: str = None,
+                         user=Depends(current_user)):
+    """Get available models from the registry (live, cache-backed).
+
+    kind: filter by capability kind (text|voice|video).
+    q: case-insensitive substring match on id or display_name."""
+    models = registry.list_models()
+    if kind:
+        models = [m for m in models if m.get('kind') == kind]
+    if q:
+        needle = q.lower()
+        models = [m for m in models
+                  if needle in m['id'].lower()
+                  or needle in (m.get('display_name') or '').lower()]
+    return {"models": models}
 
 
 @models_router.get('/models/default')

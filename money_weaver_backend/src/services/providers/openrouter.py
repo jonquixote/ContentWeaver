@@ -27,6 +27,7 @@ class OpenRouterProvider(Provider):
                 {
                     "id": m["id"],
                     "provider": self.name,
+                    "kind": "text",
                     "display_name": m.get("name", m["id"]),
                     "capabilities": {"chat": True, "image": False, "audio": False},
                     "free": _free(m.get("pricing")),
