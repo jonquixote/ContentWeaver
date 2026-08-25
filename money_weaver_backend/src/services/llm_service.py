@@ -38,7 +38,8 @@ def resolve_model_for(user_id, task):
         if os.getenv('COMFY_ENABLED', 'false').lower() != 'true':
             return DEFAULT_VIDEO_GEN_FALLBACK
         return "comfy_local"
-    return _registry.best_free() or "poolside/laguna-s-2.1:free"
+    from src.services.providers.registry import PREFERRED_FREE_MODELS
+    return _registry.best_free() or PREFERRED_FREE_MODELS[0]
 
 
 SCREENPLAY_PROMPT = """You are a documentary screenwriter. Write a full screenplay for a
