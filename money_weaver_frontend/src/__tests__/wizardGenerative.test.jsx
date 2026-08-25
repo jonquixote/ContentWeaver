@@ -123,4 +123,47 @@ describe('wizard generative tools', () => {
     await user.click(draft)
     await waitFor(() => expect(calls).toBe(2))
   })
+
+  test('draft script output parses into storyboard scenes', async () => {
+    const user = userEvent.setup()
+    // Near-canonical draft: the unquoted voiceover must be canonized to
+    // `Voiceover: "..."` by serializeScreenplay(parseScreenplay(...)) before
+    // it reaches the block editor.
+    const DRAFT_SCRIPT = [
+      '**Scene 1: INT. OFFICE - DAY (0s-5s)**',
+      'A ham sandwich sits in a drawer.',
+      'Voiceover: It was a normal Tuesday.',
+      '',
+      '**Scene 2: EXT. STREET - CONTINUOUS (5s-9s)**',
+      'SAM:',
+      '[DIALOGUE: Give me the sandwich]',
+    ].join('\n')
+    server.use(
+      http.post('*/api/scripts/draft', () =>
+        HttpResponse.json({ script: DRAFT_SCRIPT })),
+    )
+    renderWizard()
+    await seedTopic(user)
+    const draft = await screen.findByRole('button', { name: /draft script/i })
+
+    // First draft fills the empty editor without confirmation.
+    await user.click(draft)
+    await screen.findByText(/scene 1/i)
+
+    // Overwrite confirm accepted; draft lands in the editor.
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true)
+    await user.click(draft)
+    expect(confirmSpy).toHaveBeenCalledWith(expect.stringMatching(/replace/i))
+
+    // Canon round-trip: serializer restored the Voiceover quoting convention.
+    const voiceover = await screen.findByText(
+      /voiceover: "it was a normal tuesday\."/i,
+    )
+    expect(voiceover.closest('[contenteditable]')).not.toBeNull()
+
+    // Storyboard step gates on parsed scenes and renders the scene card.
+    await user.click(screen.getByRole('button', { name: /^next$/i }))
+    expect(await screen.findByText(/int\. office - day/i)).toBeInTheDocument()
+    expect(screen.queryByText(/no scenes parsed/i)).not.toBeInTheDocument()
+  })
 })

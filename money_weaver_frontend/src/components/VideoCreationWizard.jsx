@@ -24,6 +24,7 @@ import { usePresets } from '@/hooks/usePresets'
 import { useVoices } from '@/hooks/useVoices'
 import { useNiches } from '@/hooks/useNiches'
 import { parseScriptText } from '@/lib/scriptParser'
+import { parseScreenplay, serializeScreenplay } from '@/lib/screenplayBlocks'
 import '../App.css'
 
 const STEPS = [
@@ -33,20 +34,20 @@ const STEPS = [
   { id: 4, label: 'Review & Generate', icon: Play },
 ]
 
-// Plain-text script -> editor HTML. Bold **Scene N** lines become <strong> paragraphs;
-// everything else becomes a plain paragraph. Input is HTML-escaped.
+// Plain-text script -> editor HTML. Draft output is first normalized to the
+// **Scene N (Xs-Ys)** + Voiceover canon via the block model, then each line
+// becomes a paragraph (bold for scene headers). Input is HTML-escaped.
 const scriptTextToHtml = (text) => {
   const esc = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;')
-  const html = (text || '')
-    .split(/\n/)
-    .filter((line) => line.trim())
+  const html = serializeScreenplay(parseScreenplay(text))
+    .split('\n')
     .map((line) =>
-      /^\*\*.*\*\*$/.test(line.trim())
-        ? `<p><strong>${line.trim().slice(2, -2)}</strong></p>`
-        : `<p>${line.trim()}</p>`,
+      /^\*\*.*\*\*$/.test(line)
+        ? `<p><strong>${esc(line.slice(2, -2))}</strong></p>`
+        : `<p>${esc(line)}</p>`,
     )
     .join('')
-  return html ? `<div>${html}</div>` : ''
+  return html
 }
 
 const VideoCreationWizard = ({ onBack }) => {
