@@ -162,7 +162,7 @@ def test_api_key(body: ApiKeyTest, user=Depends(current_user)):
 
 
 @models_router.get('/models')
-def get_available_models(kind: str = None, q: str = None,
+def get_available_models(kind: Optional[str] = None, q: Optional[str] = None,
                          user=Depends(current_user)):
     """Get available models from the registry (live, cache-backed).
 
