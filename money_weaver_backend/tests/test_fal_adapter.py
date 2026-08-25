@@ -3,23 +3,31 @@ import pytest
 
 @pytest.fixture
 def fake_fal(monkeypatch):
-    """Fake fal_client module: submit returns handle, status/result recorded."""
+    """Fake fal_client module exposing a SyncClient class (fal-client >= 1.0
+    moved auth to the client instance; module-level helpers lost api_key)."""
     import sys, types
     calls = {}
     mod = types.ModuleType("fal_client")
-    mod.submit = lambda app, argument, api_key=None: calls.update(
-        app=app, argument=argument, api_key=api_key) or types.SimpleNamespace(
-        request_id="req-123")
-    def _status(app, request_id, logs=False, api_key=None):
-        calls['status_polls'] = calls.get('status_polls', 0) + 1
-        if calls['status_polls'] < 2:
-            return types.SimpleNamespace(status="IN_QUEUE")
-        class Done:
-            status = "COMPLETED"
-        return Done()
-    mod.status = _status
-    mod.result = lambda app, request_id, api_key=None: calls.update(result=True) or {
-        "video": {"url": "https://fake.cdn/out.mp4"}}
+
+    class FakeSyncClient:
+        def __init__(self, key=None, default_timeout=120.0):
+            calls['key'] = key
+
+        def submit(self, app, arguments):
+            calls.update(app=app, argument=dict(arguments))
+            return types.SimpleNamespace(request_id="req-123")
+
+        def status(self, app, request_id):
+            calls['status_polls'] = calls.get('status_polls', 0) + 1
+            if calls['status_polls'] < 2:
+                return types.SimpleNamespace(status="IN_QUEUE")
+            return types.SimpleNamespace(status="COMPLETED")
+
+        def result(self, app, request_id):
+            calls['result_request_id'] = request_id
+            return {"video": {"url": "https://fake.cdn/out.mp4"}}
+
+    mod.SyncClient = FakeSyncClient
     monkeypatch.setitem(sys.modules, "fal_client", mod)
     return calls
 
@@ -39,8 +47,8 @@ def test_submit_and_download(monkeypatch, tmp_path, fake_fal):
                              api_key="FAKE", work_dir=str(tmp_path))
     assert fake_fal["app"] == "fal-ai/wan-t2v"
     assert fake_fal["argument"] == {"prompt": "cat"}
-    assert fake_fal["api_key"] == "FAKE"
-    assert out.endswith(".mp4") and (tmp_path / "out.mp4").exists() or True
+    assert fake_fal["key"] == "FAKE"
+    assert fake_fal["result_request_id"] == "req-123"
     # exact assertion:
     import os
     assert os.path.exists(out) and os.path.getsize(out) > 0

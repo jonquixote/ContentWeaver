@@ -110,8 +110,9 @@ class LLMService:
         from src.services.providers.registry import PREFERRED_FREE_MODELS
         try:
             return self._chat(user_id, model, messages, **kwargs)
-        except ProviderError as e:
-            transient = any(code in str(e) for code in ("429", "404", "502", "503"))
+        except ProviderError as exc:
+            last_error = str(exc)
+            transient = any(code in last_error for code in ("429", "404", "502", "503"))
             if not transient or not str(model).endswith(":free"):
                 raise
         tried = {str(model)}
@@ -121,11 +122,14 @@ class LLMService:
             tried.add(candidate)
             try:
                 return self._chat(user_id, candidate, messages, **kwargs)
-            except ProviderError as e:
-                if not any(code in str(e) for code in ("429", "404", "502", "503")):
+            except ProviderError as exc:
+                # Capture BEFORE continuing; `except ... as e` unbinds at
+                # block exit (previously UnboundLocalError below).
+                last_error = str(exc)
+                if not any(code in last_error for code in ("429", "404", "502", "503")):
                     raise
                 continue
-        raise RuntimeError(f"all free models exhausted; last error: {e}")
+        raise RuntimeError(f"all free models exhausted; last error: {last_error}")
 
     def generate_idea(self, seed=None, model=None, language="en", user_id=None):
         topic = seed if seed else "a surprising and original topic"

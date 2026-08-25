@@ -45,17 +45,20 @@ def render(endpoint, arguments, api_key=None, work_dir="/tmp", timeout_s=600):
     key = api_key or _key_for()
     if not key:
         raise RuntimeError("FAL key unavailable (save a fal API key or set FAL_KEY)")
+    # fal-client >= 1.0 removed the api_key kwarg from the module-level
+    # submit/status/result helpers; auth now lives on the SyncClient instance.
     import fal_client
-    handle = fal_client.submit(endpoint, arguments, api_key=key)
+    client = fal_client.SyncClient(key=key)
+    handle = client.submit(endpoint, arguments)
     deadline = time.time() + timeout_s
     while time.time() < deadline:
-        status = fal_client.status(endpoint, handle.request_id, api_key=api_key)
+        status = client.status(endpoint, handle.request_id)
         if getattr(status, "status", "") == "COMPLETED":
             break
         time.sleep(2)
     else:
         raise RuntimeError(f"fal render timed out after {timeout_s}s")
-    result = fal_client.result(endpoint, handle.request_id, api_key=api_key)
+    result = client.result(endpoint, handle.request_id)
     url = _extract_url(result)
     if not url:
         raise RuntimeError(f"no media url in fal result: {str(result)[:200]}")

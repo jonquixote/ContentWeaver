@@ -297,7 +297,10 @@ def generate_assembler_video_task(self, project_id, prompt, duration=30, orienta
                 
             # Update task status for Celery progress tracking
             self.update_state(state='PROGRESS', meta={'current': 10, 'total': 100, 'status': 'Generating script...'})
-            script = llm_service.generate_script(prompt, user_id, model=model or default_model, duration=duration, niche_id=niche_id)
+            # Model precedence for the script: explicit task arg (wizard
+            # override) > user's script assignment/preference > global default.
+            script_model = model or resolve_model_for(user_id, 'script') or default_model
+            script = llm_service.generate_script(prompt, user_id, model=script_model, duration=duration, niche_id=niche_id)
             
             # Parse the script for structured data
             parsed_script = script_parsing_service.parse_script(script)
@@ -370,9 +373,10 @@ def generate_assembler_video_task(self, project_id, prompt, duration=30, orienta
                 try:
                     voice_target = resolve_model_for(user_id, 'voice_tts')
                     if str(voice_target).startswith('fal-ai/'):
+                        # fal Kokoro schema expects `prompt` (voice optional).
                         wav_path = fal_adapter.render(
                             voice_target,
-                            {'text': voiceover_text},
+                            {'prompt': voiceover_text},
                             api_key=llm_service.api_key_for(user_id, 'fal'),
                             work_dir=advanced_tts_service.working_dir,
                         )

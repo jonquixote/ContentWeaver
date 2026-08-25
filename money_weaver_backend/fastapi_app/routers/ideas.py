@@ -13,7 +13,7 @@ router = APIRouter(prefix='/api/ideas', tags=['ideas'])
 def random_idea(body: dict, user=Depends(current_user), db: Session = Depends(get_db)):
     prefs = db.query(ModelPreference).filter_by(user_id=user.id).first()
     prefs_dict = prefs.to_dict() if prefs else None
-    model = llm_service.pick_model(user.id, prefs_dict, 'idea')
+    model = body.get('model') or llm_service.pick_model(user.id, prefs_dict, 'idea')
     try:
         return llm_service.generate_idea(seed=body.get('seed'), model=model,
                                          language=body.get('language', 'en'),
