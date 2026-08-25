@@ -76,7 +76,7 @@ export function renumber(blocks) {
 // Scene headers carry ONLY a bold mark — jsonToScriptText's inlineToText
 // wraps bold marks in ** itself, so literal asterisks would double-wrap.
 export function blockToInsertContent(block) {
-  const p = (...texts) => ({ type: 'paragraph', content: texts })
+  const p = (...texts) => ({ type: 'paragraph', content: texts.flat() })
   const t = (text, bold = false) => text === ''
     ? [] : [{ type: 'text', ...(bold ? { marks: [{ type: 'bold' }] } : {}), text }]
   switch (block.type) {
