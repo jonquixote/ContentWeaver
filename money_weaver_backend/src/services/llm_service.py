@@ -6,6 +6,41 @@ from src.services.providers import OpenRouterProvider, NvidiaNimProvider
 from src.services.providers.registry import ModelRegistry, registry as _registry
 from src.services.script_parsing_service import script_parsing_service
 
+ASSIGNMENT_TASKS = ("idea", "script", "enhance", "voice_tts", "video_gen")
+DEFAULT_VIDEO_GEN_FALLBACK = "fal-ai/wan-t2v-v2.2"
+
+
+def resolve_model_for(user_id, task):
+    """assignment -> ModelPreference.defaults[task] -> sensible default."""
+    if task not in ASSIGNMENT_TASKS:
+        raise ValueError(f"unknown assignment task: {task}")
+    if user_id:
+        try:
+            from src.models.model_assignment import ModelAssignment
+            from src.models.model_preference import ModelPreference
+            from fastapi_app.db import db_session
+            with db_session() as session:
+                row = session.query(ModelAssignment).filter_by(
+                    user_id=user_id, task=task).first()
+                if row is not None and row.model_id:
+                    return row.model_id
+                pref = session.query(ModelPreference).filter_by(user_id=user_id).first()
+                if pref is not None and pref.defaults:
+                    val = (json.loads(pref.defaults) or {}).get(task)
+                    if val:
+                        return val
+        except Exception as e:
+            print(f"resolve_model_for({task}) lookup failed: {e}")
+    # Defaults (no user, or nothing stored)
+    if task == "voice_tts":
+        return "auto"
+    if task == "video_gen":
+        if os.getenv('COMFY_ENABLED', 'false').lower() != 'true':
+            return DEFAULT_VIDEO_GEN_FALLBACK
+        return "comfy_local"
+    return _registry.best_free() or "poolside/laguna-s-2.1:free"
+
+
 SCREENPLAY_PROMPT = """You are a documentary screenwriter. Write a full screenplay for a
 {seconds}-second video about: {topic}
 
