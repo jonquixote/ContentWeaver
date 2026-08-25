@@ -93,3 +93,13 @@ def _extract_url(result):
 
 def catalog_models():
     return [dict(e) for e in FAL_CATALOG]
+
+
+# Self-register into the merged registry exactly once, surviving module
+# reloads (fresh function objects break identity checks).
+from src.services.providers.registry import EXTRA_CATALOG_SOURCES
+
+if not any(getattr(s, "__module__", "") == __name__
+           and getattr(s, "__name__", "") == "catalog_models"
+           for s in EXTRA_CATALOG_SOURCES):
+    EXTRA_CATALOG_SOURCES.append(catalog_models)

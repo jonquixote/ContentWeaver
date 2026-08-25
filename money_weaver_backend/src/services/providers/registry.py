@@ -13,11 +13,20 @@ PREFERRED_FREE_MODELS = [
 # Pseudo-ids that appear in catalogs but 404 on completions.
 UNUSABLE_MODEL_IDS = {"openrouter/free"}
 
+# Optional catalog sources appended by provider adapters (e.g. fal_adapter).
+# Each source is a zero-arg callable returning a list of model dicts; failures
+# are skipped so one broken provider never blocks the merged catalog.
+EXTRA_CATALOG_SOURCES = []
+
 
 class ModelRegistry:
-    def __init__(self, providers, ttl=600):
+    def __init__(self, providers, ttl=600, include_extra_catalogs=False):
+        """include_extra_catalogs: merge adapter-registered catalogs
+        (EXTRA_CATALOG_SOURCES). Off by default so standalone/instance-scoped
+        registries stay deterministic; the shared hub registry opts in."""
         self.providers = providers
         self.ttl = ttl
+        self.include_extra_catalogs = include_extra_catalogs
         self._cache = None
         self._fetched_at = 0.0
         self._lock = threading.Lock()
@@ -37,6 +46,15 @@ class ModelRegistry:
                             merged.append(m)
                 except Exception:
                     continue
+            if self.include_extra_catalogs:
+                for source in EXTRA_CATALOG_SOURCES:
+                    try:
+                        for m in source():
+                            if m["id"] not in seen:
+                                seen.add(m["id"])
+                                merged.append(m)
+                    except Exception:
+                        continue
             self._cache = merged
             self._fetched_at = now
             return list(merged)
@@ -47,7 +65,7 @@ class ModelRegistry:
     def best_free(self, capability="chat"):
         catalog_ids = {
             m["id"] for m in self._models()
-            if m["free"] and m["capabilities"].get(capability, False)
+            if m["free"] and (m.get("capabilities") or {}).get(capability, False)
         }
         # 1. known-good candidates that are actually in the catalog
         for candidate in PREFERRED_FREE_MODELS:
@@ -76,4 +94,4 @@ class ModelRegistry:
         return None
 
 
-registry = ModelRegistry([])
+registry = ModelRegistry([], include_extra_catalogs=True)

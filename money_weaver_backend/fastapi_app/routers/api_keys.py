@@ -25,6 +25,14 @@ router = APIRouter(prefix='/api/api-keys', tags=['api-keys'])
 models_router = APIRouter(prefix='/api', tags=['models'])
 
 
+def warm_provider_catalogs():
+    """Invalidate cached catalog so newly-keyed providers appear immediately."""
+    try:
+        registry.list_models(force=True)
+    except Exception:
+        pass
+
+
 class ApiKeyCreate(BaseModel):
     name: Optional[str] = None
     provider: Optional[str] = None
@@ -55,6 +63,7 @@ def add_api_key(body: ApiKeyCreate, user=Depends(current_user), session=Depends(
         )
         session.add(api_key)
         session.commit()
+        warm_provider_catalogs()
         return {
             'message': 'API key added successfully',
             'api_key': api_key.to_dict()
