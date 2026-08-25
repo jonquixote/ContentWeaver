@@ -2,7 +2,8 @@ from src.services.celery_app import celery_app
 from src.models.project import Project
 from src.models.task import Task
 from src.database import db
-from src.services.llm_service import llm_service
+from src.services.llm_service import llm_service, resolve_model_for
+from src.services.providers import fal_adapter
 from src.services.video.stock_footage_service import stock_service
 from src.services.video.tts_service import tts_service
 from src.services.video.advanced_tts_service import advanced_tts_service
@@ -97,6 +98,25 @@ def write_voice_audio(audio_bytes, prefix='voice', work_dir=None):
     with open(path, 'wb') as fh:
         fh.write(audio_bytes)
     return path
+
+def _store_generative_output(project_id, video_bytes, output_filename):
+    """Persist generated video bytes: local final/ copy + durable storage key.
+
+    Shared by the comfy_local and fal-ai/* branches of the generative task so
+    both produce identical artifacts (final/project_<pid>_generative.mp4 and
+    generative/<pid>/project_<pid>_generative.mp4). Storage upload failures
+    keep the local copy (dev /final URLs still work).
+    """
+    os.makedirs(FINAL_DIR, exist_ok=True)
+    with open(os.path.join(FINAL_DIR, output_filename), 'wb') as fh:
+        fh.write(video_bytes)
+    try:
+        get_storage().put_object(
+            f"generative/{project_id}/{output_filename}",
+            video_bytes, 'video/mp4')
+    except Exception as e:
+        print(f"Generative storage upload failed (local copy kept): {e}")
+
 
 def _maybe_mix_music(voice_path, niche_id, work_dir=None):
     """Mix a mood-matched music bed under the voice track. Never raises;
@@ -341,6 +361,25 @@ def generate_assembler_video_task(self, project_id, prompt, duration=30, orienta
                         print(f"Voice {voice_id} not found / not owned by user {user_id} / reference missing; falling back to Kokoro")
                 except Exception as e:
                     print(f"MOSS-TTS unavailable, falling back to Kokoro for voice_id={voice_id}: {e}")
+                    audio_file = None
+
+            # Assignment-driven TTS: when the owned-voice path produced no
+            # audio and voice_tts is assigned a fal-ai/* model, synthesize via
+            # fal. 'auto' (default) or anything else keeps the local chain.
+            if not audio_file:
+                try:
+                    voice_target = resolve_model_for(user_id, 'voice_tts')
+                    if str(voice_target).startswith('fal-ai/'):
+                        wav_path = fal_adapter.render(
+                            voice_target,
+                            {'text': voiceover_text},
+                            api_key=llm_service.api_key_for(user_id, 'fal'),
+                            work_dir=advanced_tts_service.working_dir,
+                        )
+                        with open(wav_path, 'rb') as fh:
+                            audio_file = write_voice_audio(fh.read(), prefix='voice_fal')
+                except Exception as e:
+                    print(f"fal TTS unavailable for voice_tts assignment, falling back: {e}")
                     audio_file = None
 
             # Fallback: Kokoro (or basic TTS) keeps video generation working
@@ -612,37 +651,57 @@ def generate_generative_video_task(self, project_id, prompt, voice_id=None, mode
             output_filename = f"project_{project_id}_generative.mp4"
 
             if comfy_ready:
-                # Construct the Wan2.2 API-format workflow with the enhanced prompt
+                # Consume the video_gen assignment: fal-ai/* models render
+                # through the fal gateway; everything else (comfy_local and
+                # any unrecognized target) keeps the legacy ComfyUI flow.
                 self.update_state(state='PROGRESS', meta={'current': 20, 'total': 100, 'status': 'Constructing ComfyUI workflow...'})
-                template_name = _template_name_for_model(model)
-                workflow = comfy_client.render_workflow(
-                    comfy_client.load_workflow(template_name),
-                    prompt=enhanced_prompt,
-                    width=1280, height=704,
-                    seed=random.randint(0, 2**32 - 1),
-                    meta=comfy_client.load_template_meta(template_name),
-                )
+                target = resolve_model_for(project.user_id, 'video_gen')
 
-                # Submit to ComfyUI and wait for completion
-                self.update_state(state='PROGRESS', meta={'current': 30, 'total': 100, 'status': 'Submitting to ComfyUI...'})
-                prompt_id = asyncio.run(comfy_client.queue_workflow(workflow, str(uuid.uuid4())))
+                if str(target).startswith('fal-ai/'):
+                    self.update_state(state='PROGRESS', meta={'current': 30, 'total': 100, 'status': 'Submitting to fal...'})
+                    rendered_path = fal_adapter.render(
+                        target,
+                        {
+                            'prompt': enhanced_prompt,
+                            'width': 1280,
+                            'height': 704,
+                            'seed': random.randint(0, 2**32 - 1),
+                        },
+                        api_key=llm_service.api_key_for(project.user_id, 'fal'),
+                        work_dir=tempfile.gettempdir(),
+                    )
+                    with open(rendered_path, 'rb') as fh:
+                        video_bytes = fh.read()
+                    try:
+                        os.unlink(rendered_path)
+                    except OSError:
+                        pass
 
-                self.update_state(state='PROGRESS', meta={'current': 60, 'total': 100, 'status': 'Generating video with AI models...'})
-                polled = asyncio.run(comfy_client.poll_result(prompt_id))
+                    self.update_state(state='PROGRESS', meta={'current': 80, 'total': 100, 'status': 'Post-processing video...'})
+                    _store_generative_output(project_id, video_bytes, output_filename)
+                else:
+                    # Construct the Wan2.2 API-format workflow with the enhanced prompt
+                    template_name = _template_name_for_model(model)
+                    workflow = comfy_client.render_workflow(
+                        comfy_client.load_workflow(template_name),
+                        prompt=enhanced_prompt,
+                        width=1280, height=704,
+                        seed=random.randint(0, 2**32 - 1),
+                        meta=comfy_client.load_template_meta(template_name),
+                    )
 
-                # Download the rendered artifact via /view and store it
-                self.update_state(state='PROGRESS', meta={'current': 80, 'total': 100, 'status': 'Post-processing video...'})
-                artifact = comfy_client.extract_output_filename(polled) or f"{prompt_id}.mp4"
-                video_bytes = asyncio.run(comfy_client.get_view(artifact))
-                os.makedirs(FINAL_DIR, exist_ok=True)
-                with open(os.path.join(FINAL_DIR, output_filename), 'wb') as fh:
-                    fh.write(video_bytes)
-                try:
-                    get_storage().put_object(
-                        f"generative/{project_id}/{output_filename}",
-                        video_bytes, 'video/mp4')
-                except Exception as e:
-                    print(f"Generative storage upload failed (local copy kept): {e}")
+                    # Submit to ComfyUI and wait for completion
+                    self.update_state(state='PROGRESS', meta={'current': 30, 'total': 100, 'status': 'Submitting to ComfyUI...'})
+                    prompt_id = asyncio.run(comfy_client.queue_workflow(workflow, str(uuid.uuid4())))
+
+                    self.update_state(state='PROGRESS', meta={'current': 60, 'total': 100, 'status': 'Generating video with AI models...'})
+                    polled = asyncio.run(comfy_client.poll_result(prompt_id))
+
+                    # Download the rendered artifact via /view and store it
+                    self.update_state(state='PROGRESS', meta={'current': 80, 'total': 100, 'status': 'Post-processing video...'})
+                    artifact = comfy_client.extract_output_filename(polled) or f"{prompt_id}.mp4"
+                    video_bytes = asyncio.run(comfy_client.get_view(artifact))
+                    _store_generative_output(project_id, video_bytes, output_filename)
             else:
                 # Simulate ComfyUI workflow construction
                 self.update_state(state='PROGRESS', meta={'current': 20, 'total': 100, 'status': 'Constructing ComfyUI workflow...'})
