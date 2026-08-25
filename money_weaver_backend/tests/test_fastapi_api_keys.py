@@ -113,7 +113,18 @@ def test_models_requires_auth(client):
     assert client.get('/api/models').status_code == 401
 
 
-def test_default_model(client, auth_headers):
+def test_default_model(client, auth_headers, monkeypatch):
+    """Default resolves to a real free model — pseudo-ids like openrouter/free
+    (present in the live catalog but 404 on completions) must never win."""
+    fake_catalog = [
+        {"id": "openrouter/free", "provider": "openrouter", "display_name": "Free",
+         "capabilities": {"chat": True}, "free": True},
+        {"id": "nvidia/nemotron-3.5-lightning:free", "provider": "openrouter",
+         "display_name": "Nemotron", "capabilities": {"chat": True}, "free": True},
+        {"id": "paid/model", "provider": "openrouter", "display_name": "Paid",
+         "capabilities": {"chat": True}, "free": False},
+    ]
+    monkeypatch.setattr(api_keys.registry, 'list_models', lambda force=False: fake_catalog)
     r = client.get('/api/models/default', headers=auth_headers)
     assert r.status_code == 200
-    assert r.json()['default_model'] == 'openrouter/free'
+    assert r.json()['default_model'] == 'nvidia/nemotron-3.5-lightning:free'

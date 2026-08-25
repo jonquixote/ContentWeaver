@@ -64,6 +64,31 @@ class LLMService:
         p.api_key = self.api_key_for(user_id, p.name)
         return p.chat(model, messages, **kwargs)
 
+    def _chat_free_resilient(self, user_id, model, messages, **kwargs):
+        """Chat with fallback across known-good free models when the primary
+        is rate-limited/unavailable (free tiers flap). Non-openrouter models
+        and explicit non-fallback failures propagate as before."""
+        from src.services.providers.base import ProviderError
+        from src.services.providers.registry import PREFERRED_FREE_MODELS
+        try:
+            return self._chat(user_id, model, messages, **kwargs)
+        except ProviderError as e:
+            transient = any(code in str(e) for code in ("429", "404", "502", "503"))
+            if not transient or not str(model).endswith(":free"):
+                raise
+        tried = {str(model)}
+        for candidate in PREFERRED_FREE_MODELS:
+            if candidate in tried:
+                continue
+            tried.add(candidate)
+            try:
+                return self._chat(user_id, candidate, messages, **kwargs)
+            except ProviderError as e:
+                if not any(code in str(e) for code in ("429", "404", "502", "503")):
+                    raise
+                continue
+        raise RuntimeError(f"all free models exhausted; last error: {e}")
+
     def generate_idea(self, seed=None, model=None, language="en", user_id=None):
         topic = seed if seed else "a surprising and original topic"
         prompt = ("Suggest one random, engaging short-video topic. "
@@ -72,15 +97,44 @@ class LLMService:
                   "a NARRATOR character, and DIALOGUE lines). "
                   f"Base it loosely on: {topic}")
         messages = [{"role": "user", "content": prompt}]
-        model = model or _registry.best_free() or "openrouter/free"
-        raw = self._chat(user_id, model, messages, temperature=1.1, max_tokens=1500)
-        try:
-            data = json.loads(raw)
+        model = model or _registry.best_free() or "nvidia/nemotron-3.5-lightning:free"
+        raw = self._chat_free_resilient(user_id, model, messages, temperature=1.1, max_tokens=1500)
+        data = self._extract_json(raw)
+        if data is not None:
             return {"title": data.get("title", "Untitled"),
                     "topic": data.get("topic", ""),
                     "script": data.get("script", raw)}
-        except json.JSONDecodeError:
-            return {"title": "Untitled", "topic": "", "script": raw}
+        # Reasoning models may prepend CoT; strip <think> blocks and retry.
+        import re
+        cleaned = re.sub(r"<think>.*?</think>", "", str(raw), flags=re.DOTALL).strip()
+        data = self._extract_json(cleaned)
+        if data is not None:
+            return {"title": data.get("title", "Untitled"),
+                    "topic": data.get("topic", ""),
+                    "script": data.get("script", cleaned)}
+        return {"title": "Untitled", "topic": "", "script": raw}
+
+    @staticmethod
+    def _extract_json(text):
+        """Pull the first JSON object out of a model response (tolerates
+        surrounding prose/code fences). Returns None when nothing parses."""
+        if not text:
+            return None
+        try:
+            return json.loads(text)
+        except (json.JSONDecodeError, TypeError):
+            pass
+        start = str(text).find("{")
+        while start != -1:
+            decoder = json.JSONDecoder()
+            try:
+                obj, _ = decoder.raw_decode(str(text)[start:])
+                if isinstance(obj, dict):
+                    return obj
+            except json.JSONDecodeError:
+                pass
+            start = str(text).find("{", start + 1)
+        return None
 
     def generate_script(self, prompt, user_id, model=None, duration=30, niche_id=None):
         if niche_id:
@@ -92,10 +146,10 @@ class LLMService:
             except FileNotFoundError:
                 pass
         try:
-            model = model or _registry.best_free() or "openrouter/free"
+            model = model or _registry.best_free() or "nvidia/nemotron-3.5-lightning:free"
             full_prompt = SCREENPLAY_PROMPT.format(seconds=duration, topic=prompt)
             messages = [{"role": "user", "content": full_prompt}]
-            return self._chat(user_id, model, messages, max_tokens=2000, temperature=0.7)
+            return self._chat_free_resilient(user_id, model, messages, max_tokens=2000, temperature=0.7)
         except Exception as e:
             print(f"Error generating script: {e}")
             return (f"SCENE 1: Main\n[ACTION: generic establishing shot]\nNARRATOR\n"

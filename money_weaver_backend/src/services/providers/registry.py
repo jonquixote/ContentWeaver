@@ -1,6 +1,18 @@
 import threading
 import time
 
+# Known-good free models, tried in order before falling back to any catalog
+# :free entry. Non-reasoning models preferred (reasoning models put CoT in
+# content or empty it entirely). Verified against live OpenRouter 2026-08.
+PREFERRED_FREE_MODELS = [
+    "poolside/laguna-s-2.1:free",
+    "dots-studio/dots-3-note-preview:free",
+    "nvidia/nemotron-3.5-lightning:free",
+]
+
+# Pseudo-ids that appear in catalogs but 404 on completions.
+UNUSABLE_MODEL_IDS = {"openrouter/free"}
+
 
 class ModelRegistry:
     def __init__(self, providers, ttl=600):
@@ -33,13 +45,18 @@ class ModelRegistry:
         return self.list_models()
 
     def best_free(self, capability="chat"):
-        for m in self._models():
-            if m["free"] and m["capabilities"].get(capability, False):
-                if m["id"] == "openrouter/free":
-                    return m["id"]
-        for m in self._models():
-            if m["free"] and m["capabilities"].get(capability, False):
-                return m["id"]
+        catalog_ids = {
+            m["id"] for m in self._models()
+            if m["free"] and m["capabilities"].get(capability, False)
+        }
+        # 1. known-good candidates that are actually in the catalog
+        for candidate in PREFERRED_FREE_MODELS:
+            if candidate in catalog_ids:
+                return candidate
+        # 2. any real free model, excluding pseudo-ids
+        usable = sorted(catalog_ids - UNUSABLE_MODEL_IDS)
+        if usable:
+            return usable[0]
         return None
 
     def resolve(self, prefs, task, capability="chat"):
@@ -50,7 +67,7 @@ class ModelRegistry:
             for fb in (prefs.get("fallbacks") or []):
                 if fb:
                     return fb
-        return self.best_free(capability) or "openrouter/free"
+        return self.best_free(capability) or PREFERRED_FREE_MODELS[0]
 
     def provider_for(self, model_id):
         for p in self.providers:
