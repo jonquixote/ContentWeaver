@@ -2,7 +2,8 @@
 # Split from requirements.txt because:
 #   * mediapipe==0.10.21 hard-requires numpy<2 while the core stack pins
 #     numpy==2.2.6 — the two cannot resolve in a single pip pass;
-#   * mediapipe ships no wheels for Python >= 3.13 (core targets 3.12);
+#   * mediapipe ships no wheels for Python >= 3.13 (worker venv must be 3.12 —
+#     note Dockerfile uses 3.11 and CI uses 3.13; neither installs this file);
 #   * these features are mocked in the test suite; the backend and the full
 #     pytest run work without them.
 #
@@ -11,7 +12,9 @@
 #   pip install -r requirements-ml.txt     # then extras (downgrades numpy<2)
 #
 # Use a DEDICATED Python 3.12 worker venv for both files — do NOT mix into a
-# main venv on Python >= 3.13 (mediapipe has no wheels there).
+# main venv on Python >= 3.13 (mediapipe has no wheels there). CAVEAT: the
+# core stack is only tested against numpy==2.x; a worker venv that installed
+# both files runs numpy<2 and is untested.
 
 numpy==1.26.4
 
