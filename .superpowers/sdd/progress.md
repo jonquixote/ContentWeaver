@@ -41,6 +41,14 @@ Flow driven: UI register → dashboard → `/create` wizard → clicked all 5 pa
 
 Evidence: `/var/folders/j5/_4pw7zgd6m7f_l0dmh63gk680000gn/T/opencode/smoke/` — `smoke.cjs`, `result.json`, `01-register-filled.png`, `02-editor-blocks-inserted.png`, `03-storyboard-scenes.png`.
 
+### End-to-End Verification (2026-08-26)
+
+Fresh-boot verification at HEAD: backend `run.py` on :5004 (SQLite, SECRET_KEY set), vite dev :5173.
+- API E2E script (register→me→presets/niches/topics→api-keys→models catalog(490)→model-assignments→projects CRUD→ideas/draft graceful degradation): **16/16 PASS**
+- UI Playwright smoke vs :5173 (register→wizard→all 5 palette chips→characters hint→storyboard scenes): **11/11 PASS**
+- Gates: vitest **57/57**, pytest **408 passed** (coverage 67.84%), `vite build` ✓ 9s
+- Note: without LLM provider keys `/api/ideas/random` → 503, `/api/scripts/draft`+`/api/enhance-prompt` → 400 — graceful by design.
+
 ### Findings (non-blocking, no feature code changed)
 
 1. **Seed wipe in dev StrictMode:** ScriptEditor's empty-editor seed (sceneHeader+voiceover) is applied then wiped by React StrictMode's double-invoked effect — `seededRef` is already `true` on the second run, so the external-sync branch calls `setContent('')` (ScriptEditor.jsx:38-53). Dev-only; production build unaffected; unit tests (jsdom) don't exercise the double-invoke. Palette insertion unaffected — chips insert correctly regardless.
