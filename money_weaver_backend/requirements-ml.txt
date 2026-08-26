@@ -9,6 +9,9 @@
 # Install order (Python 3.12 required for this file):
 #   pip install -r requirements.txt        # core first
 #   pip install -r requirements-ml.txt     # then extras (downgrades numpy<2)
+#
+# Use a DEDICATED Python 3.12 worker venv for both files — do NOT mix into a
+# main venv on Python >= 3.13 (mediapipe has no wheels there).
 
 numpy==1.26.4
 
