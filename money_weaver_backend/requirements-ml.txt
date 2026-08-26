@@ -1,0 +1,28 @@
+# --- Optional heavy ML extras (worker-only, lazy-imported) ---
+# Split from requirements.txt because:
+#   * mediapipe==0.10.21 hard-requires numpy<2 while the core stack pins
+#     numpy==2.2.6 — the two cannot resolve in a single pip pass;
+#   * mediapipe ships no wheels for Python >= 3.13 (core targets 3.12);
+#   * these features are mocked in the test suite; the backend and the full
+#     pytest run work without them.
+#
+# Install order (Python 3.12 required for this file):
+#   pip install -r requirements.txt        # core first
+#   pip install -r requirements-ml.txt     # then extras (downgrades numpy<2)
+
+numpy==1.26.4
+
+# --- Smart 9:16 reframe (Task 6) ---
+# mediapipe pulls its own opencv-contrib-python alongside the headless build
+# from the core file. NOTE: ultralytics is AGPL-3.0 and is FORBIDDEN in this
+# repo — TRACK mode degrades to GENERAL until an alternative is chosen.
+mediapipe==0.10.21
+
+# --- Optional: Chatterbox voice cloning (MIT) ---
+# Heavy (torch/torchaudio). Install manually on workers that need cloning:
+#   pip install chatterbox-tts==0.1.7   # verify latest via `pip index versions chatterbox-tts`
+# Then set CHATTERBOX_ENABLED=true.
+
+# --- Optional: fal.ai voice/video generation (fal-client, Apache-2.0) ---
+#   pip install fal-client==1.0.1   # verify latest via PyPI before enabling
+# Per-user keys via API keys page (provider 'fal') or env FAL_KEY.
