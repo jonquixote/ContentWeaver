@@ -35,6 +35,8 @@ One line per completed plan/phase; latest phase detailed. Plans live in `docs/su
 
 Environment: backend uvicorn on :5005 (repo `run.py`, venv outside repo), frontend vite on :5199 with `VITE_API_URL=/api` + proxy config (target :5005; note: `src/services/api.js` defaults to absolute `http://localhost:5004/api`, so the env var is required for the proxy path).
 
+Backend venv is ephemeral (`/var/folders/j5/_4pw7zgd6m7f_l0dmh63gk680000gn/T/opencode/venv-t1`, Python 3.12). Recreate with: `python3.12 -m venv <path> && pip install -r money_weaver_backend/requirements.txt`.
+
 Flow driven: UI register → dashboard → `/create` wizard → clicked all 5 palette chips (scene header, voiceover, visual, dialogue, transition) → characters hint showed `NAME` → second scene (header + voiceover per canon) → Next → storyboard step rendered **2 scene cards** from inserted blocks. 11/11 checks passed.
 
 Evidence: `/var/folders/j5/_4pw7zgd6m7f_l0dmh63gk680000gn/T/opencode/smoke/` — `smoke.cjs`, `result.json`, `01-register-filled.png`, `02-editor-blocks-inserted.png`, `03-storyboard-scenes.png`.
