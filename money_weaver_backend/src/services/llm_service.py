@@ -45,15 +45,20 @@ def resolve_model_for(user_id, task):
 SCREENPLAY_PROMPT = """You are a documentary screenwriter. Write a full screenplay for a
 {seconds}-second video about: {topic}
 
-Use standard screenplay format. Each scene block must look EXACTLY like this:
+Each scene block must be in CANONICAL format exactly like this:
 
-SCENE 1: [Short scene name]
-[ACTION: one visual action line describing the shot]
-NARRATOR
-[DIALOGUE: the narration sentence(s) to be spoken]
+**Scene 1: Short Scene Name (0s-5s)**
+Visual action line describing the shot.
+Voiceover: "The spoken narration for this scene."
 
-End the screenplay with a line "END".
+**Scene 2: Next Scene (5s-10s)**
+Another visual description.
+Voiceover: "Next narration."
 
+Rules:
+- Use **Scene N: Title (Xs-Ys)** headers with timings that partition the full {seconds}s evenly.
+- Preserve that exact bold+wrapped header syntax and Voiceover: "..." lines — storyboard parsing depends on it.
+- End with a line "END".
 Return the screenplay only, no commentary."""
 
 
@@ -194,8 +199,10 @@ class LLMService:
             return self._chat_free_resilient(user_id, model, messages, max_tokens=2000, temperature=0.7)
         except Exception as e:
             print(f"Error generating script: {e}")
-            return (f"SCENE 1: Main\n[ACTION: generic establishing shot]\nNARRATOR\n"
-                    f"DIALOGUE: This is a generated script about {prompt}.\nEND")
+            return (f"**Scene 1: Main (0s-5s)**\n"
+                    f"generic establishing shot\n"
+                    f'Voiceover: "This is a generated script about {prompt}."\n'
+                    f"END")
 
 
 llm_service = LLMService()

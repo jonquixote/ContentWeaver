@@ -1,6 +1,9 @@
 const HEADER_RE = /^\*\*Scene\s+(\d+):\s*([^(\n]+?)\s*\((\d+)s?-(\d+)s?\)\*\*\s*$/i
+const LEGACY_SCENE_RE = /^(?:SCENE|SHOT)\s+(\d+):\s*(.*)$/i
+const LEGACY_ACTION_RE = /^\[ACTION:\s*(.*?)\]\s*$/i
 const VO_RE = /^Voiceover:\s*"?(.*?)"?\s*$/i
 const DLG_RE = /^\[DIALOGUE:\s*(.*?)\]\s*$/i
+const BARE_DLG_RE = /^DIALOGUE:\s*(.*)\s*$/i
 const CHAR_RE = /^([A-Z][A-Z0-9 \-]{0,30}):\s*$/
 export const TRANSITIONS = ['CUT TO:', 'MATCH CUT TO:', 'FADE OUT.', 'SMASH CUT TO:']
 
@@ -17,16 +20,31 @@ export function parseScreenplay(text) {
   let current = null // pending dialogue character
   for (const raw of String(text || '').split('\n')) {
     const line = raw.trim()
-    if (!line) { current = null; continue }
+    if (!line || line === 'END') { current = null; continue }
     const h = line.match(HEADER_RE)
     if (h) {
       blocks.push({ type: 'sceneHeader', number: +h[1], name: h[2].trim(),
         start: +h[3], end: +h[4] }); continue
     }
+    const lh = line.match(LEGACY_SCENE_RE)
+    if (lh) {
+      const num = +lh[1]
+      const name = lh[2].trim() || `Scene ${num}`
+      blocks.push({ type: 'sceneHeader', number: num, name, start: (num - 1) * 5, end: num * 5 }); continue
+    }
+    const la = line.match(LEGACY_ACTION_RE)
+    if (la) { blocks.push({ type: 'visual', text: la[1].trim() }); current = null; continue }
+    if (/^NARRATOR\s*$/i.test(line)) { current = 'NARRATOR'; continue }
     const vo = line.match(VO_RE)
     if (vo) { blocks.push({ type: 'voiceover', text: vo[1] }); current = null; continue }
-    const d = line.match(DLG_RE)
-    if (d) { blocks.push({ type: 'dialogue', character: current || '', text: d[1] }); continue }
+    const d = line.match(DLG_RE) || line.match(BARE_DLG_RE)
+    if (d) {
+      const dlgText = (d[1] ?? d[2] ?? '').trim()
+      if ((current || '').toUpperCase() === 'NARRATOR') {
+        blocks.push({ type: 'voiceover', text: dlgText }); current = null; continue
+      }
+      blocks.push({ type: 'dialogue', character: current || '', text: dlgText }); continue
+    }
     if (TRANSITIONS.includes(line.toUpperCase())) {
       blocks.push({ type: 'transition', text: line.toUpperCase() }); current = null; continue }
     const c = line.match(CHAR_RE)

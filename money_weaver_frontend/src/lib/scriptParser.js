@@ -47,11 +47,39 @@ export function parseScriptText(text) {
     })
   }
 
-  if (scenes.length === 0) {
-    return { title, full_narrative: fullNarrative, scenes: parseFallback(text) }
+  if (scenes.length > 0) {
+    return { title, full_narrative: fullNarrative, scenes }
   }
 
-  return { title, full_narrative: fullNarrative, scenes }
+  const fallback = parseFallback(text)
+  if (fallback.length > 0) {
+    return { title, full_narrative: fullNarrative, scenes: fallback }
+  }
+
+  const legacy = parseLegacyFallback(text)
+  if (legacy.length > 0) {
+    return { title, full_narrative: fullNarrative, scenes: legacy }
+  }
+
+  // Last resort: synthesize one scene from freeform narrative (supports enhance prompt output)
+  const stripped = text.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()
+  if (stripped.length > 10) {
+    return {
+      title,
+      full_narrative: stripped,
+      scenes: [{
+        scene_number: 1,
+        description: 'Main',
+        start_time: 0,
+        end_time: 30,
+        duration: 30,
+        visual_description: '',
+        voiceover: stripped.slice(0, 500),
+      }],
+    }
+  }
+
+  return { title, full_narrative: fullNarrative, scenes: [] }
 }
 
 function parseFallback(text) {
@@ -105,6 +133,42 @@ function parseFallback(text) {
 
   if (current) scenes.push(current)
   return scenes
+}
+
+function parseLegacyFallback(text) {
+  const LEGACY_HEAD_RE = /^(?:SCENE|SHOT)\s+(\d+):\s*(.*)$/i
+  const ACTION_RE_L = /^\[ACTION:\s*(.*)\]$/i
+  const DIALOG_RE_L = /^\[?DIALOGUE:\s*(.*?)\]?$/i
+  const lines = text.split('\n')
+  const scenes = []
+  let cur = null
+  let curCharacter = null
+  for (const raw of lines) {
+    const line = raw.trim()
+    if (!line || line === 'END') continue
+    const h = line.match(LEGACY_HEAD_RE)
+    if (h) {
+      if (cur) scenes.push(cur)
+      const n = parseInt(h[1], 10)
+      cur = { scene_number: n, description: (h[2] || `Scene ${n}`).trim(), start_time: (n - 1) * 5, end_time: n * 5, duration: 5, visual_description: '', voiceover: '' }
+      curCharacter = null
+      continue
+    }
+    if (!cur) continue
+    const a = line.match(ACTION_RE_L)
+    if (a) { cur.visual_description = cur.visual_description ? `${cur.visual_description} ${a[1].trim()}` : a[1].trim(); continue }
+    const d = line.match(DIALOG_RE_L)
+    if (d) { cur.voiceover = cur.voiceover ? `${cur.voiceover} ${d[1].trim()}` : d[1].trim(); continue }
+    if (/^NARRATOR\s*$/i.test(line)) { curCharacter = 'NARRATOR'; continue }
+    if (/^(CUT TO|FADE IN|FADE OUT|DISSOLVE TO|SMASH CUT)/i.test(line)) continue
+    // bare text inside legacy scene → treat as voiceover/action
+    if (line.length > 3) {
+      cur.voiceover = cur.voiceover ? `${cur.voiceover} ${line}` : line
+    }
+  }
+  if (cur) scenes.push(cur)
+  // finalize durations for legacy synthesized 5s blocks
+  return scenes.filter(s => s.description || s.voiceover || s.visual_description)
 }
 
 export function parseBlocks(text) {
