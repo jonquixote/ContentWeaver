@@ -74,3 +74,11 @@ Design tokens (`--studio-*` CSS vars in index.css), `AIGenButton` (ghost ✦, sp
 ### S5 Render + Review (2026-08-29)
 
 `RenderStage` (workflow radio, preset→orientation/dims, voice type, cloned voice, fal API voices → `voiceModelOverride`, text model override via ModelPicker, language) and `ReviewStage` (summary grid, estimated time, Create → reuses draft `projectId`, assembler/generative enqueue → `VideoProgressTracker`). Added `render.textModelOverride` (additive) to state contract. Wired stages 4-5 in Studio.jsx. vitest 97/97, build ok.
+
+### S6 Dashboard/Settings cleanup + wizard removal + E2E (2026-08-29)
+
+`Dashboard` rebuilt (project cards + resume-in-Studio + single "New project" CTA), `SettingsPage` rebuilt (two cards: API keys + model assignments), `VideoCreationWizard` + 5 wizard test files deleted, `/create` → `/studio` redirect. Added Studio Next/Back footer (fixes gated-tab dead-end: `furthest=1` otherwise locked progression). Lint cleaned (0 errors). Commits d2c9a52, f75aa41, 67278eb.
+
+**E2E (Playwright, fresh boot):** register → dashboard → New project → `/studio/2` → premise → script (title + canonical scene typed) → storyboard 2 scene cards → render → review (title + resolution) → create (graceful 503, no redis). **13/14 checks**; sole non-check is `console.error` from the expected 404 "No studio draft" probe on fresh load (hook catches gracefully). Evidence: `/var/folders/.../opencode/studio-e2e/` (storyboard.png, review.png, after-create.png).
+
+**Gates:** vitest **85/85**, pytest **415 passed** (68.11%), `vite build` ok, `eslint` 0 errors.
