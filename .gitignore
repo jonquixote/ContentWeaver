@@ -65,3 +65,6 @@ money_weaver_backend/music/*.[fF][lL][aA][cC]
 money_weaver_backend/music/*.[aA][aA][cC]
 money_weaver_backend/music/*.[oO][pP][uU][sS]
 money_weaver_backend/music/*.[wW][mM][aA]
+
+# Brainstorm visual companion scratch
+.superpowers/brainstorm/

@@ -2,7 +2,6 @@ import { BrowserRouter as Router, Routes, Route, Navigate, useLocation, useNavig
 import Dashboard from './components/Dashboard'
 import ProjectDetail from './pages/ProjectDetail'
 import Studio from './pages/Studio'
-import VideoCreationWizard from './components/VideoCreationWizard'
 import VoiceCloning from './components/VoiceCloning'
 import SettingsPage from './components/SettingsPage'
 import ProfilePage from './components/ProfilePage'
@@ -79,18 +78,11 @@ function AppContent() {
         path="/dashboard" 
         element={
           <ProtectedRoute>
-            <Dashboard onCreateVideo={() => navigate('/create')} />
+            <Dashboard />
           </ProtectedRoute>
         } 
       />
-      <Route 
-        path="/create" 
-        element={
-          <ProtectedRoute>
-            <VideoCreationWizard onBack={() => navigate('/dashboard')} />
-          </ProtectedRoute>
-        } 
-      />
+      <Route path="/create" element={<Navigate to="/studio" replace />} />
       <Route
         path="/studio"
         element={

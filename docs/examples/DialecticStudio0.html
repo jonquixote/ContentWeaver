@@ -1,0 +1,804 @@
+import React, { useState, useRef } from 'react';
+import { 
+  Lock, 
+  Activity, 
+  Users, 
+  FileText, 
+  AlertTriangle, 
+  CheckCircle, 
+  Brain, 
+  GitCommit, 
+  Zap,
+  MessageSquare,
+  RefreshCw,
+  XCircle,
+  Play,
+  Menu,
+  Download,
+  Upload,
+  Trash2,
+  X,
+  MoreHorizontal,
+  Link as LinkIcon
+} from 'lucide-react';
+
+// --- Configuration ---
+const apiKey = ""; 
+const GEMINI_MODEL = "gemini-2.5-flash-preview-09-2025";
+
+// --- Types & Interfaces ---
+
+type Tab = 'premise' | 'characters' | 'structure' | 'draft';
+type Role = 'Protagonist' | 'Antagonist' | 'Pivotal' | 'Supporting';
+
+interface PremiseState {
+  subject: string;
+  verb: string;
+  object: string;
+  isLocked: boolean;
+  aiStatus: 'idle' | 'analyzing' | 'valid' | 'invalid' | 'error';
+  critique: string | null;
+  suggestion: string | null;
+}
+
+interface Trait {
+  id: string;
+  text: string;
+  type: 'phys' | 'soc' | 'psych';
+  parentId?: string;
+}
+
+interface Relationship {
+  targetId: string; 
+  desc: string; 
+}
+
+interface Character {
+  id: string;
+  name: string;
+  role: Role;
+  traits: Trait[];
+  relationships: Relationship[];
+}
+
+interface SceneBeat {
+  id: number;
+  title: string;
+  type: 'Exposition' | 'Rising Conflict' | 'Crisis' | 'Climax' | 'Resolution';
+  desc: string;
+}
+
+interface ConflictState {
+  unityStatus: 'unknown' | 'testing' | 'strong' | 'weak';
+  unityFeedback: string | null;
+  beats: SceneBeat[];
+}
+
+interface ProjectData {
+  premise: PremiseState;
+  characters: Character[];
+  conflict: ConflictState;
+  script: string;
+}
+
+// --- API Utility ---
+
+async function callGemini(prompt: string, systemPrompt: string) {
+  const maxRetries = 3;
+  let delay = 1000;
+
+  for (let i = 0; i < maxRetries; i++) {
+    try {
+      const response = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${apiKey}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: prompt }] }],
+            systemInstruction: { parts: [{ text: systemPrompt }] },
+            generationConfig: { responseMimeType: "application/json" }
+          })
+        }
+      );
+
+      if (!response.ok) {
+        if (response.status === 429) {
+           await new Promise(r => setTimeout(r, delay));
+           delay *= 2;
+           continue;
+        }
+        throw new Error(`API Error: ${response.statusText}`);
+      }
+
+      const data = await response.json();
+      const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+      return JSON.parse(text);
+    } catch (error) {
+      if (i === maxRetries - 1) throw error;
+      await new Promise(r => setTimeout(r, delay));
+      delay *= 2;
+    }
+  }
+}
+
+// --- Main Application Component ---
+
+export default function DialecticStudio() {
+  const [activeTab, setActiveTab] = useState<Tab>('premise');
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  
+  // State
+  const [premise, setPremise] = useState<PremiseState>({
+    subject: '',
+    verb: '',
+    object: '',
+    isLocked: false,
+    aiStatus: 'idle',
+    critique: null,
+    suggestion: null
+  });
+
+  const [characters, setCharacters] = useState<Character[]>([]);
+  const [activeCharId, setActiveCharId] = useState<string | null>(null);
+
+  const [conflict, setConflict] = useState<ConflictState>({
+    unityStatus: 'unknown',
+    unityFeedback: null,
+    beats: [
+        { id: 1, title: "Point of Attack", type: "Exposition", desc: "" },
+        { id: 2, title: "Growth of Conflict", type: "Rising Conflict", desc: "" },
+        { id: 3, title: "The Crisis", type: "Crisis", desc: "" },
+        { id: 4, title: "The Climax", type: "Climax", desc: "" },
+        { id: 5, title: "The Resolution", type: "Resolution", desc: "" },
+    ]
+  });
+
+  const [script, setScript] = useState(``);
+  const [editorWarnings, setEditorWarnings] = useState<{msg: string, type: 'warn'|'ok'}[]>([]);
+  const [isCheckingScript, setIsCheckingScript] = useState(false);
+
+  // --- Persistence Logic ---
+
+  const handleSaveProject = () => {
+    const data: ProjectData = { premise, characters, conflict, script };
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `dialectic-project-${new Date().toISOString().slice(0,10)}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
+  const handleLoadProject = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      try {
+        const data = JSON.parse(event.target?.result as string) as ProjectData;
+        if (data.premise) setPremise(data.premise);
+        if (data.characters) {
+            setCharacters(data.characters);
+            if (data.characters.length > 0) setActiveCharId(data.characters[0].id);
+        } 
+        if (data.conflict) setConflict(data.conflict);
+        if (data.script) setScript(data.script);
+        alert("Project loaded successfully.");
+      } catch (err) {
+        console.error(err);
+        alert("Failed to load project. Invalid file format.");
+      }
+    };
+    reader.readAsText(file);
+    e.target.value = ''; 
+  };
+
+  // --- Logic Handlers ---
+
+  const handlePremiseTest = async () => {
+    if (premise.isLocked) return;
+    setPremise(prev => ({ ...prev, aiStatus: 'analyzing', critique: null, suggestion: null }));
+    
+    try {
+      const systemPrompt = `
+        You are The Dialectic Engine, an expert on Lajos Egri's "The Art of Dramatic Writing".
+        
+        EGRI'S LAW OF PREMISE:
+        A premise must be a clear-cut, active, and well-formulated statement of cause and effect, functioning as a complete three-part unit (Character/Concept -> Conflict -> Conclusion/Result) that embodies the author’s conviction.
+
+        1. FIRST PART (Subject/Cause): Character, Dominant Trait, or Governing Concept. 
+           - Must be the specific driving force initiating the conflict. This force can be abstract or personal.
+           - ACCEPT: Individual Traits ("Ruthless Ambition," "Jealousy," "Frugality", "Shiftlessness").
+           - ACCEPT: Broad Concepts, Philosophies, or Conditions (e.g., "Materialism", "Poverty", "Intolerance", "Great Love", "Faith").
+        
+        2. SECOND PART (Verb/Conflict): Active, Causal, and Demonstrating Force. 
+           - Must clearly articulate the struggle, the inevitable consequence, or the causality of the Subject's action.
+           - ACCEPT: Verbs indicating direct action, causality, or victory: "leads to", "destroys," "defeats", "conquers", "encourages", "defies", "creates."
+           - REJECT: Stative verbs like "is," "was," or ambiguous phrases that do not denote active conflict or direction.
+        
+        3. THIRD PART (Object/Conclusion): The Predetermined Destiny, Goal, or Defeated Opposite.
+           - This is the explicit, inescapable final state, objective, or the opponent that is overcome.
+           - ACCEPT: Final States for the Subject ("destruction", "waste", "ruin", "isolation", "self-destruction").
+           - ACCEPT: The Opposing Force or Concept that is defeated (e.g., "mysticism", "pride", "duplicity").
+
+        Your job is to VALIDATE if the user's input follows this precise causal structure as exemplified by Egri's works, ensuring the relationship between Subject, Verb, and Object is clear and active.
+        - If the user types "Materialism conquers mysticism", VALIDATE IT.
+        - If the user types "Great love defies even death", VALIDATE IT.
+        
+        Return JSON:
+        {
+          "isValid": boolean,
+          "critique": "Analysis referencing Egri's methodology.",
+          "suggestion": "Improvement if needed."
+        }
+      `;
+
+      const prompt = `
+        Analyze this premise:
+        Subject: "${premise.subject}"
+        Verb: "${premise.verb}"
+        Object: "${premise.object}"
+      `;
+
+      const result = await callGemini(prompt, systemPrompt);
+      setPremise(prev => ({ ...prev, aiStatus: result.isValid ? 'valid' : 'invalid', critique: result.critique, suggestion: result.suggestion }));
+    } catch (error) {
+      setPremise(prev => ({ ...prev, aiStatus: 'error', critique: "AI Connection Failed." }));
+    }
+  };
+
+  const addCharacter = () => {
+    const newId = Math.random().toString(36).substr(2, 9);
+    const newChar: Character = { id: newId, name: 'New Character', role: 'Supporting', traits: [], relationships: [] };
+    setCharacters([...characters, newChar]);
+    setActiveCharId(newId);
+  };
+
+  const updateCharacterRole = (id: string, role: Role) => {
+      setCharacters(prev => prev.map(c => c.id === id ? { ...c, role } : c));
+  };
+
+  const updateRelationship = (charId: string, targetId: string, desc: string) => {
+    setCharacters(prev => prev.map(c => {
+        if (c.id === charId) {
+            const existingRel = c.relationships.find(r => r.targetId === targetId);
+            let newRels;
+            if (existingRel) {
+                newRels = c.relationships.map(r => r.targetId === targetId ? { ...r, desc } : r);
+            } else {
+                newRels = [...c.relationships, { targetId, desc }];
+            }
+            return { ...c, relationships: newRels };
+        }
+        return c;
+    }));
+  };
+
+  const deleteCharacter = (id: string) => {
+    if (window.confirm("Are you sure you want to delete this character?")) {
+      const newChars = characters.filter(c => c.id !== id);
+      setCharacters(newChars);
+      if (activeCharId === id) setActiveCharId(newChars.length > 0 ? newChars[0].id : null);
+    }
+  };
+
+  const addTrait = (charId: string, type: 'phys' | 'soc' | 'psych', text: string, parentId?: string) => {
+    setCharacters(prev => prev.map(c => {
+      if (c.id !== charId) return c;
+      const newTrait: Trait = { id: Math.random().toString(36).substr(2, 9), text, type, parentId };
+      return { ...c, traits: [...c.traits, newTrait] };
+    }));
+  };
+
+  const deleteTrait = (charId: string, traitId: string) => {
+    setCharacters(prev => prev.map(c => {
+      if (c.id !== charId) return c;
+      return { ...c, traits: c.traits.filter(t => t.id !== traitId) };
+    }));
+  };
+
+  const suggestTrait = async (charId: string, targetType: 'phys'|'soc'|'psych') => {
+    const char = characters.find(c => c.id === charId);
+    if (!char) return [];
+    const existingTraits = char.traits.map(t => `${t.type}: ${t.text}`).join(', ');
+    
+    try {
+      const systemPrompt = `You are an expert on Lajos Egri's character dimensions.`;
+      const prompt = `Character: ${char.name}. Premise: ${premise.subject} ${premise.verb} ${premise.object}. Existing Traits: [${existingTraits}]. Suggest 3 CAUSAL ${targetType} traits. Return JSON: { "suggestions": ["string"] }`;
+      const result = await callGemini(prompt, systemPrompt);
+      return result.suggestions; 
+    } catch (e) {
+      return ["Error generating suggestions."];
+    }
+  };
+
+  const updateBeat = (id: number, desc: string) => {
+    setConflict(prev => ({
+        ...prev,
+        beats: prev.beats.map(b => b.id === id ? { ...b, desc } : b)
+    }));
+  };
+
+  const simulateScene = async (beatId: number) => {
+    const beat = conflict.beats.find(b => b.id === beatId);
+    if (!beat) return;
+    
+    const protag = characters.find(c => c.role === 'Protagonist');
+    const antag = characters.find(c => c.role === 'Antagonist');
+
+    if (!protag || !antag) {
+        alert("Please define a Protagonist and Antagonist in the Character Lab first.");
+        return;
+    }
+
+    try {
+        const pTraits = protag.traits.map(t => t.text).join(', ');
+        const aTraits = antag.traits.map(t => t.text).join(', ');
+        const pRel = protag.relationships.find(r => r.targetId === antag.id)?.desc || "Unknown";
+        
+        const systemPrompt = "You are a dramatic simulator based on Lajos Egri. You analyze the Dialectical progression (Thesis vs Antithesis = Synthesis).";
+        const prompt = `
+            Context: We are testing the "Rising Action" for a play based on the Premise: "${premise.subject} ${premise.verb} ${premise.object}".
+            
+            Current Scene Beat: ${beat.title} (${beat.type}).
+            User's Scene Idea: "${beat.desc}".
+            
+            Thesis (Protagonist): ${protag.name} (${pTraits}).
+            Antithesis (Antagonist): ${antag.name} (${aTraits}).
+            Unity of Opposites (Relationship): ${pRel}.
+            
+            Task: 
+            1. Simulate the clash.
+            2. Determine if the conflict is STATIC (circular argument, no growth) or RISING (leads to a new state/decision).
+            3. Does it prove the Premise?
+            
+            Return JSON: { "summary": "Scene summary...", "isRising": boolean, "critique": "Dialectical analysis..." }
+        `;
+        
+        const result = await callGemini(prompt, systemPrompt);
+        alert(`DIALECTICAL SIMULATION:\n\nSummary: ${result.summary}\n\nVerdict: ${result.isRising ? "RISING CONFLICT (Good)" : "STATIC CONFLICT (Bad)"}\n\nAnalysis: ${result.critique}`);
+    } catch(e) {
+        alert("Simulation failed.");
+    }
+  };
+
+  const runSocraticCheck = async () => {
+    if (!script.trim()) return;
+    setIsCheckingScript(true);
+    try {
+      const charData = characters.map(c => `${c.name}: ${c.traits.map(t => t.text).join(', ')}`).join('\n');
+      const systemPrompt = "You are a Socratic Writing Coach.";
+      const prompt = `Analyze script vs profiles. Characters: ${charData}. Premise: ${premise.subject} ${premise.verb} ${premise.object}. Script: ${script}. Return JSON: { "critiques": [{ "message": "string", "type": "warn" | "ok" }] }`;
+      
+      const result = await callGemini(prompt, systemPrompt);
+      setEditorWarnings(result.critiques || []);
+    } catch (e) {
+      setEditorWarnings([{ msg: "Failed to analyze.", type: 'warn' }]);
+    } finally {
+      setIsCheckingScript(false);
+    }
+  };
+
+  const renderTabButton = (id: Tab, label: string, icon: React.ReactNode) => {
+    const isActive = activeTab === id;
+    const isDisabled = id !== 'premise' && !premise.isLocked;
+    return (
+      <button
+        onClick={() => !isDisabled && setActiveTab(id)}
+        disabled={isDisabled}
+        className={`flex items-center space-x-2 px-4 py-4 border-r border-slate-700 transition-all duration-200 outline-none whitespace-nowrap ${isActive ? 'bg-slate-800 text-cyan-400 border-b-2 border-b-cyan-400' : 'bg-slate-900 text-slate-400 hover:text-slate-200'} ${isDisabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer hover:bg-slate-800'}`}
+      >
+        {icon}
+        <span className="font-medium tracking-wide uppercase text-xs md:text-sm">{label}</span>
+        {isDisabled && <Lock size={12} className="ml-1" />}
+      </button>
+    );
+  };
+
+  return (
+    <div className="flex flex-col h-screen w-full bg-slate-950 text-slate-100 font-sans overflow-hidden selection:bg-cyan-500/30">
+      
+      {/* Header */}
+      <header className="h-14 border-b border-slate-700 bg-slate-900 flex items-center justify-between px-4 shadow-md z-10 shrink-0">
+        <div className="flex items-center space-x-3">
+          <div className="w-8 h-8 bg-cyan-500 rounded flex items-center justify-center text-slate-900 font-bold shadow-cyan-500/50 shadow-lg">D</div>
+          <h1 className="text-lg font-bold tracking-wider text-slate-100 hidden md:block">DIALECTIC <span className="text-slate-500 font-normal">STUDIO</span></h1>
+        </div>
+        
+        <div className="flex items-center space-x-2">
+            <input type="file" ref={fileInputRef} onChange={handleLoadProject} className="hidden" accept=".json" />
+            <button onClick={handleSaveProject} className="p-2 text-slate-400 hover:text-cyan-400 transition-colors" title="Save Project"><Download size={18} /></button>
+            <button onClick={() => fileInputRef.current?.click()} className="p-2 text-slate-400 hover:text-cyan-400 transition-colors" title="Load Project"><Upload size={18} /></button>
+            <div className="h-4 w-px bg-slate-700 mx-2"></div>
+            <div className="flex items-center space-x-1 text-[10px] text-slate-500 uppercase font-bold tracking-widest border border-slate-700 px-2 py-1 rounded">
+                <Zap size={10} className="text-cyan-500" /> <span className="hidden md:inline">Gemini AI</span>
+            </div>
+        </div>
+      </header>
+
+      {/* Navigation */}
+      <nav className="flex border-b border-slate-700 bg-slate-900 shadow-sm shrink-0 overflow-x-auto scrollbar-hide">
+        {renderTabButton('premise', 'Premise', <GitCommit size={16} />)}
+        {renderTabButton('characters', 'Characters', <Users size={16} />)}
+        {renderTabButton('structure', 'Conflict', <Activity size={16} />)}
+        {renderTabButton('draft', 'Editor', <FileText size={16} />)}
+      </nav>
+
+      {/* Main Content Area */}
+      <main className="flex-1 overflow-hidden relative">
+        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-slate-800/20 via-slate-950 to-slate-950 pointer-events-none"></div>
+        
+        {activeTab === 'premise' && (
+          <PremiseView 
+            state={premise} 
+            setState={setPremise} 
+            onTest={handlePremiseTest} 
+            onLock={() => { setPremise({...premise, isLocked: true}); setTimeout(() => setActiveTab('characters'), 500); }} 
+          />
+        )}
+        
+        {activeTab === 'characters' && (
+          <CharacterView 
+            characters={characters} 
+            activeId={activeCharId} 
+            setActiveId={setActiveCharId}
+            onAddTrait={addTrait}
+            onDeleteTrait={deleteTrait}
+            onAddCharacter={addCharacter}
+            onDeleteCharacter={deleteCharacter}
+            onSuggest={suggestTrait}
+            onUpdateName={(id: string, name: string) => setCharacters(prev => prev.map(c => c.id===id?{...c,name}:c))}
+            onUpdateRole={updateCharacterRole}
+            onUpdateRel={updateRelationship}
+          />
+        )}
+
+        {activeTab === 'structure' && (
+          <ConflictView 
+            conflict={conflict} 
+            onUpdateBeat={updateBeat} 
+            onSimulate={simulateScene}
+          />
+        )}
+
+        {activeTab === 'draft' && (
+          <EditorView 
+            script={script} 
+            setScript={setScript} 
+            warnings={editorWarnings} 
+            runCheck={runSocraticCheck}
+            isChecking={isCheckingScript}
+          />
+        )}
+      </main>
+
+    </div>
+  );
+}
+
+// --- Sub-Components ---
+
+function PremiseView({ state, setState, onTest, onLock }: { state: PremiseState, setState: any, onTest: any, onLock: any }) {
+  const handleKeyDown = (e: React.KeyboardEvent) => { if (e.key === 'Enter' && !state.isLocked) onTest(); };
+
+  return (
+    <div className="h-full flex flex-col items-center justify-center p-6 overflow-y-auto">
+      <div className="max-w-4xl w-full space-y-6 animate-in fade-in zoom-in duration-500">
+        <div className="text-center space-y-2">
+          <h2 className="text-2xl md:text-3xl font-light text-slate-200">The Premise Crucible</h2>
+          <p className="text-slate-400 text-sm md:text-base">Define the rudder of your story.</p>
+        </div>
+
+        <div className="bg-slate-900 border border-slate-700 rounded-lg p-6 md:p-8 shadow-2xl relative">
+          <div className="flex flex-col md:flex-row items-center gap-4 relative z-10">
+            <div className="flex-1 w-full space-y-2">
+                <label className="text-xs uppercase font-bold tracking-wider text-cyan-500">Subject (Character OR Concept)</label>
+                <input 
+                    type="text" 
+                    value={state.subject} 
+                    disabled={state.isLocked}
+                    onChange={(e) => setState((prev:any) => ({...prev, subject: e.target.value, aiStatus: 'idle'}))}
+                    onKeyDown={handleKeyDown}
+                    className="w-full bg-slate-950 border border-slate-700 rounded p-3 md:p-4 text-white focus:border-cyan-500 outline-none transition-colors"
+                    placeholder="e.g. Materialism / Ruthless Ambition"
+                />
+            </div>
+             <div className="flex-1 w-full space-y-2">
+                <label className="text-xs uppercase font-bold tracking-wider text-orange-500">Verb (Active Conflict)</label>
+                <input 
+                    type="text" 
+                    value={state.verb} 
+                    disabled={state.isLocked}
+                    onChange={(e) => setState((prev:any) => ({...prev, verb: e.target.value, aiStatus: 'idle'}))}
+                    onKeyDown={handleKeyDown}
+                    className="w-full bg-slate-950 border border-slate-700 rounded p-3 md:p-4 text-white focus:border-orange-500 outline-none transition-colors"
+                    placeholder="e.g. conquers / leads to"
+                />
+            </div>
+             <div className="flex-1 w-full space-y-2">
+                <label className="text-xs uppercase font-bold tracking-wider text-purple-500">Object (Result / Defeated)</label>
+                <input 
+                    type="text" 
+                    value={state.object} 
+                    disabled={state.isLocked}
+                    onChange={(e) => setState((prev:any) => ({...prev, object: e.target.value, aiStatus: 'idle'}))}
+                    onKeyDown={handleKeyDown}
+                    className="w-full bg-slate-950 border border-slate-700 rounded p-3 md:p-4 text-white focus:border-purple-500 outline-none transition-colors"
+                    placeholder="e.g. mysticism / destruction"
+                />
+            </div>
+          </div>
+
+          <div className="mt-8 pt-8 border-t border-slate-800 flex flex-col md:flex-row items-center justify-between gap-4 relative z-10">
+             <div className="flex items-center space-x-2 text-sm">
+                {state.aiStatus === 'analyzing' && <><Activity size={16} className="animate-spin text-cyan-400"/> <span className="text-cyan-400">ANALYZING LOGIC...</span></>}
+                {state.aiStatus === 'valid' && <><CheckCircle size={16} className="text-green-400"/> <span className="text-green-400">VALID PREMISE</span></>}
+                {state.aiStatus === 'invalid' && <><AlertTriangle size={16} className="text-red-400"/> <span className="text-red-400">INVALID</span></>}
+             </div>
+
+             <div className="flex space-x-2 w-full md:w-auto">
+               {!state.isLocked && (
+                 <button onClick={onTest} disabled={state.aiStatus === 'analyzing'} className="flex-1 md:flex-none px-6 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded border border-slate-600 font-medium transition-colors disabled:opacity-50">
+                   Test Logic
+                 </button>
+               )}
+               {(state.aiStatus === 'valid' || state.aiStatus === 'invalid') && !state.isLocked && (
+                 <button onClick={onLock} className={`flex-1 md:flex-none px-6 py-2 rounded font-bold shadow-lg transition-all ${state.aiStatus === 'valid' ? 'bg-cyan-600 hover:bg-cyan-500 text-white' : 'bg-slate-700 hover:bg-slate-600 text-slate-300'}`}>
+                   {state.aiStatus === 'valid' ? 'Lock & Proceed' : 'Proceed Anyway'}
+                 </button>
+               )}
+               {state.isLocked && <button className="flex-1 md:flex-none px-6 py-2 bg-slate-900 text-green-500 border border-green-900 rounded font-medium cursor-default">Locked</button>}
+             </div>
+          </div>
+
+          {state.critique && (
+            <div className={`mt-6 p-4 rounded text-sm border font-mono leading-relaxed relative z-10 ${state.aiStatus === 'valid' ? 'bg-green-950/30 border-green-800 text-green-200' : 'bg-red-950/30 border-red-800 text-red-200'}`}>
+              <strong className="block mb-2 font-bold flex items-center"><Brain size={14} className="mr-2"/> AI ANALYSIS:</strong>
+              <p>{state.critique}</p>
+              {state.suggestion && <div className="mt-2 pt-2 border-t border-white/10 opacity-80"><strong>Suggestion:</strong> {state.suggestion}</div>}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function CharacterView({ characters, activeId, setActiveId, onAddTrait, onDeleteTrait, onAddCharacter, onDeleteCharacter, onSuggest, onUpdateName, onUpdateRole, onUpdateRel }: any) {
+  const activeChar = characters.find((c: Character) => c.id === activeId);
+  const [newTraitText, setNewTraitText] = useState('');
+  const [newTraitType, setNewTraitType] = useState<'phys'|'soc'|'psych'>('phys');
+  const [isAdding, setIsAdding] = useState(false);
+  const [selectedParent, setSelectedParent] = useState<string | null>(null);
+  const [suggestions, setSuggestions] = useState<string[]>([]);
+  const [loadingSuggestions, setLoadingSuggestions] = useState(false);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+
+  const physTraits = activeChar?.traits.filter((t: Trait) => t.type === 'phys') || [];
+  const socTraits = activeChar?.traits.filter((t: Trait) => t.type === 'soc') || [];
+  const psychTraits = activeChar?.traits.filter((t: Trait) => t.type === 'psych') || [];
+
+  const handleAdd = (text: string = newTraitText) => {
+    if (!text.trim()) return;
+    if (newTraitType === 'psych' && !selectedParent) { alert("Psychology must be linked to Physiology or Sociology."); return; }
+    onAddTrait(activeId, newTraitType, text, selectedParent);
+    setNewTraitText(''); setIsAdding(false); setSelectedParent(null); setSuggestions([]);
+  };
+
+  const handleRequestSuggestions = async (type: 'phys'|'soc'|'psych') => {
+    setNewTraitType(type); setIsAdding(true); setLoadingSuggestions(true); setSuggestions([]);
+    const results = await onSuggest(activeId, type);
+    setSuggestions(results); setLoadingSuggestions(false);
+  };
+
+  return (
+    <div className="h-full flex overflow-hidden relative">
+      {/* Drawer Toggle */}
+      <button className="md:hidden absolute top-4 left-4 z-50 p-2 bg-slate-800 rounded border border-slate-700 text-slate-300" onClick={() => setIsSidebarOpen(!isSidebarOpen)}><Menu size={20} /></button>
+
+      {/* Sidebar */}
+      <div className={`absolute inset-y-0 left-0 w-72 bg-slate-900 border-r border-slate-700 p-4 z-40 transform transition-transform duration-300 ease-in-out md:relative md:transform-none ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+        <div className="flex justify-between items-center mb-4 md:mt-0 mt-12">
+            <h3 className="text-slate-500 text-xs font-bold uppercase tracking-widest flex items-center"><Users size={12} className="mr-2"/> Cast List</h3>
+            <button onClick={() => setIsSidebarOpen(false)} className="md:hidden text-slate-500"><X size={20}/></button>
+        </div>
+        {characters.length === 0 && <div className="text-xs text-slate-600 italic p-2 text-center border border-dashed border-slate-800 rounded">No characters.</div>}
+        <div className="space-y-1">
+            {characters.map((c: Character) => (
+            <div key={c.id} className={`group flex items-center justify-between rounded border transition-all ${activeId === c.id ? 'bg-cyan-900/20 border-cyan-500' : 'bg-slate-800 border-slate-700 hover:border-slate-500'}`}>
+                <button onClick={() => { setActiveId(c.id); setIsSidebarOpen(false); }} className={`flex-1 text-left px-3 py-3 text-sm truncate ${activeId === c.id ? 'text-cyan-400' : 'text-slate-400'}`}>{c.name}</button>
+                <button onClick={(e) => { e.stopPropagation(); onDeleteCharacter(c.id); }} className="p-2 text-slate-600 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity"><Trash2 size={14} /></button>
+            </div>
+            ))}
+        </div>
+        <button onClick={onAddCharacter} className="w-full mt-4 py-2 border border-dashed border-slate-700 text-slate-500 text-sm rounded hover:bg-slate-800 hover:text-slate-300 transition-colors">+ Add Character</button>
+      </div>
+      
+      {isSidebarOpen && <div className="md:hidden absolute inset-0 bg-black/50 z-30" onClick={() => setIsSidebarOpen(false)}></div>}
+
+      {/* Main View */}
+      {activeChar ? (
+      <div className="flex-1 p-6 md:p-8 overflow-y-auto bg-slate-950 relative w-full">
+        {/* Header Area */}
+        <div className="flex flex-col md:flex-row md:items-end justify-between mb-8 sticky top-0 bg-slate-950 pb-4 z-20 border-b border-slate-800/50 pt-12 md:pt-0 gap-4">
+            <div className="flex-1">
+                <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Name</span>
+                <input className="bg-transparent border-b border-slate-700 text-white text-xl font-bold focus:border-cyan-500 outline-none w-full" value={activeChar.name} onChange={(e) => onUpdateName(activeChar.id, e.target.value)} />
+            </div>
+            <div className="w-full md:w-1/3">
+                <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Role</span>
+                <select className="w-full bg-slate-900 border border-slate-700 p-2 rounded text-sm text-slate-300 outline-none" value={activeChar.role} onChange={(e) => onUpdateRole(activeChar.id, e.target.value as Role)}>
+                    <option value="Protagonist">Protagonist</option>
+                    <option value="Antagonist">Antagonist</option>
+                    <option value="Pivotal">Pivotal Character</option>
+                    <option value="Supporting">Supporting</option>
+                </select>
+            </div>
+        </div>
+        
+        {/* Relationships Section */}
+        <div className="mb-8 p-4 border border-slate-800 bg-slate-900/30 rounded-lg">
+             <h4 className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-3 flex items-center"><LinkIcon size={12} className="mr-2"/> Relationship Matrix</h4>
+             {characters.length <= 1 && <p className="text-xs text-slate-600 italic">Add more characters to define relationships.</p>}
+             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                 {characters.filter(c => c.id !== activeChar.id).map(other => {
+                     const rel = activeChar.relationships.find(r => r.targetId === other.id);
+                     return (
+                         <div key={other.id} className="flex items-center space-x-2">
+                             <span className="text-sm text-slate-400 w-1/3 truncate text-right">{other.name} is:</span>
+                             <input 
+                                className="flex-1 bg-slate-950 border border-slate-700 p-2 rounded text-xs text-white focus:border-cyan-500 outline-none" 
+                                placeholder={`e.g. Brother, Enemy, Friend of...`}
+                                value={rel?.desc || ''}
+                                onChange={(e) => onUpdateRel(activeChar.id, other.id, e.target.value)}
+                             />
+                         </div>
+                     )
+                 })}
+             </div>
+        </div>
+
+        {/* Traits Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 md:h-[500px] relative pb-24 md:pb-0">
+          <TraitColumn title="1. Physiology" subtitle="(Hardware)" color="border-blue-500" bg="bg-blue-500/5" textColor="text-blue-400" traits={physTraits} onAdd={() => { setNewTraitType('phys'); setIsAdding(true); }} onDelete={(tId: string) => onDeleteTrait(activeChar.id, tId)} onSuggest={() => handleRequestSuggestions('phys')} />
+          <TraitColumn title="2. Sociology" subtitle="(Software)" color="border-purple-500" bg="bg-purple-500/5" textColor="text-purple-400" traits={socTraits} onAdd={() => { setNewTraitType('soc'); setIsAdding(true); }} onDelete={(tId: string) => onDeleteTrait(activeChar.id, tId)} onSuggest={() => handleRequestSuggestions('soc')} />
+          <TraitColumn title="3. Psychology" subtitle="(Product)" color="border-orange-500" bg="bg-orange-500/5" textColor="text-orange-400" traits={psychTraits} onAdd={() => { setNewTraitType('psych'); setIsAdding(true); }} onDelete={(tId: string) => onDeleteTrait(activeChar.id, tId)} onSuggest={() => handleRequestSuggestions('psych')} isResult={true} />
+          
+          <svg className="hidden md:block absolute inset-0 w-full h-full pointer-events-none z-0 opacity-40">
+            {psychTraits.map((psych: Trait, i: number) => {
+               if (!psych.parentId) return null;
+               const startX = psych.parentId.startsWith('t') ? '33%' : '66%'; 
+               const yPos = 100 + (i * 60); 
+               return <g key={psych.id}><path d={`M ${startX === '33%' ? '33%' : '66%'} ${50 + (i*30)} C 50% ${50 + (i*30)}, 80% ${yPos}, 85% ${yPos}`} fill="none" stroke={startX === '33%' ? '#3b82f6' : '#a855f7'} strokeWidth="2" strokeDasharray="4,4"/></g>;
+            })}
+          </svg>
+        </div>
+
+        {isAdding && (
+          <div className="absolute inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+            <div className="bg-slate-900 border border-slate-600 p-6 rounded-lg shadow-2xl w-full max-w-md space-y-4">
+              <div className="flex justify-between items-center"><h4 className="text-lg font-bold text-white">Add Trait</h4><button onClick={() => setIsAdding(false)}><XCircle size={20} className="text-slate-500 hover:text-white"/></button></div>
+              <input autoFocus className="w-full bg-slate-950 border border-slate-700 p-3 rounded text-white focus:border-cyan-500 outline-none" placeholder="Enter trait..." value={newTraitText} onChange={e => setNewTraitText(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleAdd()} />
+              {loadingSuggestions && <div className="text-xs text-cyan-400 animate-pulse">Consulting Gemini...</div>}
+              {suggestions.length > 0 && <div className="space-y-1"><p className="text-xs text-slate-500 font-bold uppercase">Suggestions:</p>{suggestions.map((s, i) => <button key={i} onClick={() => handleAdd(s)} className="block w-full text-left text-xs p-2 bg-slate-800 hover:bg-slate-700 rounded text-slate-300">+ {s}</button>)}</div>}
+              {newTraitType === 'psych' && (
+                <div className="space-y-2 bg-slate-800/50 p-3 rounded border border-slate-700">
+                  <label className="text-xs text-orange-400 font-bold uppercase">Source (Causality)</label>
+                  <select className="w-full bg-slate-900 border border-slate-600 p-2 rounded text-sm text-slate-300 outline-none" onChange={(e) => setSelectedParent(e.target.value)} value={selectedParent || ''}>
+                    <option value="">-- Select Root Cause --</option>
+                    {[...physTraits, ...socTraits].map(t => <option key={t.id} value={t.id}>{t.text} ({t.type === 'phys' ? 'Phys' : 'Soc'})</option>)}
+                  </select>
+                </div>
+              )}
+              <button onClick={() => handleAdd()} className="w-full px-4 py-2 bg-cyan-600 text-white rounded hover:bg-cyan-500 font-medium transition-colors">Confirm Trait</button>
+            </div>
+          </div>
+        )}
+      </div>
+      ) : (
+          <div className="flex-1 flex flex-col items-center justify-center text-slate-600 p-4 text-center"><Users size={48} className="mb-4 opacity-50"/><p>Select or create a character to begin.</p><button onClick={onAddCharacter} className="mt-4 px-4 py-2 bg-cyan-900/30 text-cyan-400 border border-cyan-800 rounded hover:bg-cyan-900/50 transition-colors">Create First Character</button></div>
+      )}
+    </div>
+  );
+}
+
+function TraitColumn({ title, subtitle, color, bg, textColor, traits, onAdd, onDelete, onSuggest, isResult = false }: any) {
+  return (
+    <div className={`flex flex-col h-full rounded-xl border ${color} ${bg} relative z-10 backdrop-blur-sm transition-all hover:bg-slate-900/80 min-h-[200px]`}>
+      <div className={`p-4 border-b ${color} bg-slate-900/50 rounded-t-xl flex justify-between items-center`}>
+        <div><h3 className={`font-bold ${textColor}`}>{title}</h3><span className="text-xs text-slate-400">{subtitle}</span></div>
+        <button onClick={onSuggest} className="text-xs flex items-center bg-slate-800 px-2 py-1 rounded text-slate-400 hover:text-white transition-colors"><Zap size={10} className="mr-1"/> Infer</button>
+      </div>
+      <div className="flex-1 p-4 space-y-3 overflow-y-auto">
+        {traits.map((t: Trait) => (
+          <div key={t.id} className="group p-3 bg-slate-900 border border-slate-700 rounded shadow-sm text-sm text-slate-300 hover:border-slate-500 transition-colors cursor-default relative flex justify-between items-center">
+            <span>{t.text}</span>
+            <button onClick={() => onDelete(t.id)} className="text-slate-600 hover:text-red-400 opacity-100 md:opacity-0 group-hover:opacity-100 transition-opacity"><X size={12}/></button>
+            <div className={`hidden md:block absolute top-1/2 -translate-y-1/2 w-2 h-2 rounded-full border border-slate-900 ${isResult ? '-left-1 bg-orange-500' : '-right-1 bg-slate-500'}`}></div>
+          </div>
+        ))}
+        <button onClick={onAdd} className="w-full py-2 border border-dashed border-slate-600/50 text-slate-500/50 text-xs rounded hover:bg-slate-800/50 hover:text-slate-300 transition-colors">+ Add Trait</button>
+      </div>
+    </div>
+  );
+}
+
+function ConflictView({ conflict, onUpdateBeat, onSimulate }: any) {
+  return (
+    <div className="h-full p-4 md:p-8 overflow-y-auto bg-slate-950 w-full">
+      <div className="max-w-4xl mx-auto space-y-8 pb-12">
+        <div className="text-center md:text-left">
+          <h2 className="text-2xl font-light text-slate-200 mb-1">Conflict Orchestration</h2>
+          <p className="text-slate-400 text-sm">Design the Dialectical Progression. Thesis vs Antithesis = Synthesis.</p>
+        </div>
+
+        {/* Beats List */}
+        <div className="space-y-6">
+            {conflict.beats.map((beat: SceneBeat) => (
+                <div key={beat.id} className="bg-slate-900 border border-slate-700 rounded-lg p-6 shadow-md hover:border-slate-500 transition-colors">
+                    <div className="flex justify-between items-start mb-4">
+                        <div>
+                            <span className={`text-[10px] font-bold uppercase tracking-widest px-2 py-1 rounded ${beat.type === 'Crisis' ? 'bg-orange-900/30 text-orange-400' : beat.type === 'Climax' ? 'bg-red-900/30 text-red-400' : 'bg-slate-800 text-slate-400'}`}>{beat.type}</span>
+                            <h3 className="text-lg font-bold text-white mt-1">{beat.title}</h3>
+                        </div>
+                        <button 
+                            onClick={() => onSimulate(beat.id)}
+                            className="text-xs flex items-center bg-cyan-900/20 text-cyan-400 border border-cyan-800/50 px-3 py-1 rounded hover:bg-cyan-900/40 transition-colors"
+                        >
+                            <Play size={12} className="mr-2 fill-cyan-400" /> Simulate Dialectic
+                        </button>
+                    </div>
+                    <textarea 
+                        className="w-full bg-slate-950 border border-slate-800 rounded p-3 text-sm text-slate-300 outline-none focus:border-cyan-500 min-h-[80px]" 
+                        placeholder="Describe the action here..."
+                        value={beat.desc}
+                        onChange={(e) => onUpdateBeat(beat.id, e.target.value)}
+                    />
+                </div>
+            ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function EditorView({ script, setScript, warnings, runCheck, isChecking }: any) {
+  const [isFeedbackOpen, setIsFeedbackOpen] = useState(false);
+  return (
+    <div className="h-full flex overflow-hidden relative">
+      <div className="flex-1 flex flex-col bg-slate-950 relative">
+        <div className="h-12 bg-slate-900 border-b border-slate-800 flex items-center justify-between px-4 shrink-0">
+           <span className="text-xs font-bold text-slate-500 uppercase flex items-center"><FileText size={12} className="mr-2" /> Drafting Mode</span>
+           <div className="flex space-x-2">
+             <button onClick={runCheck} disabled={isChecking} className="text-xs flex items-center text-cyan-400 hover:text-cyan-300 bg-cyan-900/20 px-3 py-1 rounded border border-cyan-800/50 transition-colors disabled:opacity-50">
+                {isChecking ? <RefreshCw size={12} className="animate-spin mr-1"/> : <Zap size={12} className="mr-1 fill-cyan-400" />}
+                <span className="hidden md:inline">Run </span>Check
+              </button>
+              <button onClick={() => setIsFeedbackOpen(!isFeedbackOpen)} className="md:hidden p-1 text-slate-400 border border-slate-700 rounded bg-slate-800"><MoreHorizontal size={16}/></button>
+           </div>
+        </div>
+        <div className="flex-1 relative overflow-hidden">
+           <textarea value={script} onChange={(e) => setScript(e.target.value)} className="w-full h-full bg-slate-950 text-slate-300 font-mono p-4 md:p-12 text-base md:text-lg outline-none resize-none leading-relaxed selection:bg-cyan-900/50" spellCheck={false} placeholder="INT. LOCATION - TIME..."/>
+        </div>
+      </div>
+      <div className={`absolute inset-y-0 right-0 w-80 bg-slate-900 border-l border-slate-800 flex flex-col shrink-0 z-40 transform transition-transform duration-300 md:relative md:transform-none ${isFeedbackOpen ? 'translate-x-0' : 'translate-x-full'}`}>
+        <div className="p-4 border-b border-slate-800 bg-slate-850 flex justify-between items-center">
+          <h3 className="text-sm font-bold text-slate-200 flex items-center"><MessageSquare size={16} className="mr-2 text-purple-400" /> Feedback</h3>
+          <button onClick={() => setIsFeedbackOpen(false)} className="md:hidden text-slate-500"><X size={16}/></button>
+        </div>
+        <div className="flex-1 p-4 space-y-4 overflow-y-auto">
+          {warnings.length === 0 ? <div className="text-center mt-10 text-slate-600 px-4"><p className="text-sm mb-2">Write your scene.</p><p className="text-xs">The Dialectic Engine will analyze motivation.</p></div> : 
+            warnings.map((w: any, i: number) => <div key={i} className={`border-l-2 p-3 rounded shadow-sm text-xs leading-relaxed ${w.type === 'ok' ? 'bg-green-900/10 border-green-500 text-green-300' : 'bg-red-900/10 border-red-500 text-slate-300'}`}><div className="flex items-start">{w.type === 'ok' ? <CheckCircle size={14} className="mt-0.5 mr-2 shrink-0"/> : <AlertTriangle size={14} className="mt-0.5 mr-2 shrink-0 text-red-500"/>}<p>{w.message}</p></div></div>)}
+        </div>
+      </div>
+      {isFeedbackOpen && <div className="md:hidden absolute inset-0 bg-black/50 z-30" onClick={() => setIsFeedbackOpen(false)}></div>}
+    </div>
+  );
+}
+
+
