@@ -48,6 +48,9 @@ export default function Studio() {
     patch({ stage: n })
   }
 
+  const gateOk = validateStage(state, stage).ok
+  const next = () => stage < 5 && goTo(stage + 1)
+
   return (
     <div className="studio-root min-h-screen flex flex-col">
       <header
@@ -72,6 +75,31 @@ export default function Studio() {
           <ReviewStage state={state} projectId={syncProjectId} onDone={() => navigate('/dashboard')} />
         )}
       </main>
+      <footer
+        className="flex items-center justify-between px-6 py-4 max-w-3xl mx-auto w-full"
+        style={{ borderTop: '1px solid var(--studio-border)' }}
+      >
+        <button
+          type="button"
+          onClick={() => stage > 1 && goTo(stage - 1)}
+          disabled={stage <= 1}
+          className="text-sm px-4 py-2 rounded-md border disabled:opacity-40"
+          style={{ color: 'var(--studio-muted)', borderColor: 'var(--studio-border)' }}
+        >
+          Back
+        </button>
+        {stage < 5 && (
+          <button
+            type="button"
+            onClick={next}
+            disabled={!gateOk}
+            className="text-sm px-5 py-2 rounded-md font-semibold disabled:opacity-40"
+            style={{ background: 'var(--studio-accent)', color: '#06262b' }}
+          >
+            Next
+          </button>
+        )}
+      </footer>
     </div>
   )
 }
