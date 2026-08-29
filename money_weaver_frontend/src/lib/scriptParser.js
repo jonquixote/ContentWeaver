@@ -142,7 +142,6 @@ function parseLegacyFallback(text) {
   const lines = text.split('\n')
   const scenes = []
   let cur = null
-  let curCharacter = null
   for (const raw of lines) {
     const line = raw.trim()
     if (!line || line === 'END') continue
@@ -151,7 +150,6 @@ function parseLegacyFallback(text) {
       if (cur) scenes.push(cur)
       const n = parseInt(h[1], 10)
       cur = { scene_number: n, description: (h[2] || `Scene ${n}`).trim(), start_time: (n - 1) * 5, end_time: n * 5, duration: 5, visual_description: '', voiceover: '' }
-      curCharacter = null
       continue
     }
     if (!cur) continue
@@ -159,7 +157,7 @@ function parseLegacyFallback(text) {
     if (a) { cur.visual_description = cur.visual_description ? `${cur.visual_description} ${a[1].trim()}` : a[1].trim(); continue }
     const d = line.match(DIALOG_RE_L)
     if (d) { cur.voiceover = cur.voiceover ? `${cur.voiceover} ${d[1].trim()}` : d[1].trim(); continue }
-    if (/^NARRATOR\s*$/i.test(line)) { curCharacter = 'NARRATOR'; continue }
+    if (/^NARRATOR\s*$/i.test(line)) continue
     if (/^(CUT TO|FADE IN|FADE OUT|DISSOLVE TO|SMASH CUT)/i.test(line)) continue
     // bare text inside legacy scene → treat as voiceover/action
     if (line.length > 3) {

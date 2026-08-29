@@ -1,6 +1,6 @@
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { it, expect, vi, beforeEach } from 'vitest'
 import SettingsPage from '@/components/SettingsPage'
 import ApiService from '@/services/api'
 import { useAuthStore } from '@/store/authStore'

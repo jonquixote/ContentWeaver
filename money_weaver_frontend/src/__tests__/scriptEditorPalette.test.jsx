@@ -1,6 +1,6 @@
 import { render, screen, fireEvent } from '@testing-library/react'
 import ScriptEditor from '@/components/ScriptEditor'
-import { vi } from 'vitest'
+import { test, expect, vi } from 'vitest'
 
 // jsdom has no TipTap DOM geometry, but basic commands work: the existing
 // wizardGenerative tests render this same real ScriptEditor successfully.

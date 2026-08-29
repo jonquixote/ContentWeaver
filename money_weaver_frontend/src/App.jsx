@@ -1,4 +1,4 @@
-import { BrowserRouter as Router, Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom'
+import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import Dashboard from './components/Dashboard'
 import ProjectDetail from './pages/ProjectDetail'
 import Studio from './pages/Studio'
@@ -53,8 +53,6 @@ const PublicRoute = ({ children }) => {
 }
 
 function AppContent() {
-  const navigate = useNavigate()
-
   return (
     <Routes>
       <Route path="/" element={<Navigate to="/dashboard" replace />} />

@@ -4,7 +4,7 @@ const LEGACY_ACTION_RE = /^\[ACTION:\s*(.*?)\]\s*$/i
 const VO_RE = /^Voiceover:\s*"?(.*?)"?\s*$/i
 const DLG_RE = /^\[DIALOGUE:\s*(.*?)\]\s*$/i
 const BARE_DLG_RE = /^DIALOGUE:\s*(.*)\s*$/i
-const CHAR_RE = /^([A-Z][A-Z0-9 \-]{0,30}):\s*$/
+const CHAR_RE = /^([A-Z][A-Z0-9 -]{0,30}):\s*$/
 export const TRANSITIONS = ['CUT TO:', 'MATCH CUT TO:', 'FADE OUT.', 'SMASH CUT TO:']
 
 export const BLOCK_TYPES = [
