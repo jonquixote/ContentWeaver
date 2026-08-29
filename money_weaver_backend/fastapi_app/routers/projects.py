@@ -1,3 +1,5 @@
+import json
+from datetime import datetime, timezone
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Response
@@ -70,6 +72,15 @@ def create_project(body: ProjectCreate, user=Depends(current_user), session=Depe
     return project.to_dict()
 
 
+@router.post('/studio', status_code=201)
+def create_studio_draft(user=Depends(current_user), session=Depends(get_db)):
+    project = Project(title='Studio Draft', description='',
+                      user_id=user.id, workflow_type='assembler')
+    session.add(project)
+    session.commit()
+    return project.to_dict()
+
+
 @router.get('/{project_id}')
 def get_project(project_id: int, user=Depends(current_user), session=Depends(get_db)):
     project = session.get(Project, project_id)
@@ -112,3 +123,29 @@ def delete_project(project_id: int, user=Depends(current_user), session=Depends(
     session.delete(project)
     session.commit()
     return Response(status_code=204)
+
+
+@router.get('/{project_id}/studio')
+def get_studio_state(project_id: int, user=Depends(current_user), session=Depends(get_db)):
+    project = session.get(Project, project_id)
+    if project is None:
+        raise HTTPException(404, 'Not found')
+    if project.user_id != user.id:
+        raise HTTPException(403, 'Forbidden')
+    if project.studio_state is None:
+        raise HTTPException(404, 'No studio draft')
+    return {'studio_state': json.loads(project.studio_state)}
+
+
+@router.put('/{project_id}/studio')
+def put_studio_state(project_id: int, body: dict,
+                     user=Depends(current_user), session=Depends(get_db)):
+    project = session.get(Project, project_id)
+    if project is None:
+        raise HTTPException(404, 'Not found')
+    if project.user_id != user.id:
+        raise HTTPException(403, 'Forbidden')
+    project.studio_state = json.dumps(body)
+    project.schema_version = int(body.get('schemaVersion', project.schema_version or 1))
+    session.commit()
+    return {'saved_at': datetime.now(timezone.utc).isoformat()}
