@@ -66,3 +66,7 @@ Design tokens (`--studio-*` CSS vars in index.css), `AIGenButton` (ghost ✦, sp
 ### S3 ScriptStage (2026-08-29)
 
 `ScriptStage` (title ✦ via enhance-prompt, description ✦ via `/generate/description`, draft ✦ canonicalized through `scriptTextToHtml` (new `lib/studioUtils.js`), enhance ✦ improve-only w/ confirm, characters auto-extract + manual add/remove). Wired stage 2 in Studio.jsx. vitest 83/83, build ok.
+
+### S4 StoryboardStage (2026-08-29)
+
+`StoryboardStage` (scene cards via `parseScriptText`, per-scene visual textarea + ✦suggest, editable duration + live total chip, reference image). **Deviation:** backend has no image-upload endpoint (`/uploads/presign` is audio-only), so reference image is stored as a client-side data-URL in `overrides[].imageKey` (preview only; does not feed render pipeline). vitest 90/90, build ok.
