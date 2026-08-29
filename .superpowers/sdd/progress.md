@@ -54,3 +54,7 @@ Fresh-boot verification at HEAD: backend `run.py` on :5004 (SQLite, SECRET_KEY s
 1. **Seed wipe in dev StrictMode:** ScriptEditor's empty-editor seed (sceneHeader+voiceover) is applied then wiped by React StrictMode's double-invoked effect — `seededRef` is already `true` on the second run, so the external-sync branch calls `setContent('')` (ScriptEditor.jsx:38-53). Dev-only; production build unaffected; unit tests (jsdom) don't exercise the double-invoke. Palette insertion unaffected — chips insert correctly regardless.
 2. **Visual chip prefill is empty** by design (`blockToInsertContent` default → empty paragraph); invisible in the editor but structurally inserted.
 3. **Scenes require `Voiceover:` line after each header** — `SCENE_PATTERN` in `scriptParser.js` only counts header+voiceover pairs; a trailing header alone yields no scene card. Canon behavior; wizard warns accordingly.
+
+### S1 Studio backend persistence (2026-08-29)
+
+Backend contract for Studio landed: `Project.studio_state` (TEXT, nullable) + `schema_version` (INT default 1) with lightweight `ALTER TABLE` migration in lifespan; `POST /api/projects/studio` (201 draft), `GET /api/projects/{id}/studio`, `PUT /api/projects/{id}/studio` (ownership 403/404); `POST /api/generate/description` (premise+script → description, 400/503 graceful). Commits 57a95e2, ec6318e, 34774d1. Suite 415 passed (68.11%).
