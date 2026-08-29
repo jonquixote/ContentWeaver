@@ -1,3 +1,18 @@
+/* Studio design tokens (spec 2026-08-27: technical studio, refined) */
+:root {
+  --studio-bg: #070b12;
+  --studio-surface: #0c121c;
+  --studio-card: #111827;
+  --studio-border: #1e293b;
+  --studio-accent: #22d3ee;
+  --studio-text: #f1f5f9;
+  --studio-muted: #94a3b8;
+}
+.studio-root {
+  background: var(--studio-bg);
+  color: var(--studio-text);
+}
+
 /* TipTap editor */
 .tiptap p.is-editor-empty:first-child::before {
   content: attr(data-placeholder);
