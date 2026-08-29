@@ -18,6 +18,8 @@ class Project(get_db().Model):
     transcript = get_db().Column(get_db().Text)  # JSON list of {word,start,end}
     video_url = get_db().Column(get_db().String(500))
     voice_type = get_db().Column(get_db().String(50), default='female')  # female, male, neutral
+    studio_state = get_db().Column(get_db().Text, nullable=True)  # JSON draft state for Studio
+    schema_version = get_db().Column(get_db().Integer, default=1, nullable=False)
     created_at = get_db().Column(get_db().DateTime, default=datetime.utcnow)
     updated_at = get_db().Column(get_db().DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     

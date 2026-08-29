@@ -75,6 +75,15 @@ async def lifespan(app: FastAPI):
             _conn.execute(_text("ALTER TABLE task ADD COLUMN thumbnail_path VARCHAR(500)"))
             _conn.commit()
 
+    _pcols = [c['name'] for c in _inspect(engine).get_columns('project')]
+    with engine.connect() as _conn:
+        if 'studio_state' not in _pcols:
+            _conn.execute(_text("ALTER TABLE project ADD COLUMN studio_state TEXT"))
+        if 'schema_version' not in _pcols:
+            _conn.execute(_text(
+                "ALTER TABLE project ADD COLUMN schema_version INTEGER DEFAULT 1 NOT NULL"))
+        _conn.commit()
+
     # Seed default format presets (mirrors src/main.py:88-101).
     with db_session() as session:
         if session.query(FormatPreset).count() == 0:
