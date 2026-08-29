@@ -62,3 +62,7 @@ Backend contract for Studio landed: `Project.studio_state` (TEXT, nullable) + `s
 ### S2 Studio shell + Premise (2026-08-29)
 
 Design tokens (`--studio-*` CSS vars in index.css), `AIGenButton` (ghost ✦, spinner, toast errors), `studioState.js` (default state, STAGES, DURATIONS, `validateStage`/`sceneCount`), `StageTabs` (locked-then-revisitable), `useStudioSync` (localStorage instant + server PUT at stage transitions, server-state-wins on load, 404→null), `api.js` studio methods, `/studio` + `/studio/:projectId` routes, `Studio.jsx` shell, `PremiseStage`. Commits e9b4bf0, 3232bc6, 5b1bbb3, d02a0d8. vitest 76/76, vite build ok.
+
+### S3 ScriptStage (2026-08-29)
+
+`ScriptStage` (title ✦ via enhance-prompt, description ✦ via `/generate/description`, draft ✦ canonicalized through `scriptTextToHtml` (new `lib/studioUtils.js`), enhance ✦ improve-only w/ confirm, characters auto-extract + manual add/remove). Wired stage 2 in Studio.jsx. vitest 83/83, build ok.
