@@ -58,3 +58,7 @@ Fresh-boot verification at HEAD: backend `run.py` on :5004 (SQLite, SECRET_KEY s
 ### S1 Studio backend persistence (2026-08-29)
 
 Backend contract for Studio landed: `Project.studio_state` (TEXT, nullable) + `schema_version` (INT default 1) with lightweight `ALTER TABLE` migration in lifespan; `POST /api/projects/studio` (201 draft), `GET /api/projects/{id}/studio`, `PUT /api/projects/{id}/studio` (ownership 403/404); `POST /api/generate/description` (premise+script → description, 400/503 graceful). Commits 57a95e2, ec6318e, 34774d1. Suite 415 passed (68.11%).
+
+### S2 Studio shell + Premise (2026-08-29)
+
+Design tokens (`--studio-*` CSS vars in index.css), `AIGenButton` (ghost ✦, spinner, toast errors), `studioState.js` (default state, STAGES, DURATIONS, `validateStage`/`sceneCount`), `StageTabs` (locked-then-revisitable), `useStudioSync` (localStorage instant + server PUT at stage transitions, server-state-wins on load, 404→null), `api.js` studio methods, `/studio` + `/studio/:projectId` routes, `Studio.jsx` shell, `PremiseStage`. Commits e9b4bf0, 3232bc6, 5b1bbb3, d02a0d8. vitest 76/76, vite build ok.
