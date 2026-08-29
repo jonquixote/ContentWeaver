@@ -70,3 +70,7 @@ Design tokens (`--studio-*` CSS vars in index.css), `AIGenButton` (ghost ✦, sp
 ### S4 StoryboardStage (2026-08-29)
 
 `StoryboardStage` (scene cards via `parseScriptText`, per-scene visual textarea + ✦suggest, editable duration + live total chip, reference image). **Deviation:** backend has no image-upload endpoint (`/uploads/presign` is audio-only), so reference image is stored as a client-side data-URL in `overrides[].imageKey` (preview only; does not feed render pipeline). vitest 90/90, build ok.
+
+### S5 Render + Review (2026-08-29)
+
+`RenderStage` (workflow radio, preset→orientation/dims, voice type, cloned voice, fal API voices → `voiceModelOverride`, text model override via ModelPicker, language) and `ReviewStage` (summary grid, estimated time, Create → reuses draft `projectId`, assembler/generative enqueue → `VideoProgressTracker`). Added `render.textModelOverride` (additive) to state contract. Wired stages 4-5 in Studio.jsx. vitest 97/97, build ok.
