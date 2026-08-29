@@ -386,6 +386,29 @@ class ApiService {
     return this.request(`/topics${query}`)
   }
 
+  // Studio draft persistence endpoints
+  async createStudioProject() {
+    return this.request('/projects/studio', { method: 'POST', body: JSON.stringify({}) })
+  }
+
+  async getStudioState(projectId) {
+    return this.request(`/projects/${projectId}/studio`)
+  }
+
+  async saveStudioState(projectId, state) {
+    return this.request(`/projects/${projectId}/studio`, {
+      method: 'PUT',
+      body: JSON.stringify(state),
+    })
+  }
+
+  async generateDescription(premise, script = '') {
+    return this.request('/generate/description', {
+      method: 'POST',
+      body: JSON.stringify({ premise, script }),
+    })
+  }
+
   // Viral clip detection
   async detectClips(projectId, videoKey, count) {
     return this.request('/clips/detect', {
