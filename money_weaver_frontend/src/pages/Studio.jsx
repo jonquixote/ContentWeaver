@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import StageTabs from '@/components/studio/StageTabs'
 import PremiseStage from '@/components/studio/PremiseStage'
+import ScriptStage from '@/components/studio/ScriptStage'
 import useStudioSync from '@/hooks/useStudioSync'
 import { validateStage } from '@/lib/studioState'
 
@@ -61,6 +62,7 @@ export default function Studio() {
       <StageTabs current={stage} furthest={furthest} onGo={goTo} />
       <main className="flex-1 overflow-y-auto p-6 max-w-3xl mx-auto w-full">
         {stage === 1 && <PremiseStage state={state} patch={patch} />}
+        {stage === 2 && <ScriptStage state={state} patch={patch} />}
       </main>
     </div>
   )
