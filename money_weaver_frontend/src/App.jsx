@@ -1,6 +1,7 @@
 import { BrowserRouter as Router, Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom'
 import Dashboard from './components/Dashboard'
 import ProjectDetail from './pages/ProjectDetail'
+import Studio from './pages/Studio'
 import VideoCreationWizard from './components/VideoCreationWizard'
 import VoiceCloning from './components/VoiceCloning'
 import SettingsPage from './components/SettingsPage'
@@ -89,6 +90,22 @@ function AppContent() {
             <VideoCreationWizard onBack={() => navigate('/dashboard')} />
           </ProtectedRoute>
         } 
+      />
+      <Route
+        path="/studio"
+        element={
+          <ProtectedRoute>
+            <Studio />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/studio/:projectId"
+        element={
+          <ProtectedRoute>
+            <Studio />
+          </ProtectedRoute>
+        }
       />
       <Route 
         path="/projects/:id" 
