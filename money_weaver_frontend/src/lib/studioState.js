@@ -24,6 +24,7 @@ export function defaultStudioState() {
       voiceType: 'female',
       voiceId: null,
       voiceModelOverride: null,
+      textModelOverride: null,
       workflowType: 'assembler',
       orientation: 'landscape',
       width: '1920',

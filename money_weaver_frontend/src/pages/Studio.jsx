@@ -4,13 +4,15 @@ import StageTabs from '@/components/studio/StageTabs'
 import PremiseStage from '@/components/studio/PremiseStage'
 import ScriptStage from '@/components/studio/ScriptStage'
 import StoryboardStage from '@/components/studio/StoryboardStage'
+import RenderStage from '@/components/studio/RenderStage'
+import ReviewStage from '@/components/studio/ReviewStage'
 import useStudioSync from '@/hooks/useStudioSync'
 import { validateStage } from '@/lib/studioState'
 
 export default function Studio() {
   const { projectId } = useParams()
   const navigate = useNavigate()
-  const { state, patch, ready, saveStatus } = useStudioSync(projectId, (id) =>
+  const { state, patch, ready, saveStatus, projectId: syncProjectId } = useStudioSync(projectId, (id) =>
     navigate(`/studio/${id}`, { replace: true }))
   const [stage, setStage] = useState(1)
   const [furthest, setFurthest] = useState(1)
@@ -65,6 +67,10 @@ export default function Studio() {
         {stage === 1 && <PremiseStage state={state} patch={patch} />}
         {stage === 2 && <ScriptStage state={state} patch={patch} />}
         {stage === 3 && <StoryboardStage state={state} patch={patch} />}
+        {stage === 4 && <RenderStage state={state} patch={patch} />}
+        {stage === 5 && (
+          <ReviewStage state={state} projectId={syncProjectId} onDone={() => navigate('/dashboard')} />
+        )}
       </main>
     </div>
   )
