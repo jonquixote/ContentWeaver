@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom'
 import StageTabs from '@/components/studio/StageTabs'
 import PremiseStage from '@/components/studio/PremiseStage'
 import ScriptStage from '@/components/studio/ScriptStage'
+import StoryboardStage from '@/components/studio/StoryboardStage'
 import useStudioSync from '@/hooks/useStudioSync'
 import { validateStage } from '@/lib/studioState'
 
@@ -63,6 +64,7 @@ export default function Studio() {
       <main className="flex-1 overflow-y-auto p-6 max-w-3xl mx-auto w-full">
         {stage === 1 && <PremiseStage state={state} patch={patch} />}
         {stage === 2 && <ScriptStage state={state} patch={patch} />}
+        {stage === 3 && <StoryboardStage state={state} patch={patch} />}
       </main>
     </div>
   )
