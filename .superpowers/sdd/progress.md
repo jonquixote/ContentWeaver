@@ -82,3 +82,9 @@ Design tokens (`--studio-*` CSS vars in index.css), `AIGenButton` (ghost ✦, sp
 **E2E (Playwright, fresh boot):** register → dashboard → New project → `/studio/2` → premise → script (title + canonical scene typed) → storyboard 2 scene cards → render → review (title + resolution) → create (graceful 503, no redis). **13/14 checks**; sole non-check is `console.error` from the expected 404 "No studio draft" probe on fresh load (hook catches gracefully). Evidence: `/var/folders/.../opencode/studio-e2e/` (storyboard.png, review.png, after-create.png).
 
 **Gates:** vitest **85/85**, pytest **415 passed** (68.11%), `vite build` ok, `eslint` 0 errors.
+
+### A-Z verification follow-up (2026-08-29)
+
+- **Bug fix:** StrictMode double-invokes `useStudioSync` mount effect in dev → a fresh "New project" minted TWO orphaned drafts (E2E showed `resume=2`). Guarded create branch with `createdRef` (refs persist across StrictMode's simulated remount; cleanup doesn't reset). New StrictMode test locks create-once. Commit in this batch.
+- **Bug fix:** Stage-4 preset gate (spec: "preset selected if presets exist") was never enforced in the shell — `goTo`/`gateOk` called `validateStage` without `presets` ctx. Studio now loads `usePresets` and passes `{ presets }`. Next button blocks until a preset is chosen when presets exist.
+- **Verification (fresh boot, reset DB):** backend 415 passed (68.11%), frontend vitest 86/86 (+1 StrictMode test), `vite build` ok, eslint 0 errors. Playwright Studio E2E **19/20**; sole flag is an over-strict `console.error` check on two by-design graceful degradations (404 "No studio draft" probe, 503 without celery/redis). Persistence verified: reload restores state from server, dashboard lists the draft, Resume → /studio/:id. DB has exactly one project row.
