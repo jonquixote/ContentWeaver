@@ -68,14 +68,16 @@ export default function Studio() {
         </span>
       </header>
       <StageTabs current={stage} furthest={furthest} onGo={goTo} />
-      <main className="flex-1 overflow-y-auto p-6 max-w-3xl mx-auto w-full">
-        {stage === 1 && <PremiseStage state={state} patch={patch} />}
-        {stage === 2 && <ScriptStage state={state} patch={patch} />}
-        {stage === 3 && <StoryboardStage state={state} patch={patch} />}
-        {stage === 4 && <RenderStage state={state} patch={patch} />}
-        {stage === 5 && (
-          <ReviewStage state={state} projectId={syncProjectId} onDone={() => navigate('/dashboard')} />
-        )}
+      <main className="flex-1 flex overflow-y-auto p-6 max-w-3xl mx-auto w-full">
+        <div className="m-auto w-full">
+          {stage === 1 && <PremiseStage state={state} patch={patch} />}
+          {stage === 2 && <ScriptStage state={state} patch={patch} />}
+          {stage === 3 && <StoryboardStage state={state} patch={patch} />}
+          {stage === 4 && <RenderStage state={state} patch={patch} />}
+          {stage === 5 && (
+            <ReviewStage state={state} projectId={syncProjectId} onDone={() => navigate('/dashboard')} />
+          )}
+        </div>
       </main>
       <footer
         className="flex items-center justify-between px-6 py-4 max-w-3xl mx-auto w-full"

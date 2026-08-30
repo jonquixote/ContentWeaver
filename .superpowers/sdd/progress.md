@@ -88,3 +88,12 @@ Design tokens (`--studio-*` CSS vars in index.css), `AIGenButton` (ghost ✦, sp
 - **Bug fix:** StrictMode double-invokes `useStudioSync` mount effect in dev → a fresh "New project" minted TWO orphaned drafts (E2E showed `resume=2`). Guarded create branch with `createdRef` (refs persist across StrictMode's simulated remount; cleanup doesn't reset). New StrictMode test locks create-once. Commit in this batch.
 - **Bug fix:** Stage-4 preset gate (spec: "preset selected if presets exist") was never enforced in the shell — `goTo`/`gateOk` called `validateStage` without `presets` ctx. Studio now loads `usePresets` and passes `{ presets }`. Next button blocks until a preset is chosen when presets exist.
 - **Verification (fresh boot, reset DB):** backend 415 passed (68.11%), frontend vitest 86/86 (+1 StrictMode test), `vite build` ok, eslint 0 errors. Playwright Studio E2E **19/20**; sole flag is an over-strict `console.error` check on two by-design graceful degradations (404 "No studio draft" probe, 503 without celery/redis). Persistence verified: reload restores state from server, dashboard lists the draft, Resume → /studio/:id. DB has exactly one project row.
+
+### Visual polish pass (2026-08-29, Playwright screenshot review)
+
+Visually reviewed every screen via headless Chromium. Fixes:
+- **Project title sync:** `PUT /api/projects/{id}/studio` now syncs `Project.title` from `studio_state.script.title` (blank titles ignored), so dashboard + `/projects/:id` show the real video title, not "Studio Draft". +2 backend tests (417 total).
+- **Design cohesion:** restyled reused `ScriptEditor` (canvas + palette chips) and `ModelPicker` (trigger + dropdown) off the old slate palette onto the studio `--studio-surface`/`--studio-border` tokens.
+- **Layout balance:** Studio stage content now vertically centends via flex `m-auto` (scroll-safe), removing the top-heavy dead space.
+
+Gates: backend 417 passed (68.13%), frontend vitest 86/86 (0 lint errors), vite build ok. E2E re-verified (register→dashboard→5 stages→create→persistence→resume), preset gate confirmed, dashboard title confirmed "The Coding Cat".

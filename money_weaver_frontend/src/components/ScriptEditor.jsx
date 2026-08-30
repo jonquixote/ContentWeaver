@@ -25,7 +25,7 @@ const ScriptEditor = ({ value = '', onChange, placeholder = 'Write your script. 
     },
     editorProps: {
       attributes: {
-        class: `${minHeight} px-4 py-3 text-sm text-slate-200 focus:outline-none`,
+        class: `${minHeight} px-4 py-3 text-sm text-slate-100 focus:outline-none`,
       },
     },
   })
@@ -71,8 +71,10 @@ const ScriptEditor = ({ value = '', onChange, placeholder = 'Write your script. 
   }, [editor, refreshCharacters])
 
   return (
-    <div className="bg-slate-700 border border-slate-600 rounded-md overflow-hidden">
-      <div className="flex flex-wrap gap-1.5 px-2 py-2 border-b border-slate-600 bg-slate-800">
+    <div className="rounded-md overflow-hidden border"
+         style={{ background: 'var(--studio-surface)', borderColor: 'var(--studio-border)' }}>
+      <div className="flex flex-wrap gap-1.5 px-2 py-2 border-b"
+           style={{ borderColor: 'var(--studio-border)', background: 'var(--studio-card)' }}>
         {BLOCK_TYPES.map((b) => (
           <button
             key={b.type}
@@ -81,7 +83,8 @@ const ScriptEditor = ({ value = '', onChange, placeholder = 'Write your script. 
             data-block-type={b.type}
             onDragStart={(e) => e.dataTransfer.setData('text/block-type', b.type)}
             onClick={() => insertBlock(b.type)}
-            className="px-2 py-0.5 text-xs rounded bg-slate-700 hover:bg-slate-600 text-slate-200 border border-slate-600 cursor-grab active:cursor-grabbing"
+            className="px-2 py-0.5 text-xs rounded border transition-colors"
+            style={{ background: 'var(--studio-surface)', borderColor: 'var(--studio-border)', color: 'var(--studio-text)' }}
             title={`Click to insert ${b.label}, or drag into the script`}
           >
             {b.label}

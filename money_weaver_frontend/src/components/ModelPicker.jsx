@@ -87,11 +87,12 @@ export default function ModelPicker({ models = [], value, onChange, kinds = null
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className={`flex w-full items-center justify-between gap-2 rounded-md bg-slate-700 text-white ${
+        className={`flex w-full items-center justify-between gap-2 rounded-md border text-white transition-colors ${
           compact ? 'px-2 py-1 text-xs' : 'px-3 py-2 text-sm'
         }`}
+        style={{ background: 'var(--studio-surface)', borderColor: 'var(--studio-border)' }}
       >
-        <span className="truncate">{selected ? selected.label : 'Select a model...'}</span>
+        <span className="truncate text-slate-200">{selected ? selected.label : 'Select a model...'}</span>
         {open ? (
           <X className={`${compact ? 'h-3 w-3' : 'h-4 w-4'} shrink-0 text-slate-400`} />
         ) : (
@@ -102,16 +103,18 @@ export default function ModelPicker({ models = [], value, onChange, kinds = null
       {open && (
         <div
           data-testid="model-picker-panel"
-          className="absolute z-50 mt-1 w-full rounded-md border border-slate-600 bg-slate-800 p-2 shadow-lg"
+          className="absolute z-50 mt-1 w-full rounded-md border p-2 shadow-lg"
+          style={{ background: 'var(--studio-card)', borderColor: 'var(--studio-border)' }}
         >
           <input
             type="text"
             value={q}
             onChange={(e) => setQ(e.target.value)}
             placeholder="Search models..."
-            className={`w-full rounded-md border border-slate-600 bg-slate-700 text-white placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-blue-500 ${
+            className={`w-full rounded-md border text-white placeholder:text-slate-500 focus:outline-none focus:ring-1 ${
               compact ? 'px-2 py-1 text-xs' : 'px-3 py-2 text-sm'
             }`}
+            style={{ background: 'var(--studio-surface)', borderColor: 'var(--studio-border)' }}
           />
 
           <div className="mt-2 flex flex-wrap gap-1">

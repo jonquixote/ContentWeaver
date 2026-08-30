@@ -147,5 +147,10 @@ def put_studio_state(project_id: int, body: dict,
         raise HTTPException(403, 'Forbidden')
     project.studio_state = json.dumps(body)
     project.schema_version = int(body.get('schemaVersion', project.schema_version or 1))
+    # Keep the real Project.title in sync with the studio script title so the
+    # dashboard list and /projects/:id reflect what the user actually named it.
+    script_title = (body.get('script') or {}).get('title')
+    if script_title and str(script_title).strip():
+        project.title = str(script_title).strip()
     session.commit()
     return {'saved_at': datetime.now(timezone.utc).isoformat()}

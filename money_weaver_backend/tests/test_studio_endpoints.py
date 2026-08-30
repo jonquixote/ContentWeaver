@@ -52,3 +52,31 @@ def test_studio_put_persists_schema_version(client, auth_headers):
     with db_session() as session:
         project = session.get(Project, pid)
         assert project.schema_version == 2
+
+
+def test_studio_put_syncs_project_title_from_script(client, auth_headers):
+    pid = client.post('/api/projects/studio', headers=auth_headers).json()['id']
+    state = {'stage': 2, 'schemaVersion': 1, 'premise': {'text': 'x'},
+             'script': {'title': 'The Coding Cat'}, 'storyboard': {'overrides': {}},
+             'render': {}, 'updatedAt': '2026-08-27T00:00:00Z'}
+    assert client.put(f'/api/projects/{pid}/studio', headers=auth_headers,
+                      json=state).status_code == 200
+    from src.models.project import Project
+    from fastapi_app.db import db_session
+    with db_session() as session:
+        project = session.get(Project, pid)
+        assert project.title == 'The Coding Cat'
+
+
+def test_studio_put_ignores_blank_script_title(client, auth_headers):
+    pid = client.post('/api/projects/studio', headers=auth_headers).json()['id']
+    state = {'stage': 2, 'schemaVersion': 1, 'premise': {'text': 'x'},
+             'script': {'title': '   '}, 'storyboard': {'overrides': {}},
+             'render': {}, 'updatedAt': '2026-08-27T00:00:00Z'}
+    assert client.put(f'/api/projects/{pid}/studio', headers=auth_headers,
+                      json=state).status_code == 200
+    from src.models.project import Project
+    from fastapi_app.db import db_session
+    with db_session() as session:
+        project = session.get(Project, pid)
+        assert project.title == 'Studio Draft'
