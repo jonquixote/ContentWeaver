@@ -20,15 +20,22 @@ export default function useStudioSync(projectId, onCreated = () => {}) {
   const [ready, setReady] = useState(false)
   const [saveStatus, setSaveStatus] = useState('idle')
   const idRef = useRef(projectId ?? null)
+  // StrictMode double-invokes mount effects in dev (mount → cleanup → remount on the
+  // same fiber). Guard the draft-create branch so a fresh "New project" never mints two
+  // orphaned drafts. Refs persist across that simulated remount; cleanup must NOT reset it.
+  const createdRef = useRef(false)
 
   useEffect(() => {
     let cancelled = false
     ;(async () => {
       try {
         if (projectId == null) {
-          const p = await ApiService.createStudioProject()
-          idRef.current = p.id
-          onCreated(p.id)
+          if (!createdRef.current) {
+            createdRef.current = true
+            const p = await ApiService.createStudioProject()
+            idRef.current = p.id
+            onCreated(p.id)
+          }
         } else {
           idRef.current = projectId
           let serverState = null

@@ -7,6 +7,7 @@ import StoryboardStage from '@/components/studio/StoryboardStage'
 import RenderStage from '@/components/studio/RenderStage'
 import ReviewStage from '@/components/studio/ReviewStage'
 import useStudioSync from '@/hooks/useStudioSync'
+import { usePresets } from '@/hooks/usePresets'
 import { validateStage } from '@/lib/studioState'
 
 export default function Studio() {
@@ -16,6 +17,7 @@ export default function Studio() {
     navigate(`/studio/${id}`, { replace: true }))
   const [stage, setStage] = useState(1)
   const [furthest, setFurthest] = useState(1)
+  const presets = usePresets().data ?? []
 
   useEffect(() => {
     if (ready) {
@@ -39,7 +41,7 @@ export default function Studio() {
   const goTo = (n) => {
     if (n > stage) {
       for (let s = stage; s < n; s++) {
-        const v = validateStage(state, s)
+        const v = validateStage(state, s, { presets })
         if (!v.ok) return // silently refuse; stage components surface errors
       }
     }
@@ -48,7 +50,7 @@ export default function Studio() {
     patch({ stage: n })
   }
 
-  const gateOk = validateStage(state, stage).ok
+  const gateOk = validateStage(state, stage, { presets }).ok
   const next = () => stage < 5 && goTo(stage + 1)
 
   return (

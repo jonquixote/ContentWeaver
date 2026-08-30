@@ -1,4 +1,5 @@
 import { renderHook, act, waitFor } from '@testing-library/react'
+import { StrictMode } from 'react'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import useStudioSync from '@/hooks/useStudioSync'
 import ApiService from '@/services/api'
@@ -15,6 +16,16 @@ describe('useStudioSync', () => {
     const { result } = renderHook(() => useStudioSync(undefined, onCreated))
     await waitFor(() => expect(result.current.ready).toBe(true))
     expect(onCreated).toHaveBeenCalledWith(42)
+  })
+
+  it('StrictMode double-mount mints exactly one draft (no orphans)', async () => {
+    const onCreated = vi.fn()
+    const create = vi.spyOn(ApiService, 'createStudioProject').mockResolvedValue({ id: 42 })
+    const wrapper = ({ children }) => <StrictMode>{children}</StrictMode>
+    const { result } = renderHook(() => useStudioSync(undefined, onCreated), { wrapper })
+    await waitFor(() => expect(result.current.ready).toBe(true))
+    expect(create).toHaveBeenCalledTimes(1)
+    expect(onCreated).toHaveBeenCalledTimes(1)
   })
 
   it('localStorage immediate, server sync on patch with stage change', async () => {
