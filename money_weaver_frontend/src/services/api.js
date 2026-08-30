@@ -66,6 +66,11 @@ class ApiService {
       return await response.text()
     } catch (error) {
       console.error('API request failed:', error)
+      // A fetch-level network failure (server unreachable) surfaces the browser's
+      // cryptic "Failed to fetch". Reword it so users know what to do.
+      if (error instanceof TypeError && /failed to fetch|networkerror|load failed|network request failed/i.test(error.message)) {
+        throw new Error('Cannot reach the server. Make sure the backend is running, then try again.')
+      }
       throw error
     }
   }

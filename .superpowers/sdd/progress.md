@@ -97,3 +97,11 @@ Visually reviewed every screen via headless Chromium. Fixes:
 - **Layout balance:** Studio stage content now vertically centends via flex `m-auto` (scroll-safe), removing the top-heavy dead space.
 
 Gates: backend 417 passed (68.13%), frontend vitest 86/86 (0 lint errors), vite build ok. E2E re-verified (register→dashboard→5 stages→create→persistence→resume), preset gate confirmed, dashboard title confirmed "The Coding Cat".
+
+### Login "Failed to fetch" (2026-08-30)
+
+Reported: login fails with "failed to fetch". Root cause: backend (port 5004) was not running — `fetch` to `http://localhost:5004/api/auth/login` threw the browser's `TypeError: Failed to fetch`, surfaced verbatim. Verified: with backend up, full login works (register→dashboard→logout→login→dashboard, 0 console errors); with backend down, the raw error showed.
+
+**Fix:** `ApiService.request` now detects fetch-level network failures (`TypeError` with "Failed to fetch"/"NetworkError"/"Load failed") and rethrows an actionable message — *"Cannot reach the server. Make sure the backend is running, then try again."* (+2 vitest tests, 88 total). UI verified to show the friendly message.
+
+**To run locally:** start backend (`money_weaver_backend` → `python run.py`, needs SECRET_KEY + DATABASE_URL) and frontend (`money_weaver_frontend` → `npm run dev`).
