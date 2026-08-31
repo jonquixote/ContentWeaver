@@ -141,10 +141,95 @@ class StockFootageService:
             return img
         return None
 
+    def _gemini_vision_score(self, image_url, description, voiceover):
+        """Vision score via Google Gemini (free-tier friendly). Returns 0-5 or
+        None on failure. Used when GEMINI_API_KEY is set; otherwise falls back
+        to OpenRouter."""
+        try:
+            import base64 as _b64
+            import json as _json
+            import re as _re
+            key = os.getenv('GEMINI_API_KEY')
+            if not key:
+                return None
+            if image_url.startswith('data:image/'):
+                b64str = image_url.split(',', 1)[1]
+            else:
+                r = requests.get(image_url, timeout=30)
+                if r.status_code != 200:
+                    return None
+                b64str = _b64.b64encode(r.content).decode()
+            payload = {
+                'contents': [{
+                    'parts': [
+                        {'text': (
+                            'You judge whether a stock-video thumbnail matches a scene. '
+                            'Reject clips that show something clearly unrelated to the scene '
+                            '(e.g. an animal or unrelated subject when the scene needs a person on a stage). '
+                            f'Scene shows: {description}. Voiceover: {voiceover}. '
+                            'Reply ONLY JSON: {"on_theme": true/false, "relevance": 0-5}. '
+                            'Set on_theme=false only when clearly unrelated.')},
+                        {'inline_data': {
+                            'mime_type': 'image/jpeg' if 'image/jpeg' in image_url else 'image/png',
+                            'data': b64str,
+                        }},
+                    ],
+                }],
+                'generationConfig': {'maxOutputTokens': 60, 'temperature': 0.1},
+            }
+            model = os.getenv('VISION_MODEL_GEMINI') or 'gemini-2.5-flash'
+            r = requests.post(
+                f'https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent',
+                params={'key': key}, json=payload, timeout=40)
+            if r.status_code != 200:
+                print(f"gemini vision status: {r.status_code} {r.text[:150]}")
+                return None
+            content = r.json()['candidates'][0]['content']['parts'][0]['text']
+            m = _re.search(r'\{.*\}', content, _re.DOTALL)
+            if not m:
+                return None
+            d = _json.loads(m.group(0))
+            if not isinstance(d, dict):
+                return None
+            if d.get('on_theme') is False:
+                return 0
+            return max(0, int(d.get('relevance') or 3))
+        except Exception as e:
+            print(f"gemini vision score failed: {e}")
+            return None
+
+    def _gemini_text(self, prompt, model='gemini-2.5-flash'):
+        """Gemini text completion via free-tier API; returns string or None."""
+        try:
+            import json as _json
+            key = os.getenv('GEMINI_API_KEY')
+            if not key:
+                return None
+            r = requests.post(
+                f'https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent',
+                params={'key': key},
+                json={'contents': [{'parts': [{'text': prompt}]}],
+                      'generationConfig': {'maxOutputTokens': 1200, 'temperature': 0.1}},
+                timeout=45)
+            if r.status_code != 200:
+                print(f"gemini text status: {r.status_code} {r.text[:150]}")
+                return None
+            parts = r.json()['candidates'][0]['content']['parts']
+            return ''.join(p.get('text', '') for p in parts)
+        except Exception as e:
+            print(f"gemini text failed: {e}")
+            return None
+
     def _vision_score(self, image_url, description, voiceover):
-        """0-5 relevance that a clip matches the scene; None on any failure."""
+        """0-5 relevance that a clip matches the scene; None on any failure.
+
+        Tries Gemini first (free-tier friendly when GEMINI_API_KEY is set),
+        then OpenRouter. Returns None when both are unavailable."""
         if not image_url:
             return None
+        score = self._gemini_vision_score(image_url, description, voiceover)
+        if score is not None:
+            return score
         try:
             import json as _json
             import re as _re
@@ -208,9 +293,14 @@ class StockFootageService:
                 'food/animal symbols, empty landscape). Clips of the story setting qualify. '
                 'Relevance 3+ = usable b-roll; 0-1 = useless for this scene.')
             model = os.getenv("SCRIPT_MODEL") or "openai/gpt-4o-mini"
-            raw = llm_service._chat_free_resilient(
-                None, model, [{'role': 'user', 'content': prompt}],
-                max_tokens=120, temperature=0.1)
+            gemini_key = os.getenv('GEMINI_API_KEY')
+            if gemini_key:
+                raw = self._gemini_text(
+                    prompt, os.getenv('GEMINI_MODEL') or 'gemini-2.5-flash')
+            else:
+                raw = llm_service._chat_free_resilient(
+                    None, model, [{'role': 'user', 'content': prompt}],
+                    max_tokens=120, temperature=0.1)
             m = _re.search(r'\{.*\}', raw or '', _re.DOTALL)
             if not m:
                 return [None] * len(labels)
