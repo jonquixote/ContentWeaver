@@ -115,9 +115,19 @@ class StockFootageService:
 
         try:
             model = os.getenv("SCRIPT_MODEL") or "openai/gpt-4o-mini"
-            raw = llm_service._chat_free_resilient(
-                None, model, [{"role": "user", "content": prompt}],
-                max_tokens=1600, temperature=0.2)
+            gen_kwargs = dict(max_tokens=1600, temperature=0.2)
+            # Gemini first (rotating keys = several 20/day buckets), then the
+            # OpenRouter pool. The paid openai/gpt-4o-mini default is kept only
+            # as a last resort because it 402s ("can only afford 53 tokens")
+            # whenever the primary OpenRouter balance is spent.
+            raw = None
+            if self._gemini_keys():
+                raw = self._gemini_text(
+                    prompt, os.getenv('GEMINI_MODEL') or 'gemini-2.5-flash-lite',
+                    max_tokens=1600)
+            if raw is None:
+                raw = self._openrouter_text_fallback(
+                    model, prompt, gen_kwargs)
             data = llm_service._extract_json(raw)
             if not isinstance(data, dict):
                 return {}
