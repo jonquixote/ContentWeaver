@@ -642,10 +642,15 @@ class StockFootageService:
                 print(f"Rerank failed for scene {i+1}, keeping original order: {e}")
                 random.shuffle(all_videos)
             
-            # Process videos, avoiding duplicates
+            # Process videos, avoiding duplicates (a scene uses 2-3 clips; cap
+            # successful downloads per scene so late scenes are not starved by
+            # earlier ones hoarding the global max_videos budget).
+            scene_downloads = 0
             for video_data in all_videos:
                 if downloaded_count >= max_videos:
                     break
+                if scene_downloads >= 3:
+                    break  # this scene has enough; keep budget for later scenes
                 
                 # Get video URL and metadata
                 video_url = None
@@ -762,6 +767,7 @@ class StockFootageService:
                         video_files.append((filepath, duration, video_metadata))
                         used_video_urls.add(video_url)  # Track this URL
                         downloaded_count += 1
+                        scene_downloads += 1
                     else:
                         print("Failed to download video")
                 elif video_url in used_video_urls:

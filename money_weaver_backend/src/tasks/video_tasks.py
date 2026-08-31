@@ -465,7 +465,9 @@ def generate_assembler_video_task(self, project_id, prompt, duration=30, orienta
             target_scene_count = video_settings.get_scene_count()
             
             # Request more videos than scenes to ensure variety (aim for 1.5-2x the scene count)
-            max_videos_needed = max(target_scene_count * 2, 8)  # At least 8 videos
+            # Scenes download up to 3 clips each; rejected clips don't consume the
+            # budget, so budget needs to cover valid downloads across ALL scenes.
+            max_videos_needed = max(target_scene_count * 3, 12)  # ~3 good clips per scene
             
             video_data = stock_service.get_stock_videos_for_script(
                 script, 
