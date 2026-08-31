@@ -204,18 +204,27 @@ class StockFootageService:
             return None
 
     def _gemini_text(self, prompt, model='gemini-2.5-flash', max_tokens=1200):
-        """Gemini text completion via free-tier API; returns string or None."""
+        """Gemini text completion via free-tier API; returns string or None.
+
+        Free tier is throttled (~20 req/min, RESOURCE_EXHAUSTED on burst), so
+        on a 429 we wait for the retry window and retry once (bounded), giving
+        a single scene's batch a fair chance without stalling the whole render.
+        """
         try:
             import json as _json
+            import time as _time
             key = os.getenv('GEMINI_API_KEY')
             if not key:
                 return None
-            r = requests.post(
-                f'https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent',
-                params={'key': key},
-                json={'contents': [{'parts': [{'text': prompt}]}],
-                      'generationConfig': {'maxOutputTokens': max_tokens, 'temperature': 0.1}},
-                timeout=45)
+            url = (f'https://generativelanguage.googleapis.com/v1beta/models/'
+                   f'{model}:generateContent')
+            payload = {'contents': [{'parts': [{'text': prompt}]}],
+                       'generationConfig': {'maxOutputTokens': max_tokens, 'temperature': 0.1}}
+            r = requests.post(url, params={'key': key}, json=payload, timeout=45)
+            if r.status_code == 429:
+                # ~21s backoff for free-tier RPM; sleep once and retry.
+                _time.sleep(24)
+                r = requests.post(url, params={'key': key}, json=payload, timeout=45)
             if r.status_code != 200:
                 print(f"gemini text status: {r.status_code} {r.text[:150]}")
                 return None
@@ -301,17 +310,15 @@ class StockFootageService:
                 'Relevance 3+ = usable b-roll; 0-1 = useless for this scene.')
             model = os.getenv("RERANK_TEXT_MODEL") or os.getenv("SCRIPT_MODEL") or "openai/gpt-4o-mini"
             gen_kwargs = dict(max_tokens=800, temperature=0.1)
-            if os.getenv('GEMINI_API_KEY') and not os.getenv('RERANK_TEXT_MODEL'):
-                # Gemini only when no explicit OpenRouter free model is set; the
-                # free-tier quota currently 429s, so RERANK_TEXT_MODEL (Gemma)
-                # is the primary when configured.
+            # Gemini first: its free quota is the most reliable and flash text
+            # works today. RERANK_TEXT_MODEL (e.g. Gemma) is only the OpenRouter
+            # free-tier fallback when Gemini is exhausted.
+            raw = None
+            if os.getenv('GEMINI_API_KEY'):
                 raw = self._gemini_text(
                     prompt, os.getenv('GEMINI_MODEL') or 'gemini-2.5-flash-lite',
                     max_tokens=1200)
-                if raw is None:
-                    raw = llm_service._chat_free_resilient(
-                        None, model, [{'role': 'user', 'content': prompt}], **gen_kwargs)
-            else:
+            if raw is None:
                 raw = llm_service._chat_free_resilient(
                     None, model, [{'role': 'user', 'content': prompt}], **gen_kwargs)
             m = _re.search(r'\{.*\}', raw or '', _re.DOTALL)
