@@ -205,6 +205,33 @@ class StockFootageService:
         scored.sort(key=key)
         return [v for v, _ in scored]
 
+    def _validate_downloaded_video(self, video_path, description, voiceover):
+        """Vision-check a downloaded clip's first frame; False only when it is
+        clearly off-theme. Accepts on any failure so we never silently reject
+        good footage (a scene is never emptied)."""
+        try:
+            import base64 as _b64
+            import subprocess as _sp
+            frame_path = os.path.join(
+                self.working_dir, f'vf_{int(time.time() * 1000)}.jpg')
+            r = _sp.run(
+                ['ffmpeg', '-y', '-ss', '0', '-i', video_path, '-frames:v', '1',
+                 '-vf', 'scale=320:-1', frame_path],
+                capture_output=True, timeout=30)
+            if r.returncode != 0 or not os.path.exists(frame_path):
+                return True
+            data = ('data:image/jpeg;base64,'
+                    + _b64.b64encode(open(frame_path, 'rb').read()).decode())
+            try:
+                os.remove(frame_path)
+            except Exception:
+                pass
+            score = self._vision_score(data, description, voiceover)
+            return score is None or score >= 2
+        except Exception as e:
+            print(f"frame validate failed (accepting): {e}")
+            return True
+
     def search_pexels_videos(self, query: str, per_page: int = 5, orientation: str = "landscape", min_width: int = 1280, min_height: int = 720) -> List[Dict]:
         """Search for videos on Pexels with resolution and orientation parameters"""
         if not self.pexels_api_key:
@@ -488,6 +515,16 @@ class StockFootageService:
                     filepath = self.download_video(video_url, filename)
                     if filepath:
                         print(f"Downloaded video to: {filepath}")
+                        # Verify the actual pixels are on-theme (catches off-theme
+                        # clips even when the provider gives no thumbnail).
+                        if not self._validate_downloaded_video(filepath, shot_desc, voiceover_text):
+                            print(f"Rejected off-theme clip, trying next candidate")
+                            try:
+                                os.remove(filepath)
+                            except Exception:
+                                pass
+                            used_video_urls.add(video_url)  # don't re-try this clip
+                            continue
                         # Get video duration using metadata if available, otherwise calculate
                         duration = video_metadata.get('pexels_duration') or video_metadata.get('pixabay_duration') or self.get_video_duration(filepath)
                         print(f"Video duration: {duration} seconds")
