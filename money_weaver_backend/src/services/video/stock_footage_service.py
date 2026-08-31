@@ -19,79 +19,119 @@ class StockFootageService:
         # For testing, we'll use sample videos if no API keys are configured
         self.use_sample_videos = not (self.pexels_api_key or self.pixabay_api_key)
     
+    # Words that describe mood/lighting/motion rather than a searchable visual
+    # subject. Keyword extraction should avoid these so queries return real
+    # footage instead of "dimly lit" -> random close-ups.
+    _WEAK_VISUAL_WORDS = {
+        "dimly", "lit", "filled", "bustling", "quiet", "dark", "bright", "large",
+        "small", "little", "emotional", "hopeful", "nervous", "tense", "slow",
+        "fast", "cinematic", "dramatic", "beautiful", "general", "some", "various",
+        "many", "two", "three", "the", "this", "that", "these", "those",
+    }
+
     def _extract_keywords(self, text: str, max_keywords: int = 3) -> List[str]:
-        """
-        Extract relevant keywords from text for stock footage search
+        """Extract concrete, searchable visual keywords from a shot description.
+
+        Prefers noun phrases (e.g. \"comedy club\") and substantive nouns over
+        generic mood/lighting words, so stock searches return relevant footage.
         """
         if not text:
             return []
-        
-        # Remove common generic phrases
-        generic_phrases = [
-            "general visuals", "general", "scene", "visuals", "this scene", 
-            "for this", "depicting", "showing", "featuring", "related to"
-        ]
-        
-        # Clean the text
-        cleaned_text = text.lower()
-        for phrase in generic_phrases:
-            cleaned_text = cleaned_text.replace(phrase, "")
-        
-        # Remove extra whitespace and punctuation
-        cleaned_text = re.sub(r'[^\w\s]', ' ', cleaned_text)
+
+        # Clean the text: lowercase, strip punctuation, collapse whitespace
+        cleaned_text = re.sub(r'[^\w\s]', ' ', text.lower())
         cleaned_text = re.sub(r'\s+', ' ', cleaned_text).strip()
-        
-        # Split into words
         words = cleaned_text.split()
-        
-        # Filter out common stop words but keep meaningful ones
+
+        # Keep meaningful content words (not stop words / weak visual fillers)
         stop_words = {
-            'the', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 
-            'by', 'from', 'up', 'about', 'into', 'through', 'during', 'before', 
-            'after', 'above', 'below', 'between', 'among', 'is', 'are', 'was', 
-            'were', 'be', 'been', 'have', 'has', 'had', 'do', 'does', 'did', 
+            'the', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with',
+            'by', 'from', 'up', 'about', 'into', 'through', 'during', 'before',
+            'after', 'above', 'below', 'between', 'among', 'is', 'are', 'was',
+            'were', 'be', 'been', 'have', 'has', 'had', 'do', 'does', 'did',
             'will', 'would', 'could', 'should', 'may', 'might', 'must', 'can',
-            'this', 'that', 'these', 'those', 'a', 'an', 'as', 'so', 'if', 'it'
+            'an', 'as', 'so', 'if', 'it', 'a',
         }
-        
-        # Keep only meaningful words (not stop words and longer than 2 characters)
-        meaningful_words = [word for word in words if word not in stop_words and len(word) > 2]
-        
-        # Return unique keywords, limited to max_keywords
-        return list(dict.fromkeys(meaningful_words))[:max_keywords]
+        meaningful = [
+            w for w in words
+            if w not in stop_words and len(w) > 2 and w not in self._WEAK_VISUAL_WORDS
+        ]
+
+        # Build phrase candidates first (adjacent meaningful pairs), then singles.
+        phrases = [f"{a} {b}" for a, b in zip(meaningful, meaningful[1:])]
+        candidates = list(dict.fromkeys(phrases + meaningful))
+        return candidates[:max_keywords]
     
     def _generate_search_queries(self, shot_description: str, voiceover_text: str, max_queries: int = 3) -> List[str]:
         """
         Generate search queries based on shot description and voiceover text
         """
         queries = []
-        
-        # Extract keywords from shot description
-        shot_keywords = self._extract_keywords(shot_description, 2)
-        if shot_keywords:
-            queries.append(" ".join(shot_keywords))
-        
-        # Extract keywords from voiceover text
+        shot_keywords = self._extract_keywords(shot_description, 3)
         voiceover_keywords = self._extract_keywords(voiceover_text, 2)
-        if voiceover_keywords:
-            queries.append(" ".join(voiceover_keywords))
-        
-        # Combine shot and voiceover keywords
-        if shot_keywords and voiceover_keywords:
-            combined_keywords = list(dict.fromkeys(shot_keywords + voiceover_keywords))[:3]
-            queries.append(" ".join(combined_keywords))
-        
-        # If we still don't have good queries, use some fallback strategies
-        if not queries or all(q in ["general", "scene", "visuals"] for q in queries):
-            # Extract nouns and verbs from voiceover as fallback
-            fallback_keywords = self._extract_keywords(voiceover_text, 3)
-            if fallback_keywords:
-                queries.append(" ".join(fallback_keywords))
-        
+
+        if shot_keywords:
+            queries.append(shot_keywords[0])
+        if voiceover_keywords and voiceover_keywords[0] not in queries:
+            queries.append(voiceover_keywords[0])
+        if len(shot_keywords) > 1:
+            queries.append(shot_keywords[1])
+
         # Remove duplicates and limit
         unique_queries = list(dict.fromkeys(queries))[:max_queries]
         return unique_queries if unique_queries else ["nature"]  # Fallback to "nature"
-    
+
+    def _llm_scene_queries(self, scenes: List[Dict]) -> Dict[int, List[str]]:
+        """Generate on-theme stock-video search phrases per scene with the LLM.
+
+        Returns {scene_index: [query, ...]} so each scene searches with a
+        concrete, visual query (real places/objects/people/actions) instead of
+        naive keyword extraction. Returns {} on any failure so callers fall back.
+        """
+        try:
+            from services.llm_service import llm_service
+        except Exception as e:
+            print(f"LLM query generation unavailable: {e}")
+            return {}
+
+        descriptors = []
+        for i, s in enumerate(scenes):
+            visual = (s.get('visual_description') or s.get('description') or '').strip()
+            voice = (s.get('voiceover') or '').strip()
+            descriptors.append(f"Scene {i}: VISUAL: {visual} | VOICEOVER: {voice}")
+
+        if not descriptors:
+            return {}
+
+        prompt = (
+            "You generate stock-video footage search phrases. For each scene, give 1-2 short "
+            "search queries (each <=6 words) that describe CONCRETE, SEARCHABLE visual content the "
+            "camera shows: real places, objects, people, actions. Do NOT describe emotions, metaphors, "
+            "story meaning, or paraphrase the voiceover. Do NOT use placeholders. Return ONLY JSON:\n"
+            '{"queries":[{"scene":0,"query":["comedy club stage","audience laughing"]},'
+            '{"scene":1,"query":["stand up comedian microphone"]}]}\n\n'
+            "SCENES:\n" + "\n".join(descriptors)
+        )
+
+        try:
+            model = os.getenv("SCRIPT_MODEL") or "openai/gpt-4o-mini"
+            raw = llm_service._chat_free_resilient(
+                None, model, [{"role": "user", "content": prompt}],
+                max_tokens=1600, temperature=0.2)
+            data = llm_service._extract_json(raw)
+            if not isinstance(data, dict):
+                return {}
+            out = {}
+            for entry in data.get('queries', []):
+                scene = entry.get('scene')
+                qs = [str(q).strip() for q in (entry.get('query') or []) if str(q).strip()]
+                if isinstance(scene, int) and qs:
+                    out[scene] = qs[:3]
+            return out
+        except Exception as e:
+            print(f"LLM query generation failed: {e}")
+            return {}
+
     def search_pexels_videos(self, query: str, per_page: int = 5, orientation: str = "landscape", min_width: int = 1280, min_height: int = 720) -> List[Dict]:
         """Search for videos on Pexels with resolution and orientation parameters"""
         if not self.pexels_api_key:
@@ -217,7 +257,11 @@ class StockFootageService:
             scenes = target_scenes
         
         print(f"Processing {len(scenes)} scenes")
-        
+
+        # Generate on-theme, per-scene search queries once up front (LLM),
+        # falling back to naive keyword extraction per scene if it fails.
+        queries_by_scene = self._llm_scene_queries(scenes)
+
         video_files = []
         downloaded_count = 0
         used_video_urls = set()  # Track URLs to prevent duplicates
@@ -233,7 +277,7 @@ class StockFootageService:
             print(f"Voiceover text: {voiceover_text}")
             
             # Generate better search queries
-            search_queries = self._generate_search_queries(shot_desc, voiceover_text, 3)
+            search_queries = queries_by_scene.get(i) or self._generate_search_queries(shot_desc, voiceover_text, 3)
             print(f"Generated search queries: {search_queries}")
             
             # Try each query until we find videos
@@ -274,15 +318,24 @@ class StockFootageService:
                 video_metadata = {}
                 
                 if 'video_files' in video_data:  # Pexels format
-                    # Get the best quality video file
+                    # Choose the file closest to the target height, but never
+                    # 4K+ — avoids huge downloads that can fill the disk.
+                    target_h = min_height or 720
                     best_file = None
                     for file_info in video_data['video_files']:
-                        # Prefer HD quality (1280x720 or higher)
-                        if file_info.get('width', 0) >= 1280 and file_info.get('height', 0) >= 720:
-                            if not best_file or file_info.get('width', 0) > best_file.get('width', 0):
-                                best_file = file_info
+                        h = file_info.get('height', 0)
+                        if h > 2160:
+                            continue
+                        if best_file is None:
+                            best_file = file_info
+                            continue
+                        bh = best_file.get('height', 0)
+                        chosen = abs(h - target_h) < abs(bh - target_h) or (
+                            abs(h - target_h) == abs(bh - target_h) and h < bh)
+                        if chosen:
+                            best_file = file_info
                     
-                    # If no HD quality found, get the first available
+                    # If no reasonable-sized file found, use the first available
                     if not best_file and video_data['video_files']:
                         best_file = video_data['video_files'][0]
                     

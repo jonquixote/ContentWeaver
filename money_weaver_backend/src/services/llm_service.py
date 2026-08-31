@@ -38,6 +38,11 @@ def resolve_model_for(user_id, task):
         if os.getenv('COMFY_ENABLED', 'false').lower() != 'true':
             return DEFAULT_VIDEO_GEN_FALLBACK
         return "comfy_local"
+    if task == "script":
+        # Free-tier models are unreliable for creative screenplays (rate-limit
+        # flapping, echo-the-prompt, rambling until max_tokens). Use a reliable
+        # paid model by default; SCRIPT_MODEL overrides.
+        return os.getenv("SCRIPT_MODEL") or "openai/gpt-4o-mini"
     from src.services.providers.registry import PREFERRED_FREE_MODELS
     return _registry.best_free() or PREFERRED_FREE_MODELS[0]
 
@@ -196,13 +201,40 @@ class LLMService:
             model = model or _registry.best_free() or "nvidia/nemotron-3.5-lightning:free"
             full_prompt = SCREENPLAY_PROMPT.format(seconds=duration, topic=prompt)
             messages = [{"role": "user", "content": full_prompt}]
-            return self._chat_free_resilient(user_id, model, messages, max_tokens=2000, temperature=0.7)
+            raw = self._chat_free_resilient(user_id, model, messages, max_tokens=2000, temperature=0.7)
+            if not isinstance(raw, str) or not raw.strip():
+                # Reasoning models sometimes return content: null. Don't let a
+                # None propagate into parse_script (crash) — fall through to the
+                # canned fallback screenplay instead.
+                raise RuntimeError("empty model response")
+            return self._extract_screenplay(raw)
         except Exception as e:
             print(f"Error generating script: {e}")
             return (f"**Scene 1: Main (0s-5s)**\n"
                     f"generic establishing shot\n"
                     f'Voiceover: "This is a generated script about {prompt}."\n'
                     f"END")
+
+    @staticmethod
+    def _extract_screenplay(raw):
+        """Strip chain-of-thought/reasoning so only the screenplay is returned.
+        Reasoning / small instruct models leak a 'thinking process' preamble
+        (plain prose or <think> blocks) that often echoes the prompt's own
+        example headers. The canonical screenplay is the contiguous run of
+        **Scene blocks that ends in a standalone END. So: drop <think> blocks,
+        cut at the final END, ignore the prompt's example headers, and start at
+        the first real **Scene header."""
+        import re
+        text = re.sub(r"<think>.*?</think>", "", str(raw), flags=re.DOTALL).strip()
+        end = re.search(r"(?m)^[ \t]*END[ \t]*$", text)
+        body = text[:end.end()] if end else text
+        example = re.compile(
+            r"\*\*\s*Scene\s*\d+[^\n]*?(?:Short Scene Name|Next Scene)[^\n]*\*\*",
+            re.IGNORECASE)
+        headers = list(re.finditer(r"\*\*\s*Scene\s*\d+[^\n]*\*\*\s*\n", body))
+        real = [h for h in headers if not example.search(h.group(0))]
+        start = real[0].start() if real else (headers[0].start() if headers else 0)
+        return body[start:].strip() or text
 
 
 llm_service = LLMService()
