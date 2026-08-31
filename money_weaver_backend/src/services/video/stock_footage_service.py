@@ -203,7 +203,7 @@ class StockFootageService:
             print(f"gemini vision score failed: {e}")
             return None
 
-    def _gemini_text(self, prompt, model='gemini-2.5-flash'):
+    def _gemini_text(self, prompt, model='gemini-2.5-flash', max_tokens=1200):
         """Gemini text completion via free-tier API; returns string or None."""
         try:
             import json as _json
@@ -214,7 +214,7 @@ class StockFootageService:
                 f'https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent',
                 params={'key': key},
                 json={'contents': [{'parts': [{'text': prompt}]}],
-                      'generationConfig': {'maxOutputTokens': 1200, 'temperature': 0.1}},
+                      'generationConfig': {'maxOutputTokens': max_tokens, 'temperature': 0.1}},
                 timeout=45)
             if r.status_code != 200:
                 print(f"gemini text status: {r.status_code} {r.text[:150]}")
@@ -297,15 +297,20 @@ class StockFootageService:
                 'on_theme=false only for clearly unrelated content (wrong/or absent subject, '
                 'food/animal symbols, empty landscape). Clips of the story setting qualify. '
                 'Relevance 3+ = usable b-roll; 0-1 = useless for this scene.')
-            model = os.getenv("SCRIPT_MODEL") or "openai/gpt-4o-mini"
-            gemini_key = os.getenv('GEMINI_API_KEY')
-            if gemini_key:
+            model = os.getenv("RERANK_TEXT_MODEL") or os.getenv("SCRIPT_MODEL") or "openai/gpt-4o-mini"
+            gen_kwargs = dict(max_tokens=800, temperature=0.1)
+            if os.getenv('GEMINI_API_KEY'):
                 raw = self._gemini_text(
-                    prompt, os.getenv('GEMINI_MODEL') or 'gemini-2.5-flash')
+                    prompt, os.getenv('GEMINI_MODEL') or 'gemini-2.5-flash-lite',
+                    max_tokens=1200)
+                if raw is None:
+                    # Gemini quota exhausted: fall back to an OpenRouter free
+                    # model (e.g. gemma-4 / nemotron via RERANK_TEXT_MODEL).
+                    raw = llm_service._chat_free_resilient(
+                        None, model, [{'role': 'user', 'content': prompt}], **gen_kwargs)
             else:
                 raw = llm_service._chat_free_resilient(
-                    None, model, [{'role': 'user', 'content': prompt}],
-                    max_tokens=120, temperature=0.1)
+                    None, model, [{'role': 'user', 'content': prompt}], **gen_kwargs)
             m = _re.search(r'\{.*\}', raw or '', _re.DOTALL)
             if not m:
                 return [None] * len(labels)
