@@ -183,18 +183,116 @@ class StockFootageService:
             print(f"vision score failed: {e}")
             return None
 
-    def _rerank_candidates(self, all_videos, description, voiceover):
+    def _text_scores(self, labels, description, voiceover, story_context=None):
+        """For each candidate label return a 0-5 on-theme relevance (None if
+        undecidable). Text-based counterpart of _vision_score: uses the
+        providers' own alt/tags text, so it works without image tokens (e.g.
+        when the vision model's budget is exhausted). Batches all candidates of
+        a scene into one LLM call.
+
+        story_context (str, e.g. 'a comedy-club-heckler story set on a stage') is
+        the GLOBAL setting of the whole video, so a clip of the story's setting
+        is scored on-theme even for scenes whose own description is abstract."""
+        try:
+            from services.llm_service import llm_service
+            import json as _json
+            import re as _re
+            numbered = "\n".join(f"{i}. {lb}" for i, lb in enumerate(labels))
+            ctx = f" CONTEXT: the whole video is {story_context}." if story_context else ""
+            prompt = (
+                'You judge which stock-video clip descriptions can visually serve a scene. '
+                f"{ctx} Scene shows: {description}. Voiceover: {voiceover}.\n"
+                f"CLIPS:\n{numbered}\n"
+                'Reply ONLY JSON: {"scores": [{"i": 0, "on_theme": true/false, "relevance": 0-5}, ...]}. '
+                'on_theme=false only for clearly unrelated content (wrong/or absent subject, '
+                'food/animal symbols, empty landscape). Clips of the story setting qualify. '
+                'Relevance 3+ = usable b-roll; 0-1 = useless for this scene.')
+            model = os.getenv("SCRIPT_MODEL") or "openai/gpt-4o-mini"
+            raw = llm_service._chat_free_resilient(
+                None, model, [{'role': 'user', 'content': prompt}],
+                max_tokens=120, temperature=0.1)
+            m = _re.search(r'\{.*\}', raw or '', _re.DOTALL)
+            if not m:
+                return [None] * len(labels)
+            # Parse per-record so a token-truncated (cut-off) JSON tail still
+            # yields the scores for the records that did arrive.
+            out = [None] * len(labels)
+            for rm in _re.finditer(
+                    r'"i"\s*:\s*(\d+).{0,200}?"on_theme"\s*:\s*(true|false)'
+                    r'.{0,50}?"relevance"\s*:\s*(\d+)',
+                    m.group(0).replace('\n', ' ')[:12000], _re.DOTALL):
+                try:
+                    i = int(rm.group(1))
+                except (TypeError, ValueError):
+                    continue
+                if not (0 <= i < len(labels)):
+                    continue
+                if rm.group(2) == 'false':
+                    out[i] = 0
+                else:
+                    try:
+                        out[i] = max(0, min(5, int(rm.group(3))))
+                    except (TypeError, ValueError):
+                        out[i] = None
+            return out
+        except Exception as e:
+            print(f"text scores failed: {e}")
+            return [None] * len(labels)
+
+    @staticmethod
+    def _candidate_text_label(video_data) -> Optional[str]:
+        """Human-readable self-description of a search result (its own alt
+        text / tags / description), used for text-based relevance scoring."""
+        parts = []
+        for k in ('alt', 'description', 'tags', 'name'):
+            v = video_data.get(k)
+            if isinstance(v, str) and v.strip():
+                parts.append(v.strip())
+        return '; '.join(parts) or None
+
+    @staticmethod
+    def _script_story_context(scenes):
+        """One-sentence global setting of the video (first scene's visual +
+        genre words), used to keep the story's setting clips on-theme."""
+        try:
+            first = (scenes[0].get('visual_description') or scenes[0].get('description') or '')
+            return first[:120]
+        except (IndexError, AttributeError, TypeError):
+            return None
+
+    def _rerank_candidates(self, all_videos, description, voiceover, scenes=None):
         """Drop off-theme candidates and order the rest by relevance.
 
-        Candidates without a usable thumbnail are kept (not dropped) but sorted
-        after validated ones, so we never over-filter to an empty scene."""
+        Scores via vision (thumbnail) when available, else via the candidate's
+        own textual description, so selection still works when image tokens are
+        exhausted. Candidates with neither are kept (not dropped) but sorted
+        after validated ones; the scene is never emptied."""
         scored = []
+        pending = []   # candidates that still need a text-based score
         for v in all_videos:
             img = self._preview_url(v)
             score = self._vision_score(img, description, voiceover) if img else None
-            if score is not None and score < 2:
+            if score is None:
+                label = self._candidate_text_label(v)
+                if label:
+                    pending.append((v, label, score))
+                else:
+                    scored.append((v, None))  # no info at all: keep, unvalidated
+                continue
+            if score < 2:
                 continue  # clearly off-theme, drop it
             scored.append((v, score))
+
+        if pending:
+            story = self._script_story_context(scenes or [])
+            scores = self._text_scores(
+                [lbl for _, lbl, _ in pending], description, voiceover, story) or []
+            for (v, _lbl, _old), s in zip(pending, scores):
+                if s is not None and s < 2:
+                    continue  # clearly off-theme, drop it
+                scored.append((v, s if s is not None else None))
+        if not scored:
+            return all_videos  # never drop everything: keep original order
 
         def key(item):
             s = item[1]
@@ -405,12 +503,14 @@ class StockFootageService:
                 
                 all_videos.extend(scene_videos)
             
-            # Vision-rerank candidates: drop off-theme clips (e.g. an animal when
+            # Rerank candidates: drop off-theme clips (e.g. an animal when
             # the scene needs a person on a stage) and order the rest by relevance.
-            # Falls back to the gathered order (shuffled) when the LLM is
-            # unavailable so a scene is never left empty.
+            # Vision is used when a thumbnail is available; otherwise the
+            # candidate's own text description is judged. Falls back to the
+            # gathered order (shuffled) when the LLM is unavailable so a scene
+            # is never left empty.
             try:
-                all_videos = self._rerank_candidates(all_videos, shot_desc, voiceover_text)
+                all_videos = self._rerank_candidates(all_videos, shot_desc, voiceover_text, scenes)
                 print(f"Reranked scene {i+1} to {len(all_videos)} on-theme candidates")
             except Exception as e:
                 print(f"Rerank failed for scene {i+1}, keeping original order: {e}")
