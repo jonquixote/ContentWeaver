@@ -451,6 +451,17 @@ class StockFootageService:
         that arrive with a thumbnail when the text score is missing. Candidates
         with neither are kept (not dropped) but sorted after validated ones;
         the scene is never emptied. Scores are cached on the video dict."""
+        # Deterministic blocklist: drop clearly-off-theme content even when the
+        # LLM scorer is down (free-tier quota exhausted) or the label is thin.
+        # These are the recurring offenders from a comedy-stage story: nature,
+        # food/animal symbols, vehicles, sports, silhouette-only landscapes.
+        OFF_THEME_KEYWORDS = (
+            'butterfl', 'flower', 'meadow', 'railway', 'railroad', 'track',
+            'golf', 'truck', 'ski', 'cat ', 'dog ', 'bird', 'puppy', 'kitten',
+            'earbud', 'headphone', 'cake', 'food', 'pizza', 'sunset',
+            'mountain', 'forest', 'beach', 'wave', 'leaf', 'garden',
+            'silhouette', 'sunrise', 'dandelion', 'bird feeding',
+        )
         scored = []
         pending = []   # candidates that still need a vision-based score
         labels = []
@@ -462,6 +473,8 @@ class StockFootageService:
                 scored.append((v, cached))
                 continue
             label = self._candidate_text_label(v)
+            if label and any(kw in label.lower() for kw in OFF_THEME_KEYWORDS):
+                continue  # deterministic off-theme (e.g. butterfly/earbuds)
             if not label:
                 img = self._preview_url(v)
                 if img:
