@@ -232,9 +232,11 @@ class StockFootageService:
         then OpenRouter. Returns None when both are unavailable."""
         if not image_url:
             return None
-        score = self._gemini_vision_score(image_url, description, voiceover)
-        if score is not None:
-            return score
+        if not os.getenv('VISION_MODEL'):
+            # No explicit OpenRouter vision model: try Gemini free tier first.
+            score = self._gemini_vision_score(image_url, description, voiceover)
+            if score is not None:
+                return score
         try:
             import json as _json
             import re as _re
@@ -299,13 +301,14 @@ class StockFootageService:
                 'Relevance 3+ = usable b-roll; 0-1 = useless for this scene.')
             model = os.getenv("RERANK_TEXT_MODEL") or os.getenv("SCRIPT_MODEL") or "openai/gpt-4o-mini"
             gen_kwargs = dict(max_tokens=800, temperature=0.1)
-            if os.getenv('GEMINI_API_KEY'):
+            if os.getenv('GEMINI_API_KEY') and not os.getenv('RERANK_TEXT_MODEL'):
+                # Gemini only when no explicit OpenRouter free model is set; the
+                # free-tier quota currently 429s, so RERANK_TEXT_MODEL (Gemma)
+                # is the primary when configured.
                 raw = self._gemini_text(
                     prompt, os.getenv('GEMINI_MODEL') or 'gemini-2.5-flash-lite',
                     max_tokens=1200)
                 if raw is None:
-                    # Gemini quota exhausted: fall back to an OpenRouter free
-                    # model (e.g. gemma-4 / nemotron via RERANK_TEXT_MODEL).
                     raw = llm_service._chat_free_resilient(
                         None, model, [{'role': 'user', 'content': prompt}], **gen_kwargs)
             else:
