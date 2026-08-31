@@ -539,6 +539,19 @@ total_duration: int = 30,
                         os.remove(cut_video)
                     except:
                         pass  # Ignore errors in cleanup
+
+            # Clean up the downloaded source clips. They were only needed to cut
+            # segments, which the concat demuxer has already consumed by now. Not
+            # removing them lets the work/ dir fill the disk across runs (which
+            # manifests as 'Invalid argument' on the caption-burn / final mux
+            # when the disk hits 100%).
+            for vf, _, _ in normalized_video_files:
+                if (vf and vf != output_path and os.path.exists(vf)
+                        and 'stock_' in os.path.basename(vf)):
+                    try:
+                        os.remove(vf)
+                    except:
+                        pass
             
             # Check if the process completed successfully and file was created
             if result.returncode == 0:
