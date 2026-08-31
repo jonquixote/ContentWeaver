@@ -1,7 +1,7 @@
 import requests
 import os
 import random
-from typing import List, Dict, Tuple
+from typing import List, Dict, Tuple, Optional
 import time
 import cv2
 import sys
@@ -131,6 +131,79 @@ class StockFootageService:
         except Exception as e:
             print(f"LLM query generation failed: {e}")
             return {}
+
+    @staticmethod
+    def _preview_url(video_data) -> Optional[str]:
+        """A publicly fetchable preview thumbnail for a search result item,
+        used to vision-verify the clip is on-theme before downloading it."""
+        img = video_data.get('image')
+        if isinstance(img, str) and img.startswith('http'):
+            return img
+        return None
+
+    def _vision_score(self, image_url, description, voiceover):
+        """0-5 relevance that a clip matches the scene; None on any failure."""
+        if not image_url:
+            return None
+        try:
+            import json as _json
+            import re as _re
+            payload = {
+                'model': os.getenv('VISION_MODEL') or 'openai/gpt-4o-mini',
+                'messages': [{'role': 'user', 'content': [
+                    {'type': 'image_url', 'image_url': {'url': image_url}},
+                    {'type': 'text', 'text': (
+                        'You judge whether a stock-video thumbnail matches a scene. '
+                        'Reject clips that show something clearly unrelated to the scene '
+                        '(e.g. an animal or unrelated subject when the scene needs a person on a stage). '
+                        f'Scene shows: {description}. Voiceover: {voiceover}. '
+                        'Reply ONLY JSON: {"on_theme": true/false, "relevance": 0-5}. '
+                        'Set on_theme=false only when clearly unrelated.')},
+                ]}],
+                'max_tokens': 60,
+            }
+            r = requests.post(
+                'https://openrouter.ai/api/v1/chat/completions',
+                json=payload,
+                headers={'Authorization': 'Bearer ' + (os.getenv('OPENROUTER_API_KEY') or '')},
+                timeout=60)
+            if r.status_code != 200:
+                return None
+            content = r.json()['choices'][0]['message']['content']
+            m = _re.search(r'\{.*\}', content, _re.DOTALL)
+            if not m:
+                return None
+            d = _json.loads(m.group(0))
+            if not isinstance(d, dict):
+                return None
+            if d.get('on_theme') is False:
+                return 0
+            return max(0, int(d.get('relevance') or 3))
+        except Exception as e:
+            print(f"vision score failed: {e}")
+            return None
+
+    def _rerank_candidates(self, all_videos, description, voiceover):
+        """Drop off-theme candidates and order the rest by relevance.
+
+        Candidates without a usable thumbnail are kept (not dropped) but sorted
+        after validated ones, so we never over-filter to an empty scene."""
+        scored = []
+        for v in all_videos:
+            img = self._preview_url(v)
+            score = self._vision_score(img, description, voiceover) if img else None
+            if score is not None and score < 2:
+                continue  # clearly off-theme, drop it
+            scored.append((v, score))
+
+        def key(item):
+            s = item[1]
+            if s is None:
+                return (2, 0)  # unvalidated: keep, but after validated on-theme
+            return (0, -s)     # validated: higher relevance first
+
+        scored.sort(key=key)
+        return [v for v, _ in scored]
 
     def search_pexels_videos(self, query: str, per_page: int = 5, orientation: str = "landscape", min_width: int = 1280, min_height: int = 720) -> List[Dict]:
         """Search for videos on Pexels with resolution and orientation parameters"""
@@ -305,8 +378,16 @@ class StockFootageService:
                 
                 all_videos.extend(scene_videos)
             
-            # Shuffle to add randomness
-            random.shuffle(all_videos)
+            # Vision-rerank candidates: drop off-theme clips (e.g. an animal when
+            # the scene needs a person on a stage) and order the rest by relevance.
+            # Falls back to the gathered order (shuffled) when the LLM is
+            # unavailable so a scene is never left empty.
+            try:
+                all_videos = self._rerank_candidates(all_videos, shot_desc, voiceover_text)
+                print(f"Reranked scene {i+1} to {len(all_videos)} on-theme candidates")
+            except Exception as e:
+                print(f"Rerank failed for scene {i+1}, keeping original order: {e}")
+                random.shuffle(all_videos)
             
             # Process videos, avoiding duplicates
             for video_data in all_videos:
