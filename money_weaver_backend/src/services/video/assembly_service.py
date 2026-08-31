@@ -211,7 +211,7 @@ class VideoAssemblyService:
                 '-c', 'copy',  # Use stream copy to preserve original quality and avoid re-encoding
                 '-avoid_negative_ts', 'make_zero',
                 '-fflags', '+genpts',
-                '-vsync', 'vfr',  # Variable frame rate to prevent frozen frames
+                '-fps_mode', 'vfr',  # Variable frame rate to prevent frozen frames
                 '-y',  # Overwrite output file
                 output_path
             ]
@@ -238,7 +238,7 @@ class VideoAssemblyService:
                     '-strict', 'experimental',
                     '-avoid_negative_ts', 'make_zero',
                     '-fflags', '+genpts',
-                    '-vsync', 'vfr',  # Variable frame rate to prevent frozen frames
+                    '-fps_mode', 'vfr',  # Variable frame rate to prevent frozen frames
                     '-movflags', '+faststart',  # Optimize for web streaming
                     '-y',  # Overwrite output file
                     output_path
@@ -487,7 +487,6 @@ total_duration: int = 30,
                 '-fflags', '+genpts',  # Generate presentation timestamps
                 '-fps_mode', 'vfr',  # Use variable frame rate mode instead of deprecated vsync
                 '-shortest',  # Ensure video ends when the shortest stream (audio) ends
-                '-vsync', 'vfr',  # Variable frame rate to prevent frozen frames
                 '-async', '1',  # Audio/video sync
             ]
             
