@@ -197,6 +197,19 @@ class LLMService:
                 prompt = inject_prompt(prompt, niche)
             except FileNotFoundError:
                 pass
+        # Idempotent rerender: if the caller already handed us a complete
+        # screenplay (this is the assemble endpoint's stored script), reuse it
+        # verbatim instead of re-asking an LLM. Re-generation risks the free
+        # tier 402/429 fallback wrapping the script as prose ("generated script
+        # about **Scene 1...**"), which corrupts scene 1 and shortens the video.
+        try:
+            import re as _re2
+            if (isinstance(prompt, str)
+                    and len(_re2.findall(r'\*\*\s*Scene\s*\d+[^\n]*\*\*', prompt)) >= 2
+                    and _re2.search(r'(?m)^[ \t]*END[ \t]*$', prompt)):
+                return _re2.sub(r'<think>.*?</think>', '', prompt, flags=_re2.DOTALL).strip()
+        except Exception:
+            pass
         try:
             model = model or _registry.best_free() or "nvidia/nemotron-3.5-lightning:free"
             full_prompt = SCREENPLAY_PROMPT.format(seconds=duration, topic=prompt)
