@@ -87,23 +87,37 @@ def _render_caption_png(text: str, font_size: int, color, border: int,
         runs = [('', False)]
     margin = max(20, border * 2 + 8)
     max_text_width = max(200, width - 2 * margin)
-    lines = []
-    current_line = []
+    space_width = regular_font.getbbox(' ')[2] - regular_font.getbbox(' ')[0]
+
+    def _word_width(t):
+        f = bold_font if t[1] else regular_font
+        b = f.getbbox(t[0])
+        return b[2] - b[0]
+
+    # Build words (with their bold flag) preserving ** run boundaries.
+    tokens = [
+        (w, is_bold)
+        for run_text, is_bold in runs
+        for w in run_text.split()
+        if w
+    ]
+
+    # Wrap at WORD boundaries so we never split a word across two lines.
+    lines = []  # list of (list[(word, is_bold)], line_width)
+    current = []
     current_width = 0
-    for run_text, is_bold in runs:
-        if not run_text:
-            continue
-        font = bold_font if is_bold else regular_font
-        for char in run_text:
-            char_width = font.getbbox(char)[2] - font.getbbox(char)[0]
-            if current_line and current_width + char_width > max_text_width:
-                lines.append((current_line, current_width))
-                current_line = []
-                current_width = 0
-            current_line.append((char, is_bold))
-            current_width += char_width
-    if current_line:
-        lines.append((current_line, current_width))
+    for tok in tokens:
+        ww = _word_width(tok)
+        sep = 0 if not current else space_width
+        if current and current_width + sep + ww > max_text_width:
+            lines.append((current, current_width))
+            current = []
+            current_width = 0
+            sep = 0
+        current.append(tok)
+        current_width += sep + ww
+    if current:
+        lines.append((current, current_width))
     if not lines:
         return None
     line_height = font_size + max(8, border * 2)
@@ -116,10 +130,10 @@ def _render_caption_png(text: str, font_size: int, color, border: int,
     y = height - total_text_height - margin
     for line, line_width in lines:
         x = (width - line_width) // 2
-        for char, is_bold in line:
+        for word, is_bold in line:
             font = bold_font if is_bold else regular_font
-            draw.text((x, y), char, font=font, fill=color_rgba, stroke_width=border, stroke_fill=(0, 0, 0, 255))
-            x += font.getbbox(char)[2] - font.getbbox(char)[0]
+            draw.text((x, y), word, font=font, fill=color_rgba, stroke_width=border, stroke_fill=(0, 0, 0, 255))
+            x += (font.getbbox(word)[2] - font.getbbox(word)[0]) + space_width
         y += line_height
     working_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))), 'work')
     os.makedirs(working_dir, exist_ok=True)

@@ -135,11 +135,35 @@ def _maybe_mix_music(voice_path, niche_id, work_dir=None):
         return None
 
 
-def extract_transcript_words(audio_path):
-    """Word-level transcript via faster-whisper; [] on any failure."""
+def extract_transcript_words(audio_path, timeout=180):
+    """Word-level transcript via faster-whisper.
+
+    Runs in an isolated subprocess with a timeout: faster-whisper/ctranslate2
+    intermittently deadlocks (OpenMP + fork) inside a forked Celery worker at
+    0% CPU. Isolating the call means that deadlock can't wedge the pipeline —
+    a hang simply times out and returns []. A missing word transcript is safe:
+    it's only used for YouTube captions / viral re-detection, never for
+    assembly, so the video builds regardless.
+    """
+    import sys, json as _json
+
+    runner = (
+        "import sys, json;"
+        "from src.services.video.viral_detector import transcribe;"
+        "sys.stdout.write(json.dumps(transcribe(sys.argv[1]) or []))"
+    )
+    env = dict(os.environ)
+    env.setdefault("OMP_NUM_THREADS", "1")     # avoid ctranslate2/OpenMP fork deadlock
+    env.setdefault("MKL_NUM_THREADS", "1")
+    env.setdefault("CT2_VERBOSE", "0")
     try:
-        from src.services.video.viral_detector import transcribe
-        return transcribe(audio_path)
+        proc = subprocess.run(
+            [sys.executable, "-c", runner, audio_path],
+            capture_output=True, text=True, timeout=timeout, env=env,
+        )
+        if proc.returncode != 0 or not proc.stdout.strip():
+            return []
+        return _json.loads(proc.stdout) or []
     except Exception:
         return []
 
