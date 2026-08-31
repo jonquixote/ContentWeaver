@@ -163,19 +163,19 @@ class StockFootageService:
                 'contents': [{
                     'parts': [
                         {'text': (
-                            'You judge whether a stock-video thumbnail matches a scene. '
-                            'Reject clips that show something clearly unrelated to the scene '
-                            '(e.g. an animal or unrelated subject when the scene needs a person on a stage). '
-                            f'Scene shows: {description}. Voiceover: {voiceover}. '
+                            'Does this stock-video thumbnail show the subject the scene needs? '
+                            f'Scene subject: {description[:140]}. '
                             'Reply ONLY JSON: {"on_theme": true/false, "relevance": 0-5}. '
-                            'Set on_theme=false only when clearly unrelated.')},
+                            'on_theme=false only when clearly unrelated (wrong subject, '
+                            'animal/food symbols, empty landscape); stories set in a '
+                            'comedy club qualify even when described abstractly.')},
                         {'inline_data': {
                             'mime_type': 'image/jpeg' if 'image/jpeg' in image_url else 'image/png',
                             'data': b64str,
                         }},
                     ],
                 }],
-                'generationConfig': {'maxOutputTokens': 60, 'temperature': 0.1},
+                'generationConfig': {'maxOutputTokens': 400, 'temperature': 0.1},
             }
             model = os.getenv('VISION_MODEL_GEMINI') or 'gemini-2.5-flash'
             r = requests.post(
@@ -184,7 +184,12 @@ class StockFootageService:
             if r.status_code != 200:
                 print(f"gemini vision status: {r.status_code} {r.text[:150]}")
                 return None
-            content = r.json()['candidates'][0]['content']['parts'][0]['text']
+            cand = r.json()['candidates'][0]
+            if cand.get('finishReason') == 'SAFETY':
+                print("gemini vision SAFETY refusal")
+                return None
+            parts = cand['content']['parts']
+            content = ''.join(p.get('text', '') for p in parts)
             m = _re.search(r'\{.*\}', content, _re.DOTALL)
             if not m:
                 return None
@@ -353,34 +358,60 @@ class StockFootageService:
     def _rerank_candidates(self, all_videos, description, voiceover, scenes=None):
         """Drop off-theme candidates and order the rest by relevance.
 
-        Scores via vision (thumbnail) when available, else via the candidate's
-        own textual description, so selection still works when image tokens are
-        exhausted. Candidates with neither are kept (not dropped) but sorted
-        after validated ones; the scene is never emptied."""
+        Uses the batched TEXT score for all candidates first (one LLM call per
+        scene, fits free-tier rate limits), and only vision-checks candidates
+        that arrive with a thumbnail when the text score is missing. Candidates
+        with neither are kept (not dropped) but sorted after validated ones;
+        the scene is never emptied. Scores are cached on the video dict."""
         scored = []
-        pending = []   # candidates that still need a text-based score
+        pending = []   # candidates that still need a vision-based score
+        labels = []
         for v in all_videos:
-            img = self._preview_url(v)
-            score = self._vision_score(img, description, voiceover) if img else None
-            if score is None:
-                label = self._candidate_text_label(v)
-                if label:
-                    pending.append((v, label, score))
+            cached = v.get('_relevance_score')
+            if cached is not None:
+                if cached < 2:
+                    continue
+                scored.append((v, cached))
+                continue
+            label = self._candidate_text_label(v)
+            if not label:
+                img = self._preview_url(v)
+                if img:
+                    pending.append((v, None, None))
                 else:
                     scored.append((v, None))  # no info at all: keep, unvalidated
                 continue
-            if score < 2:
-                continue  # clearly off-theme, drop it
+            labels.append((v, label))
+
+        # Batched text score: one LLM call for the whole scene (cheap, no image
+        # tokens, fits the free-tier rate limit).
+        if labels:
+            story = self._script_story_context(scenes or [])
+            text_scores = self._text_scores(
+                [lbl for _, lbl in labels], description, voiceover, story) or []
+            for (v, _lbl), s in zip(labels, text_scores):
+                if s is not None:
+                    v['_relevance_score'] = s
+                    if s < 2:
+                        continue  # clearly off-theme, drop it
+                    scored.append((v, s))
+                else:
+                    img = self._preview_url(v)
+                    if img:
+                        pending.append((v, None, None))
+                    else:
+                        scored.append((v, None))
+
+        # Vision-scored fallback for candidates the text scorer could not
+        # decide (but that have a thumbnail). Cached.
+        for v, _lbl, _old in pending:
+            score = self._vision_score(self._preview_url(v), description, voiceover)
+            if score is not None:
+                v['_relevance_score'] = score
+                if score < 2:
+                    continue  # clearly off-theme, drop it
             scored.append((v, score))
 
-        if pending:
-            story = self._script_story_context(scenes or [])
-            scores = self._text_scores(
-                [lbl for _, lbl, _ in pending], description, voiceover, story) or []
-            for (v, _lbl, _old), s in zip(pending, scores):
-                if s is not None and s < 2:
-                    continue  # clearly off-theme, drop it
-                scored.append((v, s if s is not None else None))
         if not scored:
             return all_videos  # never drop everything: keep original order
 
