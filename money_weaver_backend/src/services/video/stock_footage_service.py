@@ -141,6 +141,53 @@ class StockFootageService:
             return img
         return None
 
+    @staticmethod
+    def _gemini_keys():
+        """Ordered list of Gemini API keys to try (primary + comma-separated
+        fallbacks). Free tier caps each PROJECT at 20 req/day, so multiple keys
+        = multiple 20/day buckets. The first 429 is a quota signal, not an
+        error - rotate to the next key before falling back entirely."""
+        primary = os.getenv('GEMINI_API_KEY') or ''
+        fallbacks = [k.strip() for k in
+                     (os.getenv('GEMINI_API_KEY_FALLBACKS') or '').split(',')
+                     if k.strip()]
+        keys = list(dict.fromkeys([primary] + fallbacks))
+        return [k for k in keys if k]
+
+    @staticmethod
+    def _openrouter_keys():
+        """Ordered OpenRouter keys: primary + OPENROUTER_API_KEY_FALLBACKS.
+        Each key brings its own balance / free-model-day bucket."""
+        primary = os.getenv('OPENROUTER_API_KEY') or ''
+        fallbacks = [k.strip() for k in
+                     (os.getenv('OPENROUTER_API_KEY_FALLBACKS') or '').split(',')
+                     if k.strip()]
+        keys = list(dict.fromkeys([primary] + fallbacks))
+        return [k for k in keys if k]
+
+    def _openrouter_text_fallback(self, model, prompt, gen_kwargs):
+        """Try each OpenRouter key until one responds. Uses the LLM service for
+        the actual call but rotates the api key through the pool (each key's
+        balance/free-day bucket is separate)."""
+        from services.llm_service import llm_service
+        orig = os.environ.get('OPENROUTER_API_KEY')
+        try:
+            for k in self._openrouter_keys():
+                os.environ['OPENROUTER_API_KEY'] = k
+                try:
+                    raw = llm_service._chat_free_resilient(
+                        None, model, [{'role': 'user', 'content': prompt}], **gen_kwargs)
+                    if raw:
+                        return raw
+                except Exception as e:
+                    print(f"openrouter key {k[:10]}... failed: {str(e)[:80]}")
+            return None
+        finally:
+            if orig is None:
+                os.environ.pop('OPENROUTER_API_KEY', None)
+            else:
+                os.environ['OPENROUTER_API_KEY'] = orig
+
     def _gemini_vision_score(self, image_url, description, voiceover):
         """Vision score via Google Gemini (free-tier friendly). Returns 0-5 or
         None on failure. Used when GEMINI_API_KEY is set; otherwise falls back
@@ -149,8 +196,8 @@ class StockFootageService:
             import base64 as _b64
             import json as _json
             import re as _re
-            key = os.getenv('GEMINI_API_KEY')
-            if not key:
+            keys = self._gemini_keys()
+            if not keys:
                 return None
             if image_url.startswith('data:image/'):
                 b64str = image_url.split(',', 1)[1]
@@ -178,11 +225,19 @@ class StockFootageService:
                 'generationConfig': {'maxOutputTokens': 400, 'temperature': 0.1},
             }
             model = os.getenv('VISION_MODEL_GEMINI') or 'gemini-2.5-flash'
-            r = requests.post(
-                f'https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent',
-                params={'key': key}, json=payload, timeout=40)
-            if r.status_code != 200:
+            r = None
+            for key in keys:
+                r = requests.post(
+                    f'https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent',
+                    params={'key': key}, json=payload, timeout=40)
+                if r.status_code == 200:
+                    break
                 print(f"gemini vision status: {r.status_code} {r.text[:150]}")
+                # 429 = this key's 20/day quota exhausted; next key may still
+                # have budget. Non-429 (400/500) is not a quota issue - bail.
+                if r.status_code != 429:
+                    return None
+            if r is None or r.status_code != 200:
                 return None
             cand = r.json()['candidates'][0]
             if cand.get('finishReason') == 'SAFETY':
@@ -212,21 +267,22 @@ class StockFootageService:
         """
         try:
             import json as _json
-            import time as _time
-            key = os.getenv('GEMINI_API_KEY')
-            if not key:
+            keys = self._gemini_keys()
+            if not keys:
                 return None
             url = (f'https://generativelanguage.googleapis.com/v1beta/models/'
                    f'{model}:generateContent')
             payload = {'contents': [{'parts': [{'text': prompt}]}],
                        'generationConfig': {'maxOutputTokens': max_tokens, 'temperature': 0.1}}
-            r = requests.post(url, params={'key': key}, json=payload, timeout=45)
-            if r.status_code == 429:
-                # ~21s backoff for free-tier RPM; sleep once and retry.
-                _time.sleep(24)
+            r = None
+            for key in keys:
                 r = requests.post(url, params={'key': key}, json=payload, timeout=45)
-            if r.status_code != 200:
+                if r.status_code == 200:
+                    break
                 print(f"gemini text status: {r.status_code} {r.text[:150]}")
+                if r.status_code != 429:
+                    return None
+            if r is None or r.status_code != 200:
                 return None
             parts = r.json()['candidates'][0]['content']['parts']
             return ''.join(p.get('text', '') for p in parts)
@@ -263,14 +319,23 @@ class StockFootageService:
                 ]}],
                 'max_tokens': 60,
             }
-            r = requests.post(
-                'https://openrouter.ai/api/v1/chat/completions',
-                json=payload,
-                headers={'Authorization': 'Bearer ' + (os.getenv('OPENROUTER_API_KEY') or '')},
-                timeout=60)
-            if r.status_code != 200:
+            content = None
+            for k in self._openrouter_keys():
+                r = requests.post(
+                    'https://openrouter.ai/api/v1/chat/completions',
+                    json=payload,
+                    headers={'Authorization': 'Bearer ' + k},
+                    timeout=60)
+                if r.status_code == 200:
+                    content = r.json()['choices'][0]['message']['content']
+                    break
+                if r.status_code != 429:
+                    # 402 = this key out of balance: try the next key.
+                    print(f"openrouter vision {r.status_code}: {r.text[:100]}")
+                    if r.status_code != 402:
+                        break
+            if content is None:
                 return None
-            content = r.json()['choices'][0]['message']['content']
             m = _re.search(r'\{.*\}', content, _re.DOTALL)
             if not m:
                 return None
@@ -310,17 +375,15 @@ class StockFootageService:
                 'Relevance 3+ = usable b-roll; 0-1 = useless for this scene.')
             model = os.getenv("RERANK_TEXT_MODEL") or os.getenv("SCRIPT_MODEL") or "openai/gpt-4o-mini"
             gen_kwargs = dict(max_tokens=800, temperature=0.1)
-            # Gemini first: its free quota is the most reliable and flash text
-            # works today. RERANK_TEXT_MODEL (e.g. Gemma) is only the OpenRouter
-            # free-tier fallback when Gemini is exhausted.
+            # Gemini first: rotate across GEMINI_API_KEY + fallback keys (each
+            # has its own 20/day free quota), then the OpenRouter key pool.
             raw = None
-            if os.getenv('GEMINI_API_KEY'):
+            if self._gemini_keys():
                 raw = self._gemini_text(
                     prompt, os.getenv('GEMINI_MODEL') or 'gemini-2.5-flash-lite',
                     max_tokens=1200)
             if raw is None:
-                raw = llm_service._chat_free_resilient(
-                    None, model, [{'role': 'user', 'content': prompt}], **gen_kwargs)
+                raw = self._openrouter_text_fallback(model, prompt, gen_kwargs)
             m = _re.search(r'\{.*\}', raw or '', _re.DOTALL)
             if not m:
                 return [None] * len(labels)
