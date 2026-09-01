@@ -206,7 +206,12 @@ class LLMService:
             import re as _re2
             if (isinstance(prompt, str)
                     and len(_re2.findall(r'\*\*\s*Scene\s*\d+[^\n]*\*\*', prompt)) >= 2
-                    and _re2.search(r'(?m)^[ \t]*END[ \t]*$', prompt)):
+                    and _re2.search(r'(?m)^END\s*\.?\s*$', prompt[-300:])
+                    # A corrupt fallback wraps the real script as prose:
+                    # Voiceover: "This is a generated script about **Scene 1..."
+                    # which pollutes Scene 1 and shortens the render. Reject it
+                    # so the LLM regenerates a clean script instead.
+                    and 'generated script about' not in prompt.lower()):
                 return _re2.sub(r'<think>.*?</think>', '', prompt, flags=_re2.DOTALL).strip()
         except Exception:
             pass
