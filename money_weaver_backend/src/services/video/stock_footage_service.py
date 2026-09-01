@@ -461,6 +461,14 @@ class StockFootageService:
             'earbud', 'headphone', 'cake', 'food', 'pizza', 'sunset',
             'mountain', 'forest', 'beach', 'wave', 'leaf', 'garden',
             'silhouette', 'sunrise', 'dandelion', 'bird feeding',
+            'duck', 'rabbit', 'bunny', 'squirrel', 'goat', 'sheep', 'cow ',
+            'horse', 'deer', 'fox', 'owl', 'eagle', 'pigeon', 'parrot',
+            'swan', 'goose', 'hen', 'rooster', 'turtle', 'frog', 'snake',
+            'fish ', 'whale', 'dolphin', 'seal', 'penguin', 'bear ',
+            'rat ', 'mouse', 'lizard', 'insect', 'bee ', 'ant ', 'spider',
+            'monkey', 'elephant', 'lion', 'tiger', 'workout', 'pushup',
+            'push-up', 'basketball', 'football', 'soccer', 'tennis',
+            'athlete', 'fitness', 'gym ', 'weights', 'sport',
         )
         scored = []
         pending = []   # candidates that still need a vision-based score
