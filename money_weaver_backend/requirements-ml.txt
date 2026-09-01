@@ -18,6 +18,14 @@
 
 numpy==1.26.4
 
+# torch==2.2.2 is the last CPU wheel for Python 3.12 on the pytorch cpu index.
+# It is built against numpy 1.x: with numpy>=2 tensor.numpy() raises
+# 'RuntimeError: Numpy is not available' (the numpy 2 _ARRAY_API ABI change).
+# The footage Embedder avoids this by returning text embeddings via .tolist()
+# (verified working). Any future torch->numpy conversion (image embeds, detector
+# preprocessing) must run under numpy<2 (this file) or a numpy-2-compatible
+# torch build. See docs/superpowers/followups/2026-09-01-plan-b-spike-torch.md.
+
 # --- Smart 9:16 reframe (Task 6) ---
 # mediapipe pulls its own opencv-contrib-python alongside the headless build
 # from the core file. NOTE: ultralytics is AGPL-3.0 and is FORBIDDEN in this

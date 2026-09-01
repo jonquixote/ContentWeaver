@@ -1,0 +1,186 @@
+interactions:
+- request:
+    body: null
+    headers:
+      Accept:
+      - '*/*'
+      Accept-Encoding:
+      - gzip, deflate
+      Connection:
+      - keep-alive
+      User-Agent:
+      - python-requests/2.32.5
+    method: GET
+    uri: https://archive.org/advancedsearch.php?q=aerial+coastline&fl%5B%5D=identifier&fl%5B%5D=title&fl%5B%5D=description&fl%5B%5D=licenseurl&fl%5B%5D=mediatype&rows=3&output=json
+  response:
+    body:
+      string: '{"responseHeader":{"status":0,"QTime":105,"params":{"query":"((text:aerial
+        OR text:aerial OR text__reviews:aerial)(text:coastline OR text:coastline OR
+        text__reviews:coastline)) OR (text:&quot;aerial coastline&quot; OR text:&quot;aerial
+        coastline&quot; OR text__reviews:&quot;aerial coastline&quot;)","qin":"aerial
+        coastline","fields":"identifier,title,description,licenseurl,mediatype","wt":"json","rows":3,"start":0}},"response":{"numFound":252,"start":0,"docs":[{"description":"Men
+        With Green Faces (MN 10585) is a Vietnam-era U.S. Navy documentary from 1969
+        that explains the intense mental and physical challenges endured by those
+        who want to become elite Navy SEALs. In addition to demonstrating the functions
+        of the Navy''s frogmen commandos, the film reflects the excitement of parachute
+        jump training to the quite of jungle patrols. The film opens with Navy SEALs
+        (of what appears to Underwater Demolition Team II) paddling a boat down a
+        river; the men leave the river and head into the jungle for a reconnaissance
+        mission. New SEALs listen to a commander during training (02:30). The men
+        exercise on a field, do pullups, and carry boats while singing. Later, the
+        frogmen put on masks and jump out of a raft moving along a body of water at
+        a fast pace (05:44). The boat comes back around to retrieve the men, who hook
+        their arms on a rope loop to move back into the boat. A member of Underwater
+        Demolition Team II explains an Emerson Scuba Rig to the new SEALs (06:58).
+        Underwater footage shows the SEALs moving just above the water\u2019s floor
+        (07:26), presumably with the Emerson rig. At Fort Benning, GA, the men train
+        by jumping out of a Chinook helicopter into water (08:00), repelling down
+        a line to simulate a parachute jump (08:32), and experience parachute openings
+        while training on a four-armed tower (09:42). The SEALs graduate to parachuting
+        out of a plane during an actual training jump (10:44). Several SEALs participate
+        in a HALO jump (High Altitude, Low Opening). The SEALs participate in a patrol
+        mission during a realistic training (12:20). \u201cEnemy\u201d targets (spring-loaded
+        targets) spring up and the SEALs quickly shoot them. Two men practice hand-to-hand
+        combat and fighting techniques (14:05). The men repel down a rocky face (14:48),
+        moving as quickly as possible. In the classroom, the SEALs learn basic Vietnamese
+        (15:50). An aerial view shows viewers Vietnam and what appears to be the Mekong
+        River (17:10). At a base in Vietnam, the SEALs\u2019 platoon leader briefs
+        his men on an upcoming patrol mission (17:40). They board a PBR in full gear
+        and camouflage. The SEALs quietly move through foliage and ford a river. The
+        men board a PBR after conducting the patrol. The film then shows the men meeting
+        for a debriefing after the mission. Armed Navy patrol boats move on a river
+        (23:46), and helicopters take to the air. The frogmen fire the boat\u2019s
+        machine guns at unseen targets on the riverbanks (24:49), while the helicopters
+        fire at enemy targets on the ground. SEALs attend an awards ceremony where
+        they receive various medals (25:55). A commander gives a widow the medals
+        earned by her late husband. The United States Navy Sea, Air, and Land Teams,
+        commonly abbreviated as Navy SEALs, are the U.S. Navy''s primary special operations
+        force and a component of the Naval Special Warfare Command. Among the SEALs''
+        main functions are conducting small-unit maritime military operations that
+        originate from, and return to, a river, ocean, swamp, delta, or coastline.
+        The SEALs are trained to operate in all environments (sea, air, and land)
+        for which they are named. Motion picture films don''t last forever; many have
+        already been lost or destroyed. For almost two decades, we''ve worked to collect,
+        scan and preserve the world as it was captured on 35mm, 16mm and 8mm movies
+        -- including home movies, industrial films, and other non-fiction. If you
+        have endangered films you''d like to have scanned, or wish to donate celluloid
+        to Periscope Film so that we can share them with the world, we''d love to
+        hear from you. Contact us via the weblink below. This film is part of the
+        Periscope Film LLC archive, one of the largest historic military, transportation,
+        and aviation stock footage collections in the USA. Entirely film backed, this
+        material is available for licensing in 24p HD, 2k and 4k. For more information
+        visit http://www.PeriscopeFilm.com","identifier":"Iao5b1Z5uAptyk1WNz76BvyarGgwgV","mediatype":"movies","title":"\"MEN
+        WITH GREEN FACES\" 1969 U.S. NAVY SEALS DOCUMENTARY VIETNAM WAR PRINT 2 4022"},{"description":"Structure
+        from motion (SFM) has become an integral technique in coastal change assessment;
+        the U.S. Geological Survey (USGS) used Agisoft Metashape Professional Edition
+        photogrammetry software to develop a workflow that processes coastline aerialimagery
+        collected in response to storms since Hurricane Florence in 2018. This report
+        details step-by-step instructions to create three-dimensional (3D) spatial
+        products from both singular and repeated collections of shoreline aerial imagery.
+        The products can be used for real-time hazard guidance and future forecasting
+        and recovery endeavors.","identifier":"usgs-processing-coastal-imagery-with-agisoft-metashape","mediatype":"texts","title":"Processing
+        Coastal Imagery With Agisoft Metashape Professional Edition, Version 1.6\u2014Structure
+        From Motion Workflow Documentation"},{"description":"\u201cThis Land of Ours:
+        The State of Connecticut\u201d (1947) is a color documentary-short by Carl
+        Dudley Productions as part of his Screen Book of Knowledge and This Land Of
+        Ours series. This film highlights the various historic sites and major industrial
+        and cultural centers of the state of Connecticut from New Haven and Hartford
+        to the tobacco farms in the Connecticut River Valley. Connecticut, known as
+        the nutmeg state, was one of the 13 original states and is today the 3rd smallest
+        state in the Union after Rhode Island and Delaware. Carl Dudley was born in
+        Little Rock, Arkansas in the early 20th century and went on to become a film
+        director and producer. In 1944, he founded the Dudley Pictures Corporation
+        and produced thirty documentary shorts in the This Land of Ours series. Opening
+        credits: young boy opens larger-than-life size book to reveal title page for
+        film (0:10). Colorful illustrated map of the United States, camera closes
+        in on Connecticut as narration begins (0:32). POV from car driving along Merritt
+        Parkway, pass under brick road bridge, scenic countryside vistas: red barn
+        house, red and yellow leaves of fall foliage (0:55). Historic graveyard (1:17).
+        Defender\u2019s Monument in New Haven (1:33). Nathan Hale Monument (1893)
+        by Frederick MacMonnies (now at City Hall Park, New York City) (1:43). Grounds
+        of abolitionist John Brown Farm State Historic Site and resting place (2:01).
+        Grounds of the Homesite of Lyman Beecher, birthplace of Henry Ward Beecher,
+        Harriet Beecher Stowe in Litchfield (2:14). Camera pans industrial center:
+        tall warehouse and telephone polls in foreground (2:33). Interior of various
+        factories: men and women on assembly line working on appliances, fabrics,
+        furniture etc. (2:39). Interior of fabric mill working with cotton, wool,
+        silk (3:09). Close-up of threads inside woolen mill machine (3:11). Aerial
+        view of Hartford - Connecticut State Capitol Building (3:19). Pedestrian traffic
+        on busy downtown shopping street in Hartford (3:24). Connecticut\u2019s Old
+        State House (3:29). View of the Travelers Tower, first skyscraper in Connecticut
+        (3:32). View of Connecticut State Capitol Building and Corning Fountain in
+        Bushnell Park (3:39). Camera pans New Haven skyline (4:00). Yale University
+        Campus (4:17). Harkness Tower (4:35). University of Connecticut Storrs Main
+        Campus, Wilbur Cross Building (4:36). Camera pans New London Harbor on the
+        Thames River (4:54). General Dynamics Electric Boat submarine building shipyard
+        in Groton (5:06). Farmer steers horse-drawn rake through field, red barn contrasts
+        blue sky in background (5:14). Boy walks up to cows on farm (5:28). Holstein
+        or Guernsey Cattle graze grass in pen, some enter white barn house (5:38).
+        Field hands tend to tobacco plants under tented area offering shade; Connecticut
+        Shade Tobacco grown in Connecticut River Valley (5:49). Horses in field (6:09).
+        Montage old barns converted into eating establishments (6:22). Summer Stock
+        Theatre, red barn converted into performance space (6:36). Sunbathers and
+        swimmers dot coastline of Ocean Beach Park on Long Island Sound, sailboats
+        on the Atlantic (6:48). Return to illustrated map of the United States, camera
+        zooms out from Connecticut as narrator reviews information covered in film
+        (7:28). Parking lot filled with cars of commuters at train station (8:53).
+        Men on horses play polo (8:59). New Haven Five Mile Point Lighthouse (9:11).
+        Motion picture films don''t last forever; many have already been lost or destroyed.
+        For almost two decades, we''ve worked to collect, scan and preserve the world
+        as it was captured on 35mm, 16mm and 8mm movies -- including home movies,
+        industrial films, and other non-fiction. If you have endangered films you''d
+        like to have scanned, or wish to donate celluloid to Periscope Film so that
+        we can share them with the world, we''d love to hear from you. Contact us
+        via the weblink below. This film is part of the Periscope Film LLC archive,
+        one of the largest historic military, transportation, and aviation stock footage
+        collections in the USA. Entirely film backed, this material is available for
+        licensing in 24p HD, 2k and 4k. For more information visit http://www.PeriscopeFilm.com","identifier":"u6p2gOLrmlRNuXTU3xAovABB9sKYTR","mediatype":"movies","title":"\"
+        THIS LAND OF OURS CONNECTICUT \" 1947 EDUCATIONAL TRAVELOGUE FILM NEW HAVEN
+        HARTFORD XD7262"}]}}'
+    headers:
+      Access-Control-Allow-Headers:
+      - Accept-Encoding,Accept-Language,Authorization,Baggage,Cache-Control,Content-Length,Content-Range,DNT,Pragma,Range,Sentry-Trace,X-Requested-With
+      Access-Control-Allow-Methods:
+      - GET, POST, OPTIONS
+      Access-Control-Allow-Origin:
+      - '*'
+      Cache-Control:
+      - no-cache
+      Connection:
+      - keep-alive
+      Content-Security-Policy:
+      - 'report-uri https://archive.org/services/csp-report; default-src *; img-src
+        * data: blob:; object-src ''none''; media-src * blob:; connect-src * data:;
+        style-src ''unsafe-inline'' https://archive.org/ https://archive.org https://esm.archive.org/
+        https://esm.ext.archive.org/ https://offshoot.prod.archive.org/ https://av.archive.org/css/
+        https://av.dev.archive.org/css/ https://accounts.google.com/gsi/ https://synerg.adp.com/;
+        script-src ''nonce-bec5e50f87f02ca7593738a8e2171aa5'' https://archive.org/includes/
+        https://archive.org/includes/ https://archive.org/components/ https://archive.org/components/
+        https://archive.org/v/ https://archive.org/v/ https://archive.org/upload/app/
+        https://archive.org/offshoot_assets/ https://archive.org/offshoot_assets/
+        https://esm.archive.org/ https://esm.ext.archive.org/ https://polyfill.archive.org/v3/polyfill.min.js
+        https://offshoot.prod.archive.org/ https://av.archive.org/ https://av.dev.archive.org/
+        https://openlibrary.org/query.json https://emularity-engine.ux-b.archive.org/
+        https://emularity-config.ux-b.archive.org/ https://emularity-bios.ux-b.archive.org/
+        https://archive.org/services/emularity/ https://archive.org/services/emularity/
+        ''wasm-unsafe-eval'' ''sha256-CoX53XgCdkM1zegYEEpMUeYIZnv663inNm8bQv2VRbM=''
+        https://accounts.google.com/gsi/ https://www.google.com/recaptcha/ https://www.gstatic.com/recaptcha/
+        https://workforcenow.adp.com/ https://synerg.adp.com/ https://apollo.archive.org'
+      Content-Type:
+      - application/json
+      Date:
+      - Tue, 01 Sep 2026 10:16:50 GMT
+      Onion-Location:
+      - https://archivep75mbjunhxc6x4j5mwjmomyxb573v42baldlqu56ruil2oiad.onion/advancedsearch.php?q=aerial+coastline&fl%5B%5D=identifier&fl%5B%5D=title&fl%5B%5D=description&fl%5B%5D=licenseurl&fl%5B%5D=mediatype&rows=3&output=json
+      Referrer-Policy:
+      - no-referrer-when-downgrade
+      Server:
+      - nginx/1.31.3
+      Strict-Transport-Security:
+      - max-age=15724800
+      Transfer-Encoding:
+      - chunked
+    status:
+      code: 200
+      message: OK
+version: 1
