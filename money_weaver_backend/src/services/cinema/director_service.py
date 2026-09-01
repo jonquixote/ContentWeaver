@@ -120,6 +120,14 @@ _DETERMINISTIC_ABSTRACT_MAP = {
     "despair": "an empty room with a broken mic stand",
 }
 
+# Bump when the director's prompt/logic changes so stale cached ShotSpecs are
+# never reused. Salted into the cache key.
+DIRECTOR_VERSION = "a1"
+
+
+def _cache_key(scene_text: str) -> str:
+    return hashlib.sha256(f"{DIRECTOR_VERSION}:{scene_text}".encode()).hexdigest()
+
 
 def _concretize(text: str) -> str:
     low = text.lower()
@@ -177,7 +185,7 @@ def _cache_get(scene_text: str) -> list[ShotSpec] | None:
     db = d / "director_cache.sqlite"
     if not db.exists():
         return None
-    key = hashlib.sha256((scene_text).encode()).hexdigest()
+    key = _cache_key(scene_text)
     try:
         conn = sqlite3.connect(str(db))
         row = conn.execute(
@@ -200,7 +208,7 @@ def _cache_put(scene_text: str, specs: list[ShotSpec]) -> None:
     d = cache_dir()
     d.mkdir(parents=True, exist_ok=True)
     db = d / "director_cache.sqlite"
-    key = hashlib.sha256((scene_text).encode()).hexdigest()
+    key = _cache_key(scene_text)
     try:
         conn = sqlite3.connect(str(db))
         conn.execute(

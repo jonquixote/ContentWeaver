@@ -88,3 +88,16 @@ def test_run_director_uses_llm_success(monkeypatch):
     specs = run_director("unique-llm-scene-text", 1, story_context="s", llm_fn=ok_llm)
     assert len(specs) == 1
     assert specs[0].scale.value == "mcu"
+
+
+def test_cache_key_salted_by_director_version(monkeypatch):
+    # A stale cache entry (written under a previous DIRECTOR_VERSION) must not
+    # be reused: the key salt changes on version bump.
+    from src.services.cinema import director_service as ds
+    from src.services.cinema.director_service import _cache_key
+
+    monkeypatch.setattr(ds, "DIRECTOR_VERSION", "a1")
+    k1 = _cache_key("same scene text")
+    monkeypatch.setattr(ds, "DIRECTOR_VERSION", "a2")
+    k2 = _cache_key("same scene text")
+    assert k1 != k2
