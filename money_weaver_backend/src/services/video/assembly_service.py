@@ -212,21 +212,28 @@ class VideoAssemblyService:
             
             output_path = os.path.join(self.working_dir, output_filename)
             
-            # Build FFmpeg command to cut video segment with proper keyframe alignment
-            # Using -ss before -i for faster seeking
-            # Adding keyframe alignment to prevent frozen frames
-            # Using -avoid_negative_ts and -fflags for proper timestamp handling
-            # Adding -vsync for variable frame rate
+            # Build FFmpeg command to cut video segment with frame-accurate
+            # seek. IMPORTANT: -ss AFTER -i decodes from the seek point so the
+            # output length matches `duration` exactly; with -ss before -i +
+            # -c copy the cut snaps to the previous keyframe and comes out
+            # ~1.9s instead of ~2.9s, which shrank 12 scenes' total to ~40-46s.
+            # We re-encode (no -c copy) so every segment is exactly `duration`
+            # long and the concat sum equals the requested total_duration.
             cmd = [
                 'ffmpeg',
-                '-ss', str(start_time),
                 '-i', video_file,
+                '-ss', str(start_time),
                 '-t', str(duration),
-                '-c', 'copy',  # Use stream copy to preserve original quality and avoid re-encoding
+                '-c:v', 'libx264',
+                '-preset', 'veryfast',
+                '-crf', '23',
+                '-map', '0:v:0',
+                '-an',  # no audio; final concat muxes the TTS track
                 '-avoid_negative_ts', 'make_zero',
                 '-fflags', '+genpts',
-                '-fps_mode', 'vfr',  # Variable frame rate to prevent frozen frames
-                '-y',  # Overwrite output file
+                '-fps_mode', 'vfr',
+                '-movflags', '+faststart',
+                '-y',
                 output_path
             ]
             
@@ -241,15 +248,17 @@ class VideoAssemblyService:
                 return output_path
             else:
                 print(f"FFmpeg error (return code {result.returncode}): {result.stderr}")
-                # If stream copy fails, try re-encoding with better parameters
+                # If re-encoding fails, retry with the same frame-accurate seek
                 cmd = [
                     'ffmpeg',
-                    '-ss', str(start_time),
                     '-i', video_file,
+                    '-ss', str(start_time),
                     '-t', str(duration),
                     '-c:v', 'libx264',
-                    '-c:a', 'aac',
-                    '-strict', 'experimental',
+                    '-preset', 'veryfast',
+                    '-crf', '23',
+                    '-map', '0:v:0',
+                    '-an',
                     '-avoid_negative_ts', 'make_zero',
                     '-fflags', '+genpts',
                     '-fps_mode', 'vfr',  # Variable frame rate to prevent frozen frames
