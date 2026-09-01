@@ -79,12 +79,11 @@ class ClipRecord(BaseModel):
     luminance: float | None = None
     motion_energy: float | None = None
     faces: int | None = None
-    average_hash: str | None = None      # Pillow/numpy phash — Plan A dedup
+    average_hash: str | None = None      # Pillow/numpy average/perceptual hash of preview thumbnails
     used_in_video_ids: list[str] = []
 ```
 
 ### 4. Director (`cinema/director_service.py`)
-
 **LLM-first with a first-class deterministic fallback** (amended):
 
 - `LLM_DIRECTOR_*` behind `CINEMA_DIRECTOR_ENABLED` flag (default off, tests
@@ -121,8 +120,11 @@ score(c, spec, prev) =
 
 Key rules (amended):
 - **None typed fields are neutral** (weight 0), never scored as a mismatch.
-- **Dedup** uses Pillow/numpy **average-hash** on preview thumbnails (deps
-  already present: Pillow, numpy) — not URL-only. Hamming ≤ 6 → `reject`.
+- **Dedup mechanism PINNED**: average/perceptual hash on provider **preview
+  thumbnails** via Pillow/numpy (deps already present). Hamming distance ≤ 6 →
+  `reject`. This is explicit and image-derived — **not** URL or provider-ID
+  matching, which is explicitly disallowed (a clip can appear under two IDs or
+  two URLs and must be deduped). `average_hash` field stores the hex digest.
 - Weights are per-mode config in `cinema/modes.py` (dict of MontageMode → config).
 
 ### 6. Integration (`stock_footage_service.py`)

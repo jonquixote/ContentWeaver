@@ -28,7 +28,7 @@ Celery `footage` queue tasks, config, retrieval API, rollout phases, tests.
 
 | In FOOTAGE_INGEST_SERVICE.md | In Plan B |
 |---|---|
-| Embeddings: open-clip `ViT-L-14` | Embedder interface; backend via `EMBED_BACKEND` (none/torch/onnx/hosted_gemini) |
+| Embeddings: open-clip `ViT-L-14` | Embedder interface; default `ViT-B-32` for CPU/Intel; `ViT-L-14` reserved for `hosted_gemini`/GPU via `EMBED_BACKEND_L_MODEL` |
 | Vector DB: pgvector (Supabase) | sqlite-vec default; pgvector optional via `VECTOR_STORE` |
 | Shot scale enum numbers | reuse `cinema/types.py::ShotScale` (superset of the DTO) |
 
@@ -44,7 +44,8 @@ k-means palette + luma, pHash dedup. Each detected shot → one `ClipRecord`.
 ```
 VECTOR_STORE=sqlite_vec            # sqlite_vec | pgvector
 EMBED_BACKEND=none                 # none | torch | onnx | hosted_gemini
-EMBED_MODEL=ViT-L-14
+EMBED_MODEL=ViT-B-32               # CPU/Intel default; ViT-L-14 only via hosted_gemini or GPU
+EMBED_BACKEND_L_MODEL=ViT-L-14     # hosted/GPU option, never CPU default
 USE_SCENEDETECT=false
 ENABLE_BLIP=false
 FOOTAGE_SOURCES_ENABLED=pexels,pixabay,coverr,archive_org,nasa,loc,wikimedia_commons

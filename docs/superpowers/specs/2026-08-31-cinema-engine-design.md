@@ -60,6 +60,17 @@ its ClipRecord shape is a superset so B backfills embeddings without a
 migration. C is pure logic on the IR from A+B. D refines timing on top of C's
 plan. E adds pre-render verification hosted (no local VLM on Intel).
 
+## Field-name reconciliation (canonical schema)
+
+**Plan A (`2026-08-31-cinema-plan-a-director-shot.md`) is the canonical, complete
+schema.** The conceptual field names in the design narrative above
+(`scale`/`move`/`function`/`mood`/`provider`/`embedding`/`caption`) all appear
+identically in Plan A. Where the narrative's shot-scale members (`FS`/`WS`/`EWS`)
+differ from Plan A's enum (`MLS`/`LS`/`ELS`/`ABSTRACT`), **Plan A's enum wins**
+— it is more precise and is what the code targets. Downstream plans (C/D/E) and
+the Plan B ingest MUST use Plan A's exact `ShotSpec`/`ClipRecord` field names
+and enums; no renames without updating Plan A.
+
 ## Non-goals
 
 - No new stock providers in Plan A (C/B only via ingestor interface).
