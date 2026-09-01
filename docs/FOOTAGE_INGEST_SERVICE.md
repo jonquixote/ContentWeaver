@@ -1,6 +1,6 @@
 # Footage Ingest Service — Implementation Spec
 
-**Status:** Draft
+**Status:** Draft (amended 2026-08-31: VectorStore abstraction, ClipRecord, wave-based source phasing)
 **Date:** 2026-08-31
 **Scope:** `money_weaver_backend` — new `src/services/footage/` package, replacing runtime keyword queries to Pexels/Pixabay as the primary footage path for `assembly_service.py`.
 
@@ -16,7 +16,7 @@ Today `stock_footage_service.py` queries Pexels and Pixabay at assembly time wit
 
 **Goal:** build an owned, continuously growing footage corpus — multi-source, license-gated, normalized, embedded, and shot-annotated — that `assembly_service` queries by semantic similarity + cinematographic filters instead of keyword search.
 
-Non-goals for this spec: the montage/editing engine itself (consumes this service's metadata later); music, TTS, captions.
+Non-goals for this spec: the montage/editing engine itself (consumes this service's `ClipRecord`s later); music, TTS, captions.
 
 ---
 
@@ -26,16 +26,16 @@ Linear ingest pipeline, one Celery task per stage, idempotent at each stage:
 
 ```
 DISCOVER ──▶ FILTER ──▶ ACQUIRE ──▶ NORMALIZE ──▶ ANALYZE ──▶ INDEX
-(search     (license    (download   (transcode,   (shots,      (pgvector,
- adapters)   allowlist)  to object   proxies,      embeddings,  queryable by
-                        storage)    keyframes)    dedup)       assembly)
+(search     (license    (download   (transcode,   (ClipRecords:  (VectorStore,
+ adapters)   allowlist)  to object   proxies,      shots, embeds, queryable by
+                        storage)    keyframes)    dedup)        assembly)
 ```
 
 - **Package:** `money_weaver_backend/src/services/footage/`
 - **Adapters:** mirror the existing `src/services/providers/` pattern — `base.py` (abstract source), `registry.py` (name → adapter), one module per source.
 - **Queueing:** Celery via the existing `celery_app.py`; new queue `footage` so ingest never starves render jobs.
 - **Storage:** existing `src/services/storage/` abstraction; layout in §5.
-- **Index:** Postgres + pgvector (Supabase) — see schema in §7.
+- **Index:** VectorStore abstraction; sqlite-vec default (zero-provision dev/CI/single-node), pgvector (Supabase) when provisioned. See schema in §7.
 
 ---
 
@@ -76,19 +76,23 @@ class BaseFootageSource(ABC):
 
 `SearchPage` carries `candidates: list[CandidateVideo]` + opaque `next_cursor`. Adapters must be pure metadata at this stage — no downloads during `search()`.
 
-### 3.2 Adapter roster
+### 3.2 Adapter roster (phased by friction)
 
-| Adapter | Endpoint / lib | Auth | Notes |
-|---|---|---|---|
-| `pexels` | api.pexels.com/videos | `PEXELS_API_KEY` | Refactor existing logic out of `stock_footage_service.py`. License: Pexels license → map to `LicenseRef-Pexels`. |
-| `pixabay` | pixabay.com/api/videos | `PIXABAY_API_KEY` | Same refactor. License → `LicenseRef-Pixabay`. |
-| `archive_org` | `internetarchive` pkg (`ia search`, `ia metadata`) or `advancedsearch.php` + metadata API | none for search/download | Prefer curated PD collections: `collection:prelinger`, `collection:PrelingerArchives`, `collection:nasa`, `mediatype:movies AND licenseurl:*`. Resolve best file via `--glob='*.mp4'`-equivalent format ranking (h.264 > MPEG4 > MPEG2). Metadata is librarian-grade: query by `subject:`, `creator:`, `collection:` — not vibes. |
-| `nasa` | images-api.nasa.gov (`/search?media_type=video`) | `NASA_API_KEY` optional | PD per NASA media guidelines; store guideline URL in `license_raw`. |
-| `loc` | loc.gov JSON API (`?fo=json&c=100&sp=N`) | none (rate-limited) | Filter `online_format:film\,video`; check `rights` field per item — many are PD (early actualities, newsreels). |
-| `wikimedia_commons` | MediaWiki API `generator=search&gsrsearch=filetype:video` | none | Per-file license via `extmetadata.LicenseShortName`; map to SPDX; keep `Attribution` field. |
-| `coverr` | coverr.co API | `COVERR_API_KEY` | Free commercial use; attribution/logo requirement — set `attribution_text` accordingly and surface in render credits (§4). |
-| `europeana` | REST API with `REUSABILITY:open` filter | `EUROPEANA_API_KEY` | Rights filter at query time; still re-check per item. |
-| `youtube_cc` (optional, phase 3) | YouTube Data API `license=creativeCommon` + yt-dlp | `YOUTUBE_API_KEY` | CC-BY only; highest legal/ToS scrutiny; off by default. |
+Sources are phased by acquisition friction — keys, quotas, cost — not by preference.
+
+| Wave | Adapter | Endpoint / lib | Auth | Notes |
+|---|---|---|---|---|
+| **Now (keyless)** | `pexels` | api.pexels.com/videos | `PEXELS_API_KEY` (already provisioned) | Refactor existing logic out of `stock_footage_service.py`. License → `LicenseRef-Pexels`. |
+| **Now (keyless)** | `pixabay` | pixabay.com/api/videos | `PIXABAY_API_KEY` (already provisioned) | Same refactor. License → `LicenseRef-Pixabay`. |
+| **Now (keyless)** | `coverr` | coverr.co API | none for demo tier (50 calls/hr); `COVERR_API_KEY` for production (2,000/hr) | Free commercial use; attribution/logo requirement — set `attribution_text` and surface in render credits (§4). |
+| **Now (keyless)** | `archive_org` | `internetarchive` pkg (`ia search`, `ia metadata`) or `advancedsearch.php` + Metadata API | none for reads | Prefer curated PD collections: `collection:prelinger`, `collection:nasa`, `mediatype:movies AND licenseurl:*`. Format ranking h.264 > MPEG4 > MPEG2. Librarian-grade metadata: query `subject:`/`creator:`/`collection:` — not vibes. |
+| **Now (keyless)** | `nasa` | images-api.nasa.gov (`/search?media_type=video`) | none required (open); `NASA_API_KEY` optional | PD per NASA media guidelines; store guideline URL in `license_raw`. |
+| **Now (keyless)** | `loc` | loc.gov JSON API (`?fo=json&c=100&sp=N`) | none (rate-limited) | Filter `online_format:film\,video`; check `rights` per item — many PD (early actualities, newsreels). |
+| **Now (keyless)** | `wikimedia_commons` | MediaWiki API `generator=search&gsrsearch=filetype:video` | none | Per-file license via `extmetadata.LicenseShortName`; map to SPDX; keep `Attribution` field. |
+| **Next (free key)** | `europeana` | REST API with `REUSABILITY:open` filter | free key via account registration | Rights filter at query time; still re-check per item. |
+| **Next (free key)** | `nara` | NARA Catalog API v2 | free read-only key, issued by email request | US National Archives; mostly PD (US gov works). 20th-century history, government, military. |
+| **Later (constrained)** | `youtube_cc` | YouTube Data API `license=creativeCommon` + yt-dlp | `YOUTUBE_API_KEY` | Quota-constrained: 10,000 units/day buys only ~100 `search.list` calls at 100 units each — a trickle source, not a pool. CC-BY only; off by default. |
+| **Later (constrained)** | `pond5` | Pond5 public domain collection / partner API | paid licensed stock | Budget decision, not an adapter. Defer until a paid-stock line item exists. |
 
 Registry (`footage/sources/registry.py`) maps name → class, with per-source `enabled` flag from config.
 
@@ -151,19 +155,43 @@ ffmpeg -i master -vf "scale='min(1920,iw)':-2,fps=fps='min(30,source_fps)'" \
 
 ## 6. Analysis Stage
 
-Runs on `proxy.mp4`. All outputs land in `footage_shots` (§7).
+Runs on `proxy.mp4`. Every detected shot emits one typed **`ClipRecord`** — the currency the cinema engine's montage planner plans with. `footage_shots` (§7) is its persistence form; retrieval (§10) returns hydrated `ClipRecord`s.
 
-1. **Shot segmentation** — PySceneDetect (content detector, threshold tuned on a 50-clip validation set; target ≥95% boundary recall on stock b-roll, lower precision acceptable). Each segment = one row in `footage_shots` with `start_s`, `end_s`.
-2. **Embeddings** — open-clip `ViT-L-14` (laion2b) on 3 uniformly sampled frames per shot; L2-normalize each, mean-pool, re-normalize → one 768-d vector per shot. Batch on GPU when available; CPU fallback at reduced batch size (config `EMBED_DEVICE`).
-3. **Shot classification** (this is what enables montage logic later):
-   - `shot_size` ∈ {ECU, CU, MS, MLS, FS, WS, EWS} — heuristic from face/person detector (YOLOv8n or retinaface) subject-area ratio + heuristics for no-person shots.
-   - `camera_motion` ∈ {static, pan, tilt, tracking, handheld, zoom} — dense optical flow (Farnebäck) aggregate direction + magnitude over the shot.
-   - `motion_intensity` float — mean flow magnitude (editing rhythm signal).
-   - `faces_count`, `has_text_overlay` (OCR-lite via easyocr on keyframe), `brightness`, `color_palette` (k-means k=5 on keyframe).
+```python
+@dataclass
+class ClipRecord:
+    shot_id: UUID
+    asset_id: UUID
+    source: str
+    window: tuple[float, float]    # start_s, end_s within the asset
+    duration_s: float
+    shot_scale: ShotScale          # ECU | CU | MS | MLS | FS | WS | EWS
+    camera_move: CameraMove        # static | pan | tilt | tracking | handheld | zoom
+    motion_energy: float           # mean optical-flow magnitude, normalized 0–1 (editing rhythm signal)
+    palette: list[str]             # dominant colors, k-means k=5, hex
+    brightness: float              # 0–1 mean luma of keyframe
+    faces_count: int
+    has_text_overlay: bool
+    embedding: list[float]         # 768-d, CLIP ViT-L/14, L2-normalized
+    caption: str | None            # BLIP-2, when ENABLE_BLIP
+    license_spdx: str
+    attribution_text: str | None
+```
+
+Pipeline steps:
+
+1. **Shot segmentation** — PySceneDetect (content detector, threshold tuned on a 50-clip validation set; target ≥95% boundary recall on stock b-roll, lower precision acceptable). Each segment = one `ClipRecord` / one row in `footage_shots`.
+2. **Embeddings** — open-clip `ViT-L-14` (laion2b) on 3 uniformly sampled frames per shot; L2-normalize each, mean-pool, re-normalize → `embedding`. Batch on GPU when available; CPU fallback at reduced batch size (config `EMBED_DEVICE`).
+3. **Cinematographic attributes** (this is what the montage planner consumes):
+   - `shot_scale` — heuristic from face/person detector (YOLOv8n or retinaface) subject-area ratio + heuristics for no-person shots.
+   - `camera_move` — dense optical flow (Farnebäck) aggregate direction + magnitude over the shot window.
+   - `motion_energy` — mean flow magnitude, normalized 0–1.
+   - `palette` — k-means (k=5) on the keyframe, stored as hex; `brightness` as mean luma.
+   - `faces_count`, `has_text_overlay` (OCR-lite via easyocr on keyframe).
 4. **Dedup (two-tier):**
    - Exact/near: pHash on poster + middle keyframe; Hamming ≤ 6 → mark `duplicate_of`.
    - Semantic: cosine ≥ 0.97 against existing embeddings within same source → `duplicate_of`. Cross-source duplicates kept but down-weighted at retrieval.
-5. **Optional captioning** (flag `ENABLE_BLIP`): BLIP-2 caption per shot keyframe → `footage_shots.caption`, also embedded (text encoder) into `caption_embedding` for hybrid retrieval.
+5. **Optional captioning** (flag `ENABLE_BLIP`): BLIP-2 caption per shot keyframe → `ClipRecord.caption`, also text-embedded into `caption_embedding` for hybrid retrieval.
 
 All models lazy-loaded per worker; `requirements-ml.txt` already exists — add `open-clip-torch`, `scenedetect[opencv]`, `imagehash`, `ultralytics` (or `deepface`), `easyocr` (optional extra).
 
@@ -171,7 +199,7 @@ All models lazy-loaded per worker; `requirements-ml.txt` already exists — add 
 
 ## 7. Database Schema
 
-Postgres (Supabase) with `vector` extension enabled. Alembic migration + Prisma schema both updated (repo uses both — keep them in sync).
+**VectorStore abstraction:** one `VectorStore` interface (`upsert`, `query(vector, k, filters)`, `delete`) with two backends — `sqlite-vec` (default; zero-provision dev/CI/single-node) and `pgvector` (Supabase Postgres, when provisioned via `VECTOR_STORE=pgvector`). Relational rows live in SQLite or Postgres accordingly; vector columns become `vec0` virtual tables under sqlite-vec, native `vector(768)` under pgvector.
 
 ```sql
 create table footage_assets (
@@ -200,6 +228,7 @@ create table footage_assets (
     unique (source, source_id)
 );
 
+-- persistence form of ClipRecord
 create table footage_shots (
     id uuid primary key default gen_random_uuid(),
     asset_id uuid not null references footage_assets(id) on delete cascade,
@@ -207,18 +236,19 @@ create table footage_shots (
     start_s real not null,
     end_s real not null,
     keyframe_path text,
-    embedding vector(768),
+    embedding vector(768),           -- vec0 virtual table under sqlite-vec
     caption text,
     caption_embedding vector(768),
-    shot_size text,
-    camera_motion text,
-    motion_intensity real,
+    shot_scale text,                 -- ECU|CU|MS|MLS|FS|WS|EWS
+    camera_move text,                -- static|pan|tilt|tracking|handheld|zoom
+    motion_energy real,              -- 0–1
     faces_count int default 0,
     has_text_overlay boolean default false,
     brightness real,
     color_palette jsonb,
     unique (asset_id, shot_idx)
 );
+-- pgvector backend only:
 create index on footage_shots using hnsw (embedding vector_cosine_ops);
 
 create table ingest_jobs (
@@ -244,6 +274,8 @@ create table ingest_rejections (
 );
 ```
 
+Migrations: Alembic for Postgres; a plain DDL bootstrap script for the sqlite-vec path. Prisma schema stays in sync for the Postgres path.
+
 ---
 
 ## 8. Celery Tasks
@@ -255,7 +287,7 @@ Registered in `celery_app.py` under queue `footage`:
 | `footage.discover(source, query, limit)` | beat schedule per niche topic list + manual API | Pages adapter `search()`, upserts `footage_assets(status='discovered')`, license-filters, enqueues `acquire`. Fully idempotent via `(source, source_id)` unique key. |
 | `footage.acquire(asset_id)` | chained | `resolve_download()` → stream to `master.*`, set `status='downloaded'`. Retry 3× backoff; rate-limit per source via Celery rate_limit. |
 | `footage.normalize(asset_id)` | chained | ffmpeg profile §5 + poster + proxy. Failure → `status='failed'` with error. |
-| `footage.analyze(asset_id)` | chained | §6 pipeline → `footage_shots` rows, dedup pass, `status='analyzed'`. |
+| `footage.analyze(asset_id)` | chained | §6 pipeline → `ClipRecord`s persisted to `footage_shots`, dedup pass, `status='analyzed'`. |
 | `footage.recheck_licenses()` | beat, daily | Re-fetch metadata for assets due for re-check; on license downgrade → `status='filtered_out'` + excluded from retrieval. |
 
 Beat discovery seeds from `niches/` topic configs so the corpus grows toward what channels actually render. Suggested initial queries per adapter: 20–50 niche-aligned terms + 20 archival-flavored subjects (`subject:"city life"`, `subject:"factories"`, …) for `archive_org`.
@@ -270,13 +302,15 @@ Beat discovery seeds from `niches/` topic configs so the corpus grows toward wha
 # Footage ingest
 FOOTAGE_STORAGE_ROOT=footage
 FOOTAGE_QUEUE=footage
-FOOTAGE_SOURCES_ENABLED=pexels,pixabay,archive_org,nasa,loc,wikimedia_commons,coverr
+VECTOR_STORE=sqlite_vec          # sqlite_vec | pgvector
+FOOTAGE_SOURCES_ENABLED=pexels,pixabay,coverr,archive_org,nasa,loc,wikimedia_commons
 PEXELS_API_KEY=
 PIXABAY_API_KEY=
-NASA_API_KEY=            # optional
-COVERR_API_KEY=
-EUROPEANA_API_KEY=
-ARCHIVE_ORG_ACCESS=      # only if uploading; search/download need none
+NASA_API_KEY=            # optional; images-api.nasa.gov is open
+COVERR_API_KEY=          # optional until production tier needed
+EUROPEANA_API_KEY=       # Wave Next: free key via account registration
+NARA_API_KEY=            # Wave Next: free read-only key by email request
+YOUTUBE_API_KEY=         # Wave Later: quota-constrained (~100 searches/day)
 EMBED_MODEL=ViT-L-14
 EMBED_PRETRAINED=laion2b_s32b_b82k
 EMBED_DEVICE=auto
@@ -289,7 +323,7 @@ FOOTAGE_LICENSE_RECHECK_DAYS=90
 
 ## 10. Retrieval API (consumed by `assembly_service`)
 
-New module `footage/retrieval.py` + router:
+New module `footage/retrieval.py` + router. Returns hydrated `ClipRecord`s:
 
 ```
 POST /footage/search
@@ -298,14 +332,15 @@ POST /footage/search
   "limit": 12,
   "min_duration_s": 2.0,
   "filters": {
-    "shot_size": ["WS", "EWS", "MS"],
-    "camera_motion": ["static", "pan"],
+    "shot_scale": ["WS", "EWS", "MS"],
+    "camera_move": ["static", "pan"],
+    "motion_energy_max": 0.4,
     "faces_max": 0,
     "sources": null,               // null = all enabled
     "exclude_used_in_video": "<video_uuid>"
   }
 }
-→ ranked shots: asset_id, shot window (start_s/end_s), scores, license + attribution_text
+→ ranked ClipRecords: asset_id, window, scores, cinematographic attrs, license + attribution_text
 ```
 
 Ranking: cosine(text-embedding, shot.embedding) × source-quality prior × duplicate penalty. Hybrid mode adds `caption_embedding` when BLIP enabled.
@@ -316,18 +351,18 @@ Ranking: cosine(text-embedding, shot.embedding) × source-quality prior × dupli
 
 ## 11. Rollout & Acceptance
 
-**Phase 0 — skeleton (week 1):** schema + migration; `base.py`/`registry.py`; `archive_org`, `nasa`, `pexels`, `pixabay` adapters; discover+acquire tasks; license gate. Acceptance: 1,000 assets ingested from ≥3 sources, 100% with allowlisted licenses and provenance rows.
+**Phase 0 — Wave Now + skeleton (week 1):** VectorStore abstraction (sqlite-vec path); `base.py`/`registry.py`; all seven Wave Now adapters (`pexels`, `pixabay`, `coverr`, `archive_org`, `nasa`, `loc`, `wikimedia_commons`) — all keyless or already-provisioned; discover+acquire tasks; license gate. Acceptance: 1,000 assets ingested from ≥3 sources, 100% with allowlisted licenses and provenance rows.
 
-**Phase 1 — analysis (week 2):** normalize + analyze tasks, shot table, embeddings. Acceptance: ≥90% of normalized assets produce ≥1 shot; embedding sanity test (query "aerial coastline" returns aerial coastlines in top 5 of a labeled 200-shot validation set).
+**Phase 1 — analysis (week 2):** normalize + analyze tasks, `ClipRecord` emission, embeddings. Acceptance: ≥90% of normalized assets produce ≥1 shot; embedding sanity test (query "aerial coastline" returns aerial coastlines in top 5 of a labeled 200-shot validation set). The critic loop reuses the same labeled 200-shot validation set.
 
-**Phase 2 — retrieval swap (week 3):** `/footage/search`, `stock_footage_service` behind-flag migration, credits/attribution block in renders. Acceptance: fallback-to-live rate < 30% on last 50 real renders; attribution present for 100% of CC-BY/Coverr shots used.
+**Phase 2 — retrieval swap + Wave Next (week 3):** `/footage/search`; `stock_footage_service` behind-flag migration; credits/attribution block in renders; `europeana` and `nara` adapters once their free keys are issued. Acceptance: fallback-to-live rate < 30% on last 50 real renders; attribution present for 100% of CC-BY/Coverr shots used.
 
-**Phase 3 — breadth (ongoing):** `loc`, `wikimedia_commons`, `coverr`, `europeana`, optional `youtube_cc`; BLIP captions; cross-source dedup tuning.
+**Phase 3 — Wave Later (ongoing):** `youtube_cc` behind a daily quota governor (10,000 units/day ≈ 100 `search.list` calls — schedule as a trickle, not a pool); `pond5` only when a paid-stock budget line is approved; BLIP captions; cross-source dedup tuning; pgvector backend cutover when corpus outgrows sqlite-vec.
 
-**Tests:** adapter contract tests with VCR/recorded fixtures (no live API in CI); license-gate unit tests per license class incl. downgrade path; ffmpeg profile golden-file test; dedup precision/recall on a hand-labeled dup set; retrieval ranking regression set (fixed query → expected top-k membership).
+**Tests:** adapter contract tests with VCR/recorded fixtures (no live API in CI); license-gate unit tests per license class incl. downgrade path; ffmpeg profile golden-file test; dedup precision/recall on a hand-labeled dup set; retrieval ranking regression set (fixed query → expected top-k membership); VectorStore conformance suite run against both backends.
 
 ---
 
 ## 12. Why This Fixes the "Lumière Problem"
 
-The montage failure isn't only pool size — it's that keyword search has no notion of a *shot*. This service makes the shot the unit of retrieval: every candidate carries shot size, camera motion, motion intensity, duration, and faces. That's the minimal metadata substrate a montage engine (shot-size progression, rhythmic cutting on `motion_intensity`, avoiding three consecutive static CUs of smiling faces) needs. Sources widen the vocabulary; this schema teaches the system grammar.
+The montage failure isn't only pool size — it's that keyword search has no notion of a *shot*. This service makes the shot the unit of retrieval, typed as `ClipRecord`: shot scale, camera move, motion energy, palette, duration, faces. That's the minimal attribute set a montage planner (shot-scale progression, rhythmic cutting on `motion_energy`, avoiding three consecutive static CUs of smiling faces) needs to actually plan. Sources widen the vocabulary; `ClipRecord` teaches the system grammar.
