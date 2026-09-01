@@ -227,11 +227,12 @@ class VideoAssemblyService:
                 '-c:v', 'libx264',
                 '-preset', 'veryfast',
                 '-crf', '23',
+                '-r', '25',             # normalize to CFR 25 fps
+                '-fps_mode', 'cfr',     # constant frame rate (sources vary 23.98..59.94)
                 '-map', '0:v:0',
                 '-an',  # no audio; final concat muxes the TTS track
                 '-avoid_negative_ts', 'make_zero',
                 '-fflags', '+genpts',
-                '-fps_mode', 'vfr',
                 '-movflags', '+faststart',
                 '-y',
                 output_path
@@ -257,13 +258,14 @@ class VideoAssemblyService:
                     '-c:v', 'libx264',
                     '-preset', 'veryfast',
                     '-crf', '23',
+                    '-r', '25',
+                    '-fps_mode', 'cfr',
                     '-map', '0:v:0',
                     '-an',
                     '-avoid_negative_ts', 'make_zero',
                     '-fflags', '+genpts',
-                    '-fps_mode', 'vfr',  # Variable frame rate to prevent frozen frames
-                    '-movflags', '+faststart',  # Optimize for web streaming
-                    '-y',  # Overwrite output file
+                    '-movflags', '+faststart',
+                    '-y',
                     output_path
                 ]
                 print(f"Retrying with re-encoding: {' '.join(cmd)}")
@@ -514,7 +516,8 @@ total_duration: int = 30,
                 '-strict', 'experimental',
                 '-avoid_negative_ts', 'make_zero',  # Critical for preventing frozen frames
                 '-fflags', '+genpts',  # Generate presentation timestamps
-                '-fps_mode', 'vfr',  # Use variable frame rate mode instead of deprecated vsync
+                '-fps_mode', 'cfr',  # constant frame rate: all cuts are pre-normalized to 25fps
+                '-r', '25',  # fix the concat mux to 25 fps so no frame is held/repeated
                 '-shortest',  # Ensure video ends when the shortest stream (audio) ends
                 '-async', '1',  # Audio/video sync
             ]
