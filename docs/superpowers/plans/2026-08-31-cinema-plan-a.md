@@ -1672,6 +1672,14 @@ git commit -m "docs(cinema): document Plan A feature flags (all default-off)"
 
 ---
 
+## Known follow-ups (out of Plan A scope)
+
+- Deterministic director hardcodes `mood="dim"` and fixed pacing. Tone/mood
+  from the narrative arc is a Plan C (montage) / D (timing) concern — derive
+  `mood` from scene context there.
+- Director dry-run at CP4 is written as deterministic-only; LLM path is behind
+  `CINEMA_DIRECTOR_ENABLED` and exercised only when a model is configured.
+
 ## Self-Review
 
 **Spec coverage check** — map Plan A spec requirements to tasks:

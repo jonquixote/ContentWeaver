@@ -265,7 +265,7 @@ def run_director(
             if spec_list is None:
                 spec_list = []
             if spec_list:
-                print("cinema director_source: llm")
+                print("cinema director_source: inferred")
                 _cache_put(scene_text, spec_list)
                 return spec_list
         except Exception as e:
