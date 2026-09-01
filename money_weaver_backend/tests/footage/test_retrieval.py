@@ -34,7 +34,7 @@ def test_search_clips_applies_source_and_duration_filters(monkeypatch):
             return [1.0, 0.0, 0.0]
 
     import src.services.footage.retrieval as ret
-    ret.make_embedder = StubEmbedder
+    monkeypatch.setattr(ret, "make_embedder", StubEmbedder)
     d = tempfile.mkdtemp()
     monkeypatch.setenv("FOOTAGE_VECTOR_DB", os.path.join(d, "vec.db"))
     monkeypatch.setenv("FOOTAGE_ASSETS_DB", os.path.join(d, "assets.db"))
@@ -73,7 +73,7 @@ def test_quarantined_asset_with_embedding_never_retrieved(monkeypatch):
             return [1.0, 0.0, 0.0]
 
     import src.services.footage.retrieval as ret
-    ret.make_embedder = StubEmbedder
+    monkeypatch.setattr(ret, "make_embedder", StubEmbedder)
     d = tempfile.mkdtemp()
     monkeypatch.setenv("FOOTAGE_VECTOR_DB", os.path.join(d, "vec.db"))
     monkeypatch.setenv("FOOTAGE_ASSETS_DB", os.path.join(d, "assets.db"))

@@ -5,7 +5,7 @@ import os
 from src.services.footage.importers import LICENSE_ALLOWLIST
 from src.services.footage.sources.base import CandidateVideo
 
-MAX_DURATION_S = 120.0
+MAX_DURATION_S = float(os.getenv("FOOTAGE_MAX_DURATION_S", "120"))
 
 
 def allow_license(license_spdx: str | None, source: str) -> bool:
