@@ -24,3 +24,24 @@ def test_none_backend_still_produces_clip_ready_shape():
     # The contract: with EMBED_BACKEND=none, embeddings are empty (None) but
     # ingestion must not crash. This is asserted by the analyze task, not here.
     assert NoneEmbedder().embed_text("x") == []
+
+
+def test_make_embedder_memoized_single_instance(monkeypatch):
+    # Live ingest reuses the model; make_embedder must return the SAME instance
+    # for a given (backend, model) so torch weights are not reloaded per clip.
+    monkeypatch.setenv("EMBED_BACKEND", "none")
+    import src.services.footage.embedder as em
+    em._EMBEDDER_CACHE = None
+    a = em.make_embedder()
+    b = em.make_embedder()
+    assert a is b  # memoized
+
+
+def test_make_embedder_reloads_on_backend_change(monkeypatch):
+    monkeypatch.setenv("EMBED_BACKEND", "none")
+    import src.services.footage.embedder as em
+    em._EMBEDDER_CACHE = None
+    a = em.make_embedder()
+    monkeypatch.setenv("EMBED_BACKEND", "none")
+    b = em.make_embedder()
+    assert a is b  # same (backend, model) -> same instance
