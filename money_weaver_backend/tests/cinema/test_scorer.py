@@ -86,3 +86,18 @@ def test_neighbor_term_tonal_vs_intellectual():
     assert neighbor_term(cur, prev, MontageMode.TONAL) > 0
     # intellectual penalizes sameness
     assert neighbor_term(cur, prev, MontageMode.INTELLECTUAL) < 0
+
+
+def test_rank_candidates_respects_cross_shot_chosen():
+    # clip picked for an EARLIER shot (passed as `chosen`) must exclude its
+    # near-dup from this shot's ranking (cross-shot dedup).
+    earlier = _clip("earlier", duration=10, scale=ShotScale.MS, ah="1111111111111111")
+    later_candidates = [
+        _clip("neardup", duration=10.2, scale=ShotScale.MS, ah="1111111111111110"),  # near-dup of earlier
+        _clip("fresh", duration=11, scale=ShotScale.MS, ah="aaaaaaaaaaaaaaaa"),
+        _clip("fresh2", duration=12, scale=ShotScale.MS, ah="bbbbbbbbbbbbbbbb"),
+    ]
+    ranked = rank_candidates(later_candidates, _spec(), chosen=[earlier])
+    ids = [c.clip_id for c in ranked]
+    assert "neardup" not in ids  # excluded because it duplicates `earlier`
+    assert "fresh" in ids

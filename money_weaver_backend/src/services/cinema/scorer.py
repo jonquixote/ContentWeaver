@@ -108,19 +108,25 @@ def rank_candidates(
     prev: ClipRecord | None = None,
     chosen: list[ClipRecord] | None = None,
 ) -> list[ClipRecord]:
-    """MMR-style ranking: pick highest-scoring, penalize proximity to chosen."""
-    chosen = chosen if chosen is not None else []
+    """MMR-style ranking: pick highest-scoring, penalize proximity to chosen.
+
+    `chosen` = clips already selected for EARLIER shots (cross-shot context).
+    Dedup and MMR diversity evaluate against `picked + chosen`, so a near-dup
+    of any previously-selected clip is excluded from this shot's ranking.
+    """
+    prior = chosen if chosen is not None else []
     remaining = list(clips)
     picked: list[ClipRecord] = []
     while remaining:
         best = None
         best_c = float("-inf")
+        selected_so_far = picked + prior
         for c in remaining:
-            if dedup_reject(c, picked):
+            if dedup_reject(c, selected_so_far):
                 continue
-            s = score(c, spec, mode=mode, prev=prev, chosen=picked)
-            # MMR diversity: subtract similarity to already-chosen (hash proximity)
-            for pc in picked:
+            s = score(c, spec, mode=mode, prev=prev, chosen=selected_so_far)
+            # MMR diversity: subtract similarity to already-selected (hash proximity)
+            for pc in selected_so_far:
                 if c.average_hash and pc.average_hash:
                     dist = hamming_distance(c.average_hash, pc.average_hash) / 64.0
                     s -= _distance_penalty(dist, mode)
