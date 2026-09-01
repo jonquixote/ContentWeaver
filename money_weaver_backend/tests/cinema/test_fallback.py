@@ -90,3 +90,34 @@ def test_rerank_preserves_rank_order_and_stubbed_dedup(monkeypatch):
     # rank order: MS (1) before ELS (3); stragglers (if any) appended after.
     assert out_ids.index(1) < out_ids.index(3)
     assert set(out_ids) == {1, 3, 4}
+
+
+def test_rerank_with_cinema_chosen_excludes_near_dup(monkeypatch):
+    # A clip chosen for an EARLIER shot (passed via `chosen`) must exclude its
+    # near-dup from this shot's ranking through the public signature.
+    monkeypatch.setenv("CINEMA_ENABLED", "true")
+    from src.services.cinema.clip import ClipRecord
+    from src.services.cinema.shot import ShotSpec
+    from src.services.cinema.types import ShotScale
+
+    svc = StockFootageService.__new__(StockFootageService)
+    earlier = ClipRecord(clip_id="pexels:9", provider="pexels", source_url="u",
+                         duration_s=10, scale=ShotScale.MS, average_hash="1111111111111111")
+    records = [
+        ClipRecord(clip_id="pexels:5", provider="pexels", source_url="u", duration_s=10.2,
+                   scale=ShotScale.MS, average_hash="1111111111111110"),  # near-dup of earlier
+        ClipRecord(clip_id="pexels:6", provider="pexels", source_url="u", duration_s=11,
+                   scale=ShotScale.MS, average_hash="aaaaaaaaaaaaaaaa"),
+    ]
+    monkeypatch.setattr(svc, "build_clip_records", lambda v: records)
+
+    spec = ShotSpec(
+        scene_number=2, shot_index=0, narrative_beats="jokes",
+        subject_concrete="comedian with mic", scale="ms", move="static",
+        function="context", mood="dim",
+    )
+    videos = [{"id": 5, "alt": "x", "source": "pexels"}, {"id": 6, "alt": "y", "source": "pexels"}]
+    result = svc.rerank_with_cinema(videos, spec, chosen=[earlier])
+    out_ids = [v["id"] for v in result]
+    assert 5 not in out_ids  # near-dup of the earlier clip excluded
+    assert 6 in out_ids
