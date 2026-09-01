@@ -46,6 +46,13 @@ class SqliteVecStore(VectorStore):
             conn.load_extension("vec0")
         except Exception:
             pass  # sqlite-vec not available; degrade to relational + in-Python cosine
+        # Schema-reconcile: a stale dev DB from an older plan may lack the
+        # duration_s column. Recreate the table if the schema drifted, so we
+        # don't hit a missing-column error (the index is re-derivable from the
+        # ingest pipeline; losing it is acceptable).
+        cols = {r[1] for r in conn.execute("PRAGMA table_info(footage_vec)").fetchall()}
+        if cols and "duration_s" not in cols:
+            conn.execute("DROP TABLE IF EXISTS footage_vec")
         conn.execute(
             "CREATE TABLE IF NOT EXISTS footage_vec (\n"
             "  id TEXT PRIMARY KEY, embedding TEXT, source TEXT, scale TEXT,"

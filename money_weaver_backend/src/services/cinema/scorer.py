@@ -69,7 +69,10 @@ def dedup_reject(clip: ClipRecord, chosen: list[ClipRecord] | None) -> bool:
         return False
     for c in chosen:
         if c.average_hash and hamming_distance(clip.average_hash, c.average_hash) <= DEDUP_HAMMING:
-            # duration veto needs both durations known; unknown (None) is neutral
+            # Duration veto: when BOTH durations are known, they must be within
+            # DEDUP_DURATION_TOLERANCE_S. An unknown (None) duration falls back
+            # to the hash-only veto (dedup by hash is still applied) — the guard
+            # only relaxes when a known duration clearly differs.
             if (clip.duration_s is None or c.duration_s is None
                     or abs(clip.duration_s - c.duration_s) <= DEDUP_DURATION_TOLERANCE_S):
                 return True
