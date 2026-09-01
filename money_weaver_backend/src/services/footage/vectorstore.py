@@ -48,7 +48,8 @@ class SqliteVecStore(VectorStore):
             pass  # sqlite-vec not available; degrade to relational + in-Python cosine
         conn.execute(
             "CREATE TABLE IF NOT EXISTS footage_vec (\n"
-            "  id TEXT PRIMARY KEY, embedding TEXT, source TEXT, scale TEXT)"
+            "  id TEXT PRIMARY KEY, embedding TEXT, source TEXT, scale TEXT,"
+            " duration_s REAL)"
         )
         conn.commit()
         conn.close()
@@ -56,10 +57,10 @@ class SqliteVecStore(VectorStore):
     def upsert(self, row: dict) -> None:
         conn = self._conn()
         conn.execute(
-            "INSERT OR REPLACE INTO footage_vec (id, embedding, source, scale) "
-            "VALUES (?, ?, ?, ?)",
+            "INSERT OR REPLACE INTO footage_vec (id, embedding, source, scale, duration_s) "
+            "VALUES (?, ?, ?, ?, ?)",
             (row["id"], json.dumps(row.get("embedding") or []),
-             row.get("source"), row.get("scale")),
+             row.get("source"), row.get("scale"), row.get("duration_s")),
         )
         conn.commit()
         conn.close()
@@ -68,7 +69,7 @@ class SqliteVecStore(VectorStore):
         import math
         conn = self._conn()
         rows = conn.execute(
-            "SELECT id, embedding, source, scale FROM footage_vec"
+            "SELECT id, embedding, source, scale, duration_s FROM footage_vec"
         ).fetchall()
         conn.close()
         scored = []
@@ -89,9 +90,12 @@ class SqliteVecStore(VectorStore):
                 or 1.0
             )
             sim = num / denom
-            scored.append((sim, r["id"]))
+            scored.append((sim, r["id"], r["duration_s"], r["source"]))
         scored.sort(reverse=True)
-        return [{"id": i, "score": s} for s, i in scored[:k]]
+        return [
+            {"id": i, "score": s, "duration_s": d, "source": src}
+            for s, i, d, src in scored[:k]
+        ]
 
     def delete(self, ids: list[str]) -> None:
         conn = self._conn()
