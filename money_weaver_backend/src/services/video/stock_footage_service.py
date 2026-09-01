@@ -151,6 +151,59 @@ class StockFootageService:
             return img
         return None
 
+    def build_clip_records(self, all_videos: list[dict]) -> list["ClipRecord"]:
+        """Turn provider result dicts into typed ClipRecords (Plan A: no embedding)."""
+        from src.services.cinema.clip import ClipRecord
+
+        recs = []
+        for v in all_videos:
+            source = "pexels" if v.get("source") == "pexels" else "pixabay"
+            label = self._candidate_text_label(v) or v.get("alt") or v.get("description") or ""
+            duration = v.get("duration") or v.get("pexels_duration") or v.get("pixabay_duration") or 0.0
+            try:
+                duration = float(duration)
+            except (TypeError, ValueError):
+                duration = 0.0
+            recs.append(
+                ClipRecord(
+                    clip_id=str(v.get("id") or v.get("pexels_id") or v.get("pixabay_id") or hash(str(v))),
+                    provider=source,
+                    source_url=self._preview_url(v) or v.get("url") or v.get("link") or "",
+                    duration_s=float(duration) if duration > 0 else 5.0,
+                    width=v.get("width"),
+                    height=v.get("height"),
+                    caption=label,
+                    average_hash=None,  # Plan A: dedup via hash in scorer from thumbnail
+                )
+            )
+        return recs
+
+    def rerank_with_cinema(self, videos: list[dict], spec: "ShotSpec | None", prev: "ClipRecord | None" = None) -> list[dict]:
+        """Reorder/dedup videos by cinema scorer. Falls back (returns input
+        unchanged) when disabled or on any cinema error — never blocks a render."""
+        import os
+
+        from src.services.cinema.types import MontageMode
+
+        if os.getenv("CINEMA_ENABLED", "false").lower() != "true" or spec is None:
+            return videos
+        try:
+            clips = self.build_clip_records(videos)
+            from src.services.cinema.scorer import rank_candidates
+
+            ranked = rank_candidates(clips, spec, mode=MontageMode.OVERTONAL, prev=prev)
+            ranked_ids = {clip.clip_id for clip in ranked}
+            out = [
+                v
+                for v in videos
+                if str(v.get("id") or v.get("pexels_id") or v.get("pixabay_id") or hash(str(v)))
+                in ranked_ids
+            ]
+            return out if out else videos
+        except Exception as e:
+            print(f"cinema rerank failed, falling back to provider order: {e}")
+            return videos
+
     @staticmethod
     def _gemini_keys():
         """Ordered list of Gemini API keys to try (primary + comma-separated
