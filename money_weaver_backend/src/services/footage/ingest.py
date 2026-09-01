@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import time
 
 from src.services.footage.importers import LICENSE_ALLOWLIST
 from src.services.footage.sources.base import CandidateVideo
@@ -102,6 +103,31 @@ def _set_status(asset_id: str, status: str) -> None:
         pass
 
 
+def _record_rejection(candidate: CandidateVideo, reason: str) -> None:
+    """Record a license-gate rejection so reporting is honest (rejections == the
+    gate working). Best-effort: swallow DB errors."""
+    import sqlite3
+    import uuid
+    db = os.getenv("FOOTAGE_ASSETS_DB", os.getenv("FOOTAGE_VECTOR_DB", "/tmp/cw-footage-vec.db"))
+    try:
+        conn = sqlite3.connect(db)
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS ingest_rejections ("
+            "id TEXT PRIMARY KEY, source TEXT NOT NULL, source_id TEXT NOT NULL, "
+            "reason TEXT NOT NULL, detail TEXT DEFAULT '{}', created_at TEXT)"
+        )
+        conn.execute(
+            "INSERT OR REPLACE INTO ingest_rejections (id, source, source_id, reason, detail, created_at) "
+            "VALUES (?, ?, ?, ?, ?, ?)",
+            (str(uuid.uuid4()), candidate.source, candidate.source_id, reason,
+             '{}', time.strftime("%Y-%m-%d %H:%M:%S")),
+        )
+        conn.commit()
+        conn.close()
+    except sqlite3.Error:
+        pass
+
+
 def discover(source: str, query: str, limit: int = 100) -> int:
     """Page adapter search(), license-filter, enqueue acquire. Idempotent."""
     from src.services.footage.sources.registry import get_source
@@ -110,6 +136,7 @@ def discover(source: str, query: str, limit: int = 100) -> int:
     n = 0
     for c in page.candidates:
         if not allow_license(c.license_spdx, c.source):
+            _record_rejection(c, "license_not_allowlisted")
             continue
         # enqueue_acquire applies the duration guard (quarantines long-form).
         try:
