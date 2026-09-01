@@ -12,6 +12,7 @@
 
 - Every heavy dependency imported behind a feature flag in `.env.example` (default-off). Test suite MUST pass with all absent.
 - Dedup mechanism is PINNED to average/perceptual hash on provider **preview thumbnails** via Pillow/numpy, Hamming distance ≤ 6 → reject. **Never** URL or provider-ID matching.
+- Dedup veto (sanctioned addition): a candidate is rejected ONLY when Hamming ≤ 6 **AND** duration within ±1s of the already-chosen clip — guards against flat-thumbnail aHash collisions where two clips share an all-zero hash but differ in length. Applies in Task 9's `dedup_reject`.
 - None typed fields (scale/move/embedding/etc.) score as neutral (weight 0), never as a mismatch.
 - ShotSpec/ClipRecord field names are canonical in Plan A; no renames.
 - `never blocks a render`: LLM director has 1 call, one rotated retry with hard timeout, then deterministic fallback. Enforced by test.
@@ -1057,20 +1058,26 @@ git commit -m "feat(cinema): per-MontageMode scorer weight configs"
 
 ---
 
-## Task 8: DCT helper for phash (numpy, no scipy)
+## Task 8: DCT helper for phash — ABSORBED into Task 4 (verify-only at CP3)
+
+**Status:** Superseded. `src/services/cinema/dct.py` was created as part of
+Task 4 (Task 4's `perceptual_hash_from_bytes` depends on it). Task 8 is now
+**verify-only**: write `tests/cinema/test_dct.py` and ensure it passes. No new
+production code.
 
 **Files:**
-- Create: `src/services/cinema/dct.py`
+- Create: `tests/cinema/test_dct.py` (test only; `dct.py` already exists)
 - Test: `tests/cinema/test_dct.py`
 
 **Interfaces:**
-- Produces: `dct_2d_lowfreq(arr: np.ndarray) -> np.ndarray`. Optional — but required by `perceptual_hash_from_bytes`. Pure numpy DCT of a grayscale 32x32 block.
+- Consumes: `src.services.cinema.dct.dct_2d_lowfreq(arr: np.ndarray) -> np.ndarray` (already implemented in Task 4).
 
-- [ ] **Step 1: Write the failing test**
+- [ ] **Step 1: Write the verify test**
 
 Create `tests/cinema/test_dct.py`:
 ```python
 import numpy as np
+import pytest
 
 from src.services.cinema.dct import dct_2d_lowfreq
 
@@ -1081,19 +1088,22 @@ def test_dct_shape_and_value():
     assert out.shape == (32, 32)
     # DC coefficient should be the largest-magnitude (brightness) term
     assert abs(out[0, 0]) == pytest.approx(abs(out).max(), rel=0.6)
-
-
-import pytest  # noqa: E402
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [ ] **Step 2: Run test to verify it passes**
 
 Run: `pytest tests/cinema/test_dct.py -v`
-Expected: FAIL with `ModuleNotFoundError: No module named 'src.services.cinema.dct'`
+Expected: PASS (implementation already landed with Task 4).
 
-- [ ] **Step 3: Implement DCT**
+- [ ] **Step 3: Commit**
 
-Create `src/services/cinema/dct.py`:
+```bash
+git add tests/cinema/test_dct.py
+git commit -m "test(cinema): verify dct_2d_lowfreq (absorbed from Task 4)"
+```
+
+> Note: the original plan's Task 8 test imported `pytest` at the bottom after
+> using `pytest.approx` above — that import-order bug is fixed here (import at top).
 ```python
 """Small 2D DCT (low-frequency) using only numpy/math — no scipy dependency.
 
@@ -1661,6 +1671,14 @@ git commit -m "docs(cinema): document Plan A feature flags (all default-off)"
 ```
 
 ---
+
+## Known follow-ups (out of Plan A scope)
+
+- Deterministic director hardcodes `mood="dim"` and fixed pacing. Tone/mood
+  from the narrative arc is a Plan C (montage) / D (timing) concern — derive
+  `mood` from scene context there.
+- Director dry-run at CP4 is written as deterministic-only; LLM path is behind
+  `CINEMA_DIRECTOR_ENABLED` and exercised only when a model is configured.
 
 ## Self-Review
 

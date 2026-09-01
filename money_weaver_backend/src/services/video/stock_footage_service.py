@@ -152,6 +152,118 @@ class StockFootageService:
         return None
 
     @staticmethod
+    def _clip_id(v: dict) -> str:
+        """Stable, provider-prefixed clip id. f'{source}:{id}' with a sha1
+        fallback when the provider id is absent. sha1 (not salted hash()) so
+        the id is identical across processes/re-renders."""
+        import hashlib
+        source = "pexels" if v.get("source") == "pexels" else "pixabay"
+        cid = v.get("id") or v.get("pexels_id") or v.get("pixabay_id")
+        if cid is not None:
+            return f"{source}:{cid}"
+        digest = hashlib.sha1(str(v).encode()).hexdigest()
+        return f"{source}:sha1:{digest}"
+
+    @staticmethod
+    def _preview_hash(clip_id: str, image_url: str) -> str | None:
+        """Average-perceptual hash of a provider preview thumbnail, cached in
+        SQLite by clip_id. Returns None on any failure (-> neutral, never
+        blocks a render). Stale/missing -> recompute."""
+        from src.services.cinema.cache import cache_dir
+        from src.services.cinema.hash_util import average_hash_from_bytes, hamming_distance  # noqa: F401
+        import sqlite3
+        import hashlib
+
+        if not image_url or not image_url.startswith("http"):
+            return None
+        d = cache_dir()
+        d.mkdir(parents=True, exist_ok=True)
+        db = d / "preview_hash_cache.sqlite"
+        key = hashlib.sha256(clip_id.encode()).hexdigest()
+        try:
+            conn = sqlite3.connect(str(db))
+            conn.execute(
+                "CREATE TABLE IF NOT EXISTS preview_hash (key TEXT PRIMARY KEY, hash TEXT)"
+            )
+            row = conn.execute("SELECT hash FROM preview_hash WHERE key=?", (key,)).fetchone()
+            if row:
+                conn.close()
+                return row[0]
+            import requests as _r
+            resp = _r.get(image_url, timeout=15)
+            if resp.status_code != 200:
+                conn.close()
+                return None
+            h = average_hash_from_bytes(resp.content)
+            conn.execute(
+                "INSERT OR REPLACE INTO preview_hash (key, hash) VALUES (?, ?)", (key, h)
+            )
+            conn.commit()
+            conn.close()
+            return h
+        except Exception:
+            return None
+
+    def build_clip_records(self, all_videos: list[dict]) -> list["ClipRecord"]:
+        """Turn provider result dicts into typed ClipRecords (Plan A: no
+        embedding, but average_hash populated from preview thumbnails so
+        dedup/MMR are live)."""
+        from src.services.cinema.clip import ClipRecord
+
+        recs = []
+        for v in all_videos:
+            source = "pexels" if v.get("source") == "pexels" else "pixabay"
+            label = self._candidate_text_label(v) or v.get("alt") or v.get("description") or ""
+            duration = v.get("duration") or v.get("pexels_duration") or v.get("pixabay_duration") or 0.0
+            try:
+                duration = float(duration)
+            except (TypeError, ValueError):
+                duration = 0.0
+            clip_id = self._clip_id(v)
+            preview = self._preview_url(v)
+            recs.append(
+                ClipRecord(
+                    clip_id=clip_id,
+                    provider=source,
+                    source_url=preview or v.get("url") or v.get("link") or "",
+                    duration_s=float(duration) if duration > 0 else 5.0,
+                    width=v.get("width"),
+                    height=v.get("height"),
+                    caption=label,
+                    average_hash=self._preview_hash(clip_id, preview),
+                )
+            )
+        return recs
+
+    def rerank_with_cinema(self, videos: list[dict], spec: "ShotSpec | None", prev: "ClipRecord | None" = None) -> list[dict]:
+        """Reorder/dedup videos by cinema scorer. Falls back (returns input
+        unchanged) when disabled or on any cinema error — never blocks a
+        render."""
+        import os
+
+        from src.services.cinema.types import MontageMode
+
+        if os.getenv("CINEMA_ENABLED", "false").lower() != "true" or spec is None:
+            return videos
+        try:
+            clips = self.build_clip_records(videos)
+            from src.services.cinema.scorer import rank_candidates
+
+            ranked = rank_candidates(clips, spec, mode=MontageMode.OVERTONAL, prev=prev)
+            # clip_ids are unique/stable via _clip_id. A video is a "straggler"
+            # only if it had NO ClipRecord (its clip_id never mapped) — a clip
+            # that got a record but was dedup-excluded is RESPECTED by the
+            # scorer and must NOT reappear (that would defeat dedup).
+            by_id = {c.clip_id: v for c, v in zip(clips, videos)}
+            out = [by_id[c.clip_id] for c in ranked if c.clip_id in by_id]
+            candidate_ids = {c.clip_id for c in clips}
+            out += [v for v in videos if self._clip_id(v) not in candidate_ids]
+            return out if out else videos
+        except Exception as e:
+            print(f"cinema rerank failed, falling back to provider order: {e}")
+            return videos
+
+    @staticmethod
     def _gemini_keys():
         """Ordered list of Gemini API keys to try (primary + comma-separated
         fallbacks). Free tier caps each PROJECT at 20 req/day, so multiple keys
