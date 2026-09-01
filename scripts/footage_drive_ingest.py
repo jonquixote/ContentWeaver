@@ -16,6 +16,14 @@ ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "money_weav
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
+# Load .env so PEXELS_API_KEY / PIXABAY_API_KEY / EMBED_* are present. The
+# adapters short-circuit to empty results on missing keys.
+try:
+    from dotenv import load_dotenv
+    load_dotenv(os.path.join(ROOT, ".env"))
+except Exception:
+    pass
+
 os.environ.setdefault("EMBED_BACKEND", "torch")
 os.environ.setdefault("FOOTAGE_ASSETS_DB", os.path.join(ROOT, "src", "database", "app.db"))
 os.environ.setdefault("FOOTAGE_VECTOR_DB", os.environ["FOOTAGE_ASSETS_DB"])
