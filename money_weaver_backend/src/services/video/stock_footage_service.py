@@ -170,7 +170,7 @@ class StockFootageService:
         SQLite by clip_id. Returns None on any failure (-> neutral, never
         blocks a render). Stale/missing -> recompute."""
         from src.services.cinema.cache import cache_dir
-        from src.services.cinema.hash_util import average_hash_from_bytes, hamming_distance  # noqa: F401
+        from src.services.cinema.hash_util import average_hash_from_bytes
         import sqlite3
         import hashlib
 
@@ -190,7 +190,7 @@ class StockFootageService:
                 conn.close()
                 return row[0]
             import requests as _r
-            resp = _r.get(image_url, timeout=15)
+            resp = _r.get(image_url, timeout=5)
             if resp.status_code != 200:
                 conn.close()
                 return None
@@ -235,10 +235,13 @@ class StockFootageService:
             )
         return recs
 
-    def rerank_with_cinema(self, videos: list[dict], spec: "ShotSpec | None", prev: "ClipRecord | None" = None) -> list[dict]:
+    def rerank_with_cinema(self, videos: list[dict], spec: "ShotSpec | None", prev: "ClipRecord | None" = None, chosen: list["ClipRecord"] | None = None) -> list[dict]:
         """Reorder/dedup videos by cinema scorer. Falls back (returns input
         unchanged) when disabled or on any cinema error — never blocks a
-        render."""
+        render.
+
+        `chosen`: clips already selected for EARLIER shots. Passed through to
+        rank_candidates so cross-shot dedup is exercisable by the caller."""
         import os
 
         from src.services.cinema.types import MontageMode
@@ -249,7 +252,7 @@ class StockFootageService:
             clips = self.build_clip_records(videos)
             from src.services.cinema.scorer import rank_candidates
 
-            ranked = rank_candidates(clips, spec, mode=MontageMode.OVERTONAL, prev=prev)
+            ranked = rank_candidates(clips, spec, mode=MontageMode.OVERTONAL, prev=prev, chosen=chosen)
             # clip_ids are unique/stable via _clip_id. A video is a "straggler"
             # only if it had NO ClipRecord (its clip_id never mapped) — a clip
             # that got a record but was dedup-excluded is RESPECTED by the
@@ -805,6 +808,7 @@ class StockFootageService:
         video_files = []
         downloaded_count = 0
         used_video_urls = set()  # Track URLs to prevent duplicates
+        chosen_clips: list = []  # ClipRecords selected so far (cinema cross-shot dedup)
         
         for i, scene in enumerate(scenes):
             if downloaded_count >= max_videos:
@@ -851,9 +855,19 @@ class StockFootageService:
             # candidate's own text description is judged. Falls back to the
             # gathered order (shuffled) when the LLM is unavailable so a scene
             # is never left empty.
+            # Cinema path: when CINEMA_ENABLED=true, run the deterministic
+            # director to build a ShotSpec and rerank via the cinema scorer
+            # (typed fields + cross-shot dedup). Logs "cinema director_source:"
+            # so the call site is confirmed non-vacuous.
             try:
-                all_videos = self._rerank_candidates(all_videos, shot_desc, voiceover_text, scenes)
-                print(f"Reranked scene {i+1} to {len(all_videos)} on-theme candidates")
+                if os.getenv("CINEMA_ENABLED", "false").lower() == "true":
+                    from src.services.cinema.director_service import run_director
+                    spec = run_director(shot_desc, scene_number=i + 1, story_context=voiceover_text)[0]
+                    all_videos = self.rerank_with_cinema(all_videos, spec, chosen=chosen_clips)
+                    print(f"Reranked scene {i+1} to {len(all_videos)} on-theme candidates (cinema)")
+                else:
+                    all_videos = self._rerank_candidates(all_videos, shot_desc, voiceover_text, scenes)
+                    print(f"Reranked scene {i+1} to {len(all_videos)} on-theme candidates")
             except Exception as e:
                 print(f"Rerank failed for scene {i+1}, keeping original order: {e}")
                 random.shuffle(all_videos)
@@ -984,6 +998,15 @@ class StockFootageService:
                         used_video_urls.add(video_url)  # Track this URL
                         downloaded_count += 1
                         scene_downloads += 1
+                        if os.getenv("CINEMA_ENABLED", "false").lower() == "true":
+                            # Record the selected clip so later shots' cross-shot
+                            # dedup excludes it (and near-dups of it).
+                            try:
+                                recs = self.build_clip_records([video_data])
+                                if recs:
+                                    chosen_clips.append(recs[0])
+                            except Exception:
+                                pass
                     else:
                         print("Failed to download video")
                 elif video_url in used_video_urls:
