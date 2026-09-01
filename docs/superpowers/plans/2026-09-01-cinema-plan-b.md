@@ -38,6 +38,12 @@
 - Registry entries expose engine-readable `strengths` (from VIDEO_SOURCES.md "Has:" notes). Pond5 PD present; YouTube/Vimeo absent.
 - Disk-cleanup: `FOOTAGE_DISK_RETENTION_H` purge, first-class task.
 - Acceptance gates (ingest spec): 1,000 assets / ≥3 sources; license gate; "aerial coastline" sanity on the labeled 200-shot set.
+- **v1 index is METADATA-SEMANTIC, not visual-semantic.** Until the
+  download/keyframe pipeline ships, embeddings are text-embeds of
+  title/description/subjects only. The "aerial coastline" gate therefore measures
+  METADATA quality (do the ingested items' text describe coastlines?), not pixels.
+  Visual embeddings (keyframe CLIP) arrive with the download/keyframe pipeline —
+  that is when the gate becomes a true visual recall test.
 - Reuse canon cinema enums/types from Plan A (`ShotScale`, `CameraMove`) — no rename.
 - **Alembic migration required** for the footage schema (footage_assets, footage_shots,
   ingest_jobs, ingest_rejections) with a working `downgrade`; must NOT interfere

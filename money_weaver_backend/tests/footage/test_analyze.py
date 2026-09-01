@@ -25,11 +25,14 @@ def test_analyze_produces_cliprecord_even_without_embedder(monkeypatch):
     assert r.embedding is None or r.embedding == []
 
 
-def test_analyze_sets_scale_or_none_no_crash():
-    # scale None (no detector) — contract holds, never raises.
+def test_analyze_sets_scale_none_while_detectors_deferred():
+    # Detectors (face bbox -> scale, optical flow -> move) are deferred. Until they
+    # ship, scale/move/motion_energy are None (neutral, never a mismatch).
     tmp = tempfile.mkdtemp()
-    recs = analyze_clip("pexels:1", _candidate(tmp))
-    assert recs[0].scale is None or recs[0].scale is not None
+    r = analyze_clip("pexels:1", _candidate(tmp))[0]
+    assert r.scale is None
+    assert r.move is None
+    assert r.motion_energy is None
 
 
 def test_analyze_records_provenance():
@@ -53,3 +56,23 @@ def test_analyze_persists_attribution():
     r = analyze_clip("dareful:1", c)[0]
     assert r.attribution_required is True
     assert r.attribution_text == "Credit: Dareful"
+
+
+def test_analyze_duration_is_none_neutral_when_unknown():
+    # Do NOT fabricate duration_s=5.0 on unknowns (flag 1): None-neutral per
+    # doctrine; the >120s guard re-applies post-probe.
+    tmp = tempfile.mkdtemp()
+    c = _candidate(tmp)
+    c.duration_s = None
+    r = analyze_clip("pexels:1", c)[0]
+    assert r.duration_s is None
+
+
+def test_analyze_preserves_source_identity():
+    # archive_org must not be laundered to provider='local' (flag 3): the source
+    # identity survives so provider-rotation penalties key off it.
+    tmp = tempfile.mkdtemp()
+    c = _candidate(tmp)
+    c.source = "archive_org"
+    r = analyze_clip("archive_org:1", c)[0]
+    assert r.provider == "archive_org"

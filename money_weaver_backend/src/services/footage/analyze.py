@@ -44,14 +44,16 @@ def analyze_clip(asset_id: str, candidate: CandidateVideo) -> list[ClipRecord]:
     energy = motion_energy(kf)
     pal, luma = palette_luma(kf)
     emb = embedder.embed_text(candidate.title or candidate.description or "")
-    provider = candidate.source if candidate.source in ("pexels", "pixabay", "local", "generative") else "local"
+    # Source identity is preserved (not laundered to "local"): provider-rotation
+    # penalties key off it. candidate.source is in the extended Provider literal.
+    provider = candidate.source
     return [
         ClipRecord(
             clip_id=f"{candidate.source}:{candidate.source_id}:shot0",
             provider=provider,
             source_url=candidate.download_url,
             local_path=candidate.download_url if not candidate.download_url.startswith("http") else None,
-            duration_s=candidate.duration_s or 5.0,
+            duration_s=candidate.duration_s,  # None-neutral: no fabricated 5.0 (duration guard re-applies post-probe)
             width=candidate.width,
             height=candidate.height,
             embedding=emb or None,

@@ -52,7 +52,7 @@ def quality(clip: ClipRecord) -> float:
         q += 0.5
     if clip.height and clip.height >= 720:
         q += 0.3
-    if clip.duration_s >= 4.0:
+    if clip.duration_s is not None and clip.duration_s >= 4.0:
         q += 0.2
     return min(q, 1.0)
 
@@ -69,7 +69,9 @@ def dedup_reject(clip: ClipRecord, chosen: list[ClipRecord] | None) -> bool:
         return False
     for c in chosen:
         if c.average_hash and hamming_distance(clip.average_hash, c.average_hash) <= DEDUP_HAMMING:
-            if abs(clip.duration_s - c.duration_s) <= DEDUP_DURATION_TOLERANCE_S:
+            # duration veto needs both durations known; unknown (None) is neutral
+            if (clip.duration_s is None or c.duration_s is None
+                    or abs(clip.duration_s - c.duration_s) <= DEDUP_DURATION_TOLERANCE_S):
                 return True
     return False
 

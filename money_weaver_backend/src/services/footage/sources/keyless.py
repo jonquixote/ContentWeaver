@@ -65,7 +65,7 @@ class ArchiveOrgSource(_KeylessAPI):
                 duration_s=None,
                 width=None,
                 height=None,
-                download_url=f"https://archive.org/download/{cid}/{cid}.mp4",
+                download_url="",  # NOT speculative; resolved via metadata API in resolve_download
                 page_url=f"https://archive.org/details/{cid}",
                 license_spdx=spdx,
                 license_raw=doc.get("licenseurl"),
@@ -73,6 +73,20 @@ class ArchiveOrgSource(_KeylessAPI):
                 extras={},
             ))
         return SearchPage(candidates=cands, next_cursor=None)
+
+    def resolve_download(self, source_id: str) -> str:
+        """Enumerate the item's actual files via the archive.org metadata API
+        and pick the first playable MP4. The old '{id}/{id}.mp4' guess rarely
+        exists — mass 404s. Returns '' when no MP4 is found."""
+        import requests
+        r = requests.get(f"https://archive.org/metadata/{source_id}", timeout=20)
+        r.raise_for_status()
+        files = r.json().get("files", [])
+        for f in files:
+            name = f.get("name", "").lower()
+            if name.endswith(".mp4"):
+                return f"https://archive.org/download/{source_id}/{f['name']}"
+        return ""
 
 
 class NasaImagesSource(_KeylessAPI):
