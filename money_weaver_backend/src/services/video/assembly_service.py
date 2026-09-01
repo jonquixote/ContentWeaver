@@ -527,8 +527,13 @@ total_duration: int = 30,
                 # For square output, crop landscape videos to center square
                 cmd.extend(['-vf', f'crop=min(iw\\,ih):min(iw\\,ih),scale={width}:{height}'])
             else:
-                # For other orientations, use video filter scaling instead of -s parameter
-                cmd.extend(['-vf', f'scale={width}:{height}'])
+                # For other orientations, scale to COVER (preserve source aspect
+                # ratio) then center-crop to the exact output frame. Plain
+                # scale=WxH squeezes/stretches landscape-into-portrait and
+                # distorts every non-9:16 source.
+                cmd.extend(['-vf',
+                            f'scale={width}:{height}:force_original_aspect_ratio=increase,'
+                            f'crop={width}:{height}'])
                 
             cmd.extend([
                 '-aspect', f'{width}:{height}',  # Set aspect ratio
