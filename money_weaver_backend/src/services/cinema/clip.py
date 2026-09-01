@@ -23,3 +23,5 @@ class ClipRecord(BaseModel):
     faces: int | None = None
     average_hash: str | None = None
     used_in_video_ids: list[str] = []
+    attribution_required: bool = False
+    attribution_text: str | None = None
