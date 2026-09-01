@@ -3,9 +3,13 @@ from __future__ import annotations
 # SQL source of truth for the footage relational tables. Alembic migration
 # 0001_footage wraps these; the additive-only contract (never touches
 # pre-existing tables) is asserted by tests/footage/test_migration.py.
+#
+# Alembic's op.execute() on sqlite cannot run multiple statements at once (the
+# driver is "one statement at a time"), so we expose STATEMENTS lists for the
+# migration to iterate, AND a *SCRIPT (executescript) for the bootstrap path.
 
-UPGRADE_SQL = """
-CREATE TABLE IF NOT EXISTS footage_assets (
+UPGRADE_STATEMENTS = [
+    """CREATE TABLE IF NOT EXISTS footage_assets (
     id TEXT PRIMARY KEY,
     source TEXT NOT NULL,
     source_id TEXT NOT NULL,
@@ -29,8 +33,8 @@ CREATE TABLE IF NOT EXISTS footage_assets (
     status TEXT DEFAULT 'discovered',
     source_metadata TEXT DEFAULT '{}',
     created_at TEXT
-);
-CREATE TABLE IF NOT EXISTS footage_shots (
+)""",
+    """CREATE TABLE IF NOT EXISTS footage_shots (
     id TEXT PRIMARY KEY,
     asset_id TEXT NOT NULL,
     shot_idx INTEGER NOT NULL,
@@ -46,8 +50,8 @@ CREATE TABLE IF NOT EXISTS footage_shots (
     has_text_overlay INTEGER DEFAULT 0,
     brightness REAL,
     color_palette TEXT
-);
-CREATE TABLE IF NOT EXISTS ingest_jobs (
+)""",
+    """CREATE TABLE IF NOT EXISTS ingest_jobs (
     id TEXT PRIMARY KEY,
     source TEXT NOT NULL,
     query TEXT NOT NULL,
@@ -58,20 +62,23 @@ CREATE TABLE IF NOT EXISTS ingest_jobs (
     error TEXT,
     created_at TEXT,
     finished_at TEXT
-);
-CREATE TABLE IF NOT EXISTS ingest_rejections (
+)""",
+    """CREATE TABLE IF NOT EXISTS ingest_rejections (
     id TEXT PRIMARY KEY,
     source TEXT NOT NULL,
     source_id TEXT NOT NULL,
     reason TEXT NOT NULL,
     detail TEXT DEFAULT '{}',
     created_at TEXT
-);
-"""
+)""",
+]
 
-DOWNGRADE_SQL = """
-DROP TABLE IF EXISTS ingest_rejections;
-DROP TABLE IF EXISTS ingest_jobs;
-DROP TABLE IF EXISTS footage_shots;
-DROP TABLE IF EXISTS footage_assets;
-"""
+DOWNGRADE_STATEMENTS = [
+    "DROP TABLE IF EXISTS ingest_rejections",
+    "DROP TABLE IF EXISTS ingest_jobs",
+    "DROP TABLE IF EXISTS footage_shots",
+    "DROP TABLE IF EXISTS footage_assets",
+]
+
+UPGRADE_SQL = "\n".join(f"{s};" for s in UPGRADE_STATEMENTS)
+DOWNGRADE_SQL = "\n".join(f"{s};" for s in DOWNGRADE_STATEMENTS)
