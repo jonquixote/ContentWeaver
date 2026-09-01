@@ -37,3 +37,18 @@ def test_vectorstore_is_abstract():
     import pytest
     with pytest.raises(TypeError):
         VectorStore()  # ABC: cannot instantiate
+
+
+def test_make_vector_store_pgvector_missing_raises_actionable(monkeypatch):
+    import pytest
+    from src.services.footage.vectorstore import make_vector_store
+    monkeypatch.setenv("VECTOR_STORE", "pgvector")
+    with pytest.raises(RuntimeError) as ei:
+        make_vector_store()
+    assert "VECTOR_STORE=sqlite_vec" in str(ei.value)  # actionable guidance
+
+
+def test_make_vector_store_defaults_to_sqlite(monkeypatch):
+    from src.services.footage.vectorstore import SqliteVecStore, make_vector_store
+    monkeypatch.delenv("VECTOR_STORE", raising=False)
+    assert isinstance(make_vector_store(), SqliteVecStore)

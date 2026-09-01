@@ -103,6 +103,12 @@ class SqliteVecStore(VectorStore):
 def make_vector_store() -> VectorStore:
     backend = os.getenv("VECTOR_STORE", "sqlite_vec")
     if backend == "pgvector":
-        from src.services.footage.pgvector_store import PgVectorStore
-        return PgVectorStore(os.getenv("DATABASE_URL", ""))
+        try:
+            from src.services.footage.pgvector_store import PgVectorStore
+            return PgVectorStore(os.getenv("DATABASE_URL", ""))
+        except ImportError as e:
+            raise RuntimeError(
+                "VECTOR_STORE=pgvector requested but pgvector_store is not "
+                "installed. Set VECTOR_STORE=sqlite_vec (the zero-provision "
+                "default) or add the pgvector backend.") from e
     return SqliteVecStore(os.getenv("FOOTAGE_VECTOR_DB", "/tmp/cw-footage-vec.db"))

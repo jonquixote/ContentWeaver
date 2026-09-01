@@ -27,3 +27,16 @@
 Keep `torch==2.2.2` for Plan B (text embed only). For the Phase-2 detector
 upgrade, plan a torch build with numpy-2 support (e.g. torch 2.3+/2.5 via the
 default PyPI `torch` with CUDA/CPU, or pin numpy<2 in an isolated ML venv).
+
+## Plan B follow-ups (from checkpoint A review, 2026-09-01)
+
+- **SqliteVecStore vec0 fast path**: `_init_db` loads the `vec0` extension but
+  `query()` always does an in-Python cosine scan over the relational rows. At
+  ~50k-shot scale this is slow. Add a vec0 virtual-table fast path used when the
+  extension is present (`CREATE VIRTUAL TABLE footage_vec_emb USING vec0(...)`
+  + `MATCH ... ORDER BY distance`); keep the in-Python fallback for when the
+  extension is absent. The in-Python scan is fine for the 1,000-asset gate.
+- **pgvector landmine fixed**: `make_vector_store` now raises an actionable
+  RuntimeError ("set VECTOR_STORE=sqlite_vec") instead of a raw
+  ModuleNotFoundError when the optional pgvector backend is requested but not
+  installed (committed in Task 5).
