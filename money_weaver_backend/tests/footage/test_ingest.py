@@ -73,3 +73,41 @@ def test_discover_records_license_rejection(monkeypatch):
 def test_duration_guard_quarantines(monkeypatch):
     # >120s quarantine -> status='needs_segmentation' (never 'ready')
     assert True
+
+
+def test_enqueue_acquire_writes_embedding_to_vector_store(monkeypatch):
+    # The corpus must be SEARCHABLE: analyze's embedding flows into the vector
+    # store (this was the bug that left footage_vec.embedding=[] -> 0 hits).
+    import os, tempfile
+    from src.services.footage.sources.base import CandidateVideo
+    import src.services.footage.ingest as ing
+    import src.services.footage.vectorstore as vs
+
+    d = tempfile.mkdtemp()
+    monkeypatch.setenv("FOOTAGE_ASSETS_DB", os.path.join(d, "assets.db"))
+    monkeypatch.setenv("FOOTAGE_VECTOR_DB", os.path.join(d, "vec.db"))
+    monkeypatch.setenv("EMBED_BACKEND", "none")
+
+    good = CandidateVideo(source="pexels", source_id="e1", title="aerial coastline", description=None,
+                          tags=[], subjects=[], creator=None, published_at=None,
+                          duration_s=10, width=1920, height=1080, download_url="u",
+                          page_url="p", license_spdx="LicenseRef-Pexels",
+                          license_raw=None, attribution_text=None)
+
+    # stub analyze_clip to return a ClipRecord with a real embedding
+    from src.services.cinema.clip import ClipRecord
+    def fake_analyze(asset_id, candidate):
+        return [ClipRecord(clip_id=asset_id, provider="pexels", source_url="u",
+                           duration_s=10.0, embedding=[1.0, 0.0, 0.0])]
+    import src.services.footage.analyze as az
+    monkeypatch.setattr(az, "analyze_clip", fake_analyze)
+
+    ing.enqueue_acquire(good)
+    store = vs.SqliteVecStore(os.path.join(d, "vec.db"))
+    hits = store.query([1.0, 0.0, 0.0], k=5, filters={})
+    assert hits and hits[0]["id"] == "pexels:e1"
+    # the embedding persisted (non-empty), not []
+    conn = __import__("sqlite3").connect(os.path.join(d, "vec.db"))
+    stored = conn.execute("SELECT embedding FROM footage_vec LIMIT 1").fetchone()[0]
+    conn.close()
+    assert stored not in ("[]", "")
