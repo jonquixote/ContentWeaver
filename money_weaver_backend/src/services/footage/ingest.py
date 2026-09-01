@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import time
 
 from src.services.footage.importers import LICENSE_ALLOWLIST
 from src.services.footage.sources.base import CandidateVideo
@@ -27,7 +28,7 @@ def duration_allowed(duration_s: float | None) -> bool:
     return float(duration_s) <= MAX_DURATION_S
 
 
-def _upsert_asset(store, candidate: CandidateVideo, status: str = "discovered") -> str:
+def _upsert_asset(store, candidate: CandidateVideo, status: str = "discovered", embedding: list[float] | None = None) -> str:
     """Write the asset source-of-truth row to footage_assets (with status) AND
     the vector to the VectorStore. Retrieval hydrates from footage_assets and
     filters status='ready', so quarantined assets never leak through."""
@@ -70,6 +71,7 @@ def _upsert_asset(store, candidate: CandidateVideo, status: str = "discovered") 
         "page_url": candidate.page_url,
         "download_url": candidate.download_url,
         "status": status,
+        "embedding": embedding,   # from analyze; None/[] -> no similarity (neutral)
     })
     return asset_id
 
@@ -77,15 +79,36 @@ def _upsert_asset(store, candidate: CandidateVideo, status: str = "discovered") 
 def enqueue_acquire(candidate: CandidateVideo) -> str:
     """Run the acquire->normalize->analyze->index chain (same for API + manual).
     Long-form assets are quarantined (needs_segmentation), not analyzed; a
-    successfully-analyzed asset is marked status='ready' so retrieval returns it."""
+    successfully-analyzed asset is marked status='ready' so retrieval returns it.
+    The analyzed ClipRecord's embedding is written to the vector store so the
+    index is searchable (metadata-semantic v1)."""
     from src.services.footage.vectorstore import make_vector_store
     store = make_vector_store()
     if not duration_allowed(candidate.duration_s):
         return _upsert_asset(store, candidate, status="needs_segmentation")
     asset_id = _upsert_asset(store, candidate, status="discovered")
     from src.services.footage.analyze import analyze_clip  # Task 7
-    analyze_clip(asset_id, candidate)
-    # mark ready post-analysis (mutation in place: same asset_id)
+    recs = analyze_clip(asset_id, candidate)
+    embedding = (recs[0].embedding if recs and recs[0].embedding else None)
+    # rewrite the vector with the real embedding (upsert by same asset_id)
+    store.upsert({
+        "id": asset_id,
+        "source": candidate.source,
+        "source_id": candidate.source_id,
+        "title": candidate.title,
+        "description": candidate.description,
+        "duration_s": candidate.duration_s,
+        "width": candidate.width,
+        "height": candidate.height,
+        "license_spdx": candidate.license_spdx,
+        "license_raw": candidate.license_raw,
+        "attribution_required": candidate.extras.get("attribution_required", False),
+        "attribution_text": candidate.attribution_text,
+        "page_url": candidate.page_url,
+        "download_url": candidate.download_url,
+        "status": "ready",
+        "embedding": embedding,
+    })
     _set_status(asset_id, "ready")
     return asset_id
 
@@ -102,6 +125,31 @@ def _set_status(asset_id: str, status: str) -> None:
         pass
 
 
+def _record_rejection(candidate: CandidateVideo, reason: str) -> None:
+    """Record a license-gate rejection so reporting is honest (rejections == the
+    gate working). Best-effort: swallow DB errors."""
+    import sqlite3
+    import uuid
+    db = os.getenv("FOOTAGE_ASSETS_DB", os.getenv("FOOTAGE_VECTOR_DB", "/tmp/cw-footage-vec.db"))
+    try:
+        conn = sqlite3.connect(db)
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS ingest_rejections ("
+            "id TEXT PRIMARY KEY, source TEXT NOT NULL, source_id TEXT NOT NULL, "
+            "reason TEXT NOT NULL, detail TEXT DEFAULT '{}', created_at TEXT)"
+        )
+        conn.execute(
+            "INSERT OR REPLACE INTO ingest_rejections (id, source, source_id, reason, detail, created_at) "
+            "VALUES (?, ?, ?, ?, ?, ?)",
+            (str(uuid.uuid4()), candidate.source, candidate.source_id, reason,
+             '{}', time.strftime("%Y-%m-%d %H:%M:%S")),
+        )
+        conn.commit()
+        conn.close()
+    except sqlite3.Error:
+        pass
+
+
 def discover(source: str, query: str, limit: int = 100) -> int:
     """Page adapter search(), license-filter, enqueue acquire. Idempotent."""
     from src.services.footage.sources.registry import get_source
@@ -110,6 +158,7 @@ def discover(source: str, query: str, limit: int = 100) -> int:
     n = 0
     for c in page.candidates:
         if not allow_license(c.license_spdx, c.source):
+            _record_rejection(c, "license_not_allowlisted")
             continue
         # enqueue_acquire applies the duration guard (quarantines long-form).
         try:

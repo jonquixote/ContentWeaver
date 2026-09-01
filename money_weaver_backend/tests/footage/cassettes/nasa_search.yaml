@@ -1,0 +1,113 @@
+interactions:
+- request:
+    body: null
+    headers:
+      Accept:
+      - '*/*'
+      Accept-Encoding:
+      - gzip, deflate
+      Connection:
+      - keep-alive
+      User-Agent:
+      - python-requests/2.32.5
+    method: GET
+    uri: https://images-api.nasa.gov/search?q=earth+orbit&media_type=video&page_size=3
+  response:
+    body:
+      string: "{\"collection\":{\"version\":\"1.1\",\"href\":\"http://images-api.nasa.gov/search?q=earth+orbit&media_type=video&page_size=3\",\"items\":[{\"href\":\"https://images-assets.nasa.gov/video/Envisioning
+        the Next Generation of Human Presence in Low Earth Orbit/collection.json\",\"data\":[{\"center\":\"HQ\",\"date_created\":\"2024-08-26T00:00:00Z\",\"description\":\"NASA\u2019s
+        human spaceflight missions have steadily built on each other, leading us to
+        a continuous human presence in low Earth orbit for 23 years. Now, as we stand
+        on the cusp of a new era of human spaceflight, NASA is calling for feedback
+        on what the agency\u2019s goals and objectives should be for the low Earth
+        orbit microgravity environment. The agency will utilize future commercial
+        space stations to advance microgravity science, technology, and exploration.\",\"keywords\":[\"NASA\",\"Low
+        Earth Orbit\",\"LEO Microgravity Strategy\"],\"media_type\":\"video\",\"nasa_id\":\"Envisioning
+        the Next Generation of Human Presence in Low Earth Orbit\",\"title\":\"Envisioning
+        the Next Generation of Human Presence in Low Earth Orbit\"}],\"links\":[{\"href\":\"https://images-assets.nasa.gov/video/Envisioning
+        the Next Generation of Human Presence in Low Earth Orbit/Envisioning the Next
+        Generation of Human Presence in Low Earth Orbit~large.jpg\",\"rel\":\"alternate\",\"render\":\"image\",\"width\":800,\"size\":25000,\"height\":450},{\"href\":\"https://images-assets.nasa.gov/video/Envisioning
+        the Next Generation of Human Presence in Low Earth Orbit/Envisioning the Next
+        Generation of Human Presence in Low Earth Orbit~medium.jpg\",\"rel\":\"alternate\",\"render\":\"image\",\"width\":400,\"size\":8900,\"height\":225},{\"href\":\"https://images-assets.nasa.gov/video/Envisioning
+        the Next Generation of Human Presence in Low Earth Orbit/Envisioning the Next
+        Generation of Human Presence in Low Earth Orbit~small.jpg\",\"rel\":\"alternate\",\"render\":\"image\",\"width\":200,\"size\":3400,\"height\":112},{\"href\":\"https://images-assets.nasa.gov/video/Envisioning
+        the Next Generation of Human Presence in Low Earth Orbit/Envisioning the Next
+        Generation of Human Presence in Low Earth Orbit~thumb.jpg\",\"rel\":\"preview\",\"render\":\"image\",\"width\":300,\"size\":6300,\"height\":168},{\"href\":\"https://images-assets.nasa.gov/video/Envisioning
+        the Next Generation of Human Presence in Low Earth Orbit/Envisioning the Next
+        Generation of Human Presence in Low Earth Orbit.srt\",\"rel\":\"captions\"}]},{\"href\":\"https://images-assets.nasa.gov/video/GSFC_20150420_Orbit_m11858_2014/collection.json\",\"data\":[{\"album\":[\"Earth\"],\"center\":\"GSFC\",\"date_created\":\"2015-04-20T00:00:00Z\",\"description\":\"Every
+        day of every year, NASA satellites provide useful data about our home planet,
+        and along the way, some beautiful images as well. This video includes satellite
+        images of Earth in 2014 from NASA and its partners as well as photos and a
+        time lapse video from the International Space Station. We\u2019ve also included
+        a range of data visualizations, model runs, and a conceptual animation that
+        were produced in 2014 (but in some cases might have been utilizing data from
+        earlier years.) Below is a full list of the images included.\",\"description_508\":\"Earth
+        from Orbit 2014.\",\"location\":\"Goddard Space Flight Center\",\"media_type\":\"video\",\"nasa_id\":\"GSFC_20150420_Orbit_m11858_2014\",\"secondary_creator\":\"Jefferson
+        Beck, Eric Sokolowsky\",\"title\":\"Earth from Orbit 2014\"}],\"links\":[{\"href\":\"https://images-assets.nasa.gov/video/GSFC_20150420_Orbit_m11858_2014/GSFC_20150420_Orbit_m11858_2014~large.jpg\",\"rel\":\"alternate\",\"render\":\"image\",\"width\":800,\"size\":40000,\"height\":450},{\"href\":\"https://images-assets.nasa.gov/video/GSFC_20150420_Orbit_m11858_2014/GSFC_20150420_Orbit_m11858_2014~medium.jpg\",\"rel\":\"alternate\",\"render\":\"image\",\"width\":400,\"size\":10000,\"height\":225},{\"href\":\"https://images-assets.nasa.gov/video/GSFC_20150420_Orbit_m11858_2014/GSFC_20150420_Orbit_m11858_2014~small.jpg\",\"rel\":\"alternate\",\"render\":\"image\",\"width\":200,\"size\":3900,\"height\":112},{\"href\":\"https://images-assets.nasa.gov/video/GSFC_20150420_Orbit_m11858_2014/GSFC_20150420_Orbit_m11858_2014~thumb.jpg\",\"rel\":\"preview\",\"render\":\"image\",\"width\":300,\"size\":7300,\"height\":168},{\"href\":\"https://images-assets.nasa.gov/video/GSFC_20150420_Orbit_m11858_2014/GSFC_20150420_Orbit_m11858_2014.vtt\",\"rel\":\"captions\"}]},{\"href\":\"https://images-assets.nasa.gov/video/GSFC_20140211_LDCM_m11481_Orbit/collection.json\",\"data\":[{\"album\":[\"Landsat\"],\"center\":\"GSFC\",\"date_created\":\"2014-02-11T00:00:00Z\",\"description\":\"This
+        visualization of the orbit of Landsat 8 is narrated by Jim Irons, LDCM Project
+        Scientist at NASA's Goddard Space Flight Center. As a Landsat satellite flies
+        over the surface of the Earth the instruments aboard the satellite are able
+        to view a swath 185 kilometers wide and collect images along that swath as
+        the satellite proceeds through its orbit. The spacecraft travels at approximately
+        4.7 miles per second. The satellite travels from north to south while it's
+        over the sunlit portion of the Earth, and travels south to north over the
+        dark side of the Earth. One orbit takes about 99 minutes, so that's about
+        approximately 15 orbits in a 24 hour period. The orbit's maintained such that
+        after 16 days, the entire surface of the Earth has come within view of the
+        Landsat instruments, while sunlit, and then on day 17 the first ground path
+        is repeated. So we get to view the entire surface once every 16 days.\",\"description_508\":\"As
+        a Landsat satellite flies over the surface of the Earth the instruments aboard
+        the satellite are able to view a swath 185 kilometers wide and collect images
+        along that swath as the satellite proceeds through its orbit. The spacecraft
+        travels at approximately 4.7 miles per second. The satellite travels from
+        north to south while it's over the sunlit portion of the Earth, and travels
+        south to north over the dark side of the Earth. One orbit takes about 99 minutes,
+        so that's about approximately 15 orbits in a 24 hour period. The orbit's maintained
+        such that after 16 days, the entire surface of the Earth has come within view
+        of the Landsat instruments, while sunlit, and then on day 17 the first ground
+        path is repeated. So we get to view the entire surface once every 16 days.\",\"keywords\":[\"Landsat\",\"Orbit\",\"LDCM\",\"Earth
+        Observing Fleet\",\"Earth\"],\"location\":\"Goddard Space Flight Center\",\"media_type\":\"video\",\"nasa_id\":\"GSFC_20140211_LDCM_m11481_Orbit\",\"secondary_creator\":\"Matthew
+        R. Radcliff, Cindy Starr, James R. Irons\",\"title\":\"Landsat Orbit Swath\"}],\"links\":[{\"href\":\"https://images-assets.nasa.gov/video/GSFC_20140211_LDCM_m11481_Orbit/GSFC_20140211_LDCM_m11481_Orbit~large.jpg\",\"rel\":\"alternate\",\"render\":\"image\",\"width\":800,\"size\":24000,\"height\":450},{\"href\":\"https://images-assets.nasa.gov/video/GSFC_20140211_LDCM_m11481_Orbit/GSFC_20140211_LDCM_m11481_Orbit~medium.jpg\",\"rel\":\"alternate\",\"render\":\"image\",\"width\":400,\"size\":11000,\"height\":225},{\"href\":\"https://images-assets.nasa.gov/video/GSFC_20140211_LDCM_m11481_Orbit/GSFC_20140211_LDCM_m11481_Orbit~small.jpg\",\"rel\":\"alternate\",\"render\":\"image\",\"width\":200,\"size\":3900,\"height\":112},{\"href\":\"https://images-assets.nasa.gov/video/GSFC_20140211_LDCM_m11481_Orbit/GSFC_20140211_LDCM_m11481_Orbit~thumb.jpg\",\"rel\":\"preview\",\"render\":\"image\",\"width\":300,\"size\":7400,\"height\":168},{\"href\":\"https://images-assets.nasa.gov/video/GSFC_20140211_LDCM_m11481_Orbit/GSFC_20140211_LDCM_m11481_Orbit.vtt\",\"rel\":\"captions\"}]}],\"metadata\":{\"total_hits\":877},\"links\":[{\"rel\":\"next\",\"prompt\":\"Next\",\"href\":\"http://images-api.nasa.gov/search?q=earth+orbit&media_type=video&page_size=3&page=2\"}]}}"
+    headers:
+      Access-Control-Allow-Headers:
+      - Origin,Content-Type,Accept,Authorization,X-Requested-With
+      Access-Control-Allow-Methods:
+      - GET
+      Access-Control-Allow-Origin:
+      - '*'
+      Cache-Control:
+      - public, max-age=300, s-maxage=600
+      Connection:
+      - keep-alive
+      Content-Length:
+      - '7497'
+      Content-Security-Policy-Report-Only:
+      - default-src https:; report-uri /csp-violation-report/
+      Content-Type:
+      - application/json
+      Date:
+      - Tue, 01 Sep 2026 11:41:24 GMT
+      Referrer-Policy:
+      - same-origin
+      Server:
+      - nginx/1.29.8
+      Strict-Transport-Security:
+      - max-age=31536000
+      Via:
+      - 1.1 95026a1fefec6be0989146de8d9def62.cloudfront.net (CloudFront)
+      X-Amz-Cf-Id:
+      - nV6Rdtutd6MVWMgvQ3WYRqmSc_UACM1l8n0Yw6qiGj4zB2BJ6P5hGg==
+      X-Amz-Cf-Pop:
+      - LAX50-P3
+      X-Cache:
+      - Miss from cloudfront
+      X-Content-Type-Options:
+      - nosniff
+      X-Frame-Options:
+      - SAMEORIGIN
+      X-XSS-Protection:
+      - 1; mode=block
+    status:
+      code: 200
+      message: OK
+version: 1

@@ -68,13 +68,25 @@ class HostedGeminiEmbedder(_RemoteEmbedder):
     pass
 
 
+_EMBEDDER_CACHE: "Embedder | None" = None
+
+
 def make_embedder() -> Embedder:
+    """Memoized embedder factory. Weight loading for torch costs ~48s on CPU;
+    per-asset construction would reload the model for every clip. Cache a single
+    instance per (backend, model) so a live ingest run reuses it."""
+    global _EMBEDDER_CACHE
     backend = os.getenv("EMBED_BACKEND", "none").lower()
     model = os.getenv("EMBED_MODEL", "ViT-B-32")
+    if _EMBEDDER_CACHE is not None and getattr(_EMBEDDER_CACHE, "_cache_key", None) == (backend, model):
+        return _EMBEDDER_CACHE
     if backend == "torch":
-        return TorchEmbedder(model)
-    if backend == "onnx":
-        return OnnxEmbedder(model)
-    if backend == "hosted_gemini":
-        return HostedGeminiEmbedder(model)
-    return NoneEmbedder()
+        _EMBEDDER_CACHE = TorchEmbedder(model)
+    elif backend == "onnx":
+        _EMBEDDER_CACHE = OnnxEmbedder(model)
+    elif backend == "hosted_gemini":
+        _EMBEDDER_CACHE = HostedGeminiEmbedder(model)
+    else:
+        _EMBEDDER_CACHE = NoneEmbedder()
+    _EMBEDDER_CACHE._cache_key = (backend, model)  # type: ignore[attr-defined]
+    return _EMBEDDER_CACHE
