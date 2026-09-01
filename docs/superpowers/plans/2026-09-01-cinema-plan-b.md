@@ -2,6 +2,25 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
+## Amendments (approved 2026-09-01) — apply during execution
+
+1. **Acquire-time duration guard**: assets with `duration_s > 120` are skipped /
+   quarantined as `status='needs_segmentation'` at ACQUIRE time — long-form
+   archival must NOT reach retrieval (shot segmentation is deferred). `enqueue_acquire`
+   filters these out; `footage_shots` never receives an un-segmented long asset.
+2. **Acceptance script must be able to fail**: `scripts/footage_acceptance.sh`
+   asserts `COUNT(*) >= 1000` and `COUNT(DISTINCT source) >= 3` against
+   `footage_assets` (non-zero exit on failure — not a smoke test). Before the
+   "aerial coastline" step it asserts `EMBED_BACKEND != none`; then prints top-5
+   hits with captions for human sign-off.
+3. **Task 0 spike (before any dependent task)**: `torch==2.2.2` + `open-clip`
+   install on this MBP; embed ~10 keyframes with ViT-B-32 CPU; report
+   `ms/keyframe`. Only after the spike is recorded do Tasks 2/7 depend on it.
+4. **Commit the VCR cassettes**: adapter contract tests use recorded fixtures
+   (VCR) — commit the cassettes so CI stays network-free.
+
+---
+
 **Goal:** Build an owned footage corpus — multi-source, license-gated, normalized, embedded, shot-annotated (`ClipRecord`s) — queryable by semantic similarity + cinematographic filters, per `docs/superpowers/specs/2026-08-31-cinema-plan-b-footage-ingest.md`.
 
 **Architecture:** New `src/services/footage/` package: `VectorStore` (sqlite-vec default) + `Embedder` (none/torch/onnx/hosted_gemini) interfaces; two adapter classes (API adapters for keyless wave, manual-importer for the hand-pick tier — no scrapers); Celery `footage` queue with `DISCOVER→FILTER→ACQUIRE→NORMALIZE→ANALYZE→INDEX`; license/provenance gate with `attribution_required`/`attribution_text`; `credits_manifest()` at render; machine-readable `strengths` on registry entries. Reuses `src/services/cinema/{clip,types,hash_util}.py`.
