@@ -1,0 +1,122 @@
+interactions:
+- request:
+    body: null
+    headers:
+      Accept:
+      - '*/*'
+      Accept-Encoding:
+      - gzip, deflate
+      Connection:
+      - keep-alive
+      User-Agent:
+      - python-requests/2.32.5
+    method: GET
+    uri: https://archive.org/metadata/Iao5b1Z5uAptyk1WNz76BvyarGgwgV
+  response:
+    body:
+      string: '{"alternate_locations":{"servers":[{"server":"dn721605.ca.archive.org","dir":"/0/items/Iao5b1Z5uAptyk1WNz76BvyarGgwgV"}],"workable":[{"server":"dn721605.ca.archive.org","dir":"/0/items/Iao5b1Z5uAptyk1WNz76BvyarGgwgV"}]},"created":1788258983,"d1":"dn800302.us.archive.org","dir":"/0/items/Iao5b1Z5uAptyk1WNz76BvyarGgwgV","files":[{"name":"Iao5b1Z5uAptyk1WNz76BvyarGgwgV.thumbs\/tmpf1l7w106_000001.jpg","source":"derivative","format":"Thumbnail","original":"tmpf1l7w106.mov","mtime":"1709154396","size":"17401","md5":"fa342a03f9c87a39b781d98f62e23a1f","crc32":"b2fd3119","sha1":"3b4c8968bbd2e3e0e1edecb3db1fc05c48a4d1af"},{"name":"Iao5b1Z5uAptyk1WNz76BvyarGgwgV.thumbs\/tmpf1l7w106_000115.jpg","source":"derivative","format":"Thumbnail","original":"tmpf1l7w106.mov","mtime":"1709154402","size":"22342","md5":"5f94ebda692d915683cf885d25b38754","crc32":"c011c162","sha1":"16ffd6b469c8fbd33dd2c8408cbb149673997f0a"},{"name":"Iao5b1Z5uAptyk1WNz76BvyarGgwgV.thumbs\/tmpf1l7w106_000181.jpg","source":"derivative","format":"Thumbnail","original":"tmpf1l7w106.mov","mtime":"1709154409","size":"49246","md5":"77c604c7bb58c089ab1a5f808770a4bd","crc32":"dbceadb4","sha1":"a7b01e60ad6063ca85b6018b0a190660ff800ea7"},{"name":"Iao5b1Z5uAptyk1WNz76BvyarGgwgV.thumbs\/tmpf1l7w106_000234.jpg","source":"derivative","format":"Thumbnail","original":"tmpf1l7w106.mov","mtime":"1709154414","size":"31485","md5":"b17b99a597335c2d0fea479771637084","crc32":"d4f64227","sha1":"91713ad5288d610b6c0262490c79bec050d923fe"},{"name":"Iao5b1Z5uAptyk1WNz76BvyarGgwgV.thumbs\/tmpf1l7w106_000296.jpg","source":"derivative","format":"Thumbnail","original":"tmpf1l7w106.mov","mtime":"1709154420","size":"36972","md5":"dbb279ef3b1e278b353c70a2a46fbcb0","crc32":"c578fd30","sha1":"f58209f2f77ee9d18755bf9a56bf1450e6037fea"},{"name":"Iao5b1Z5uAptyk1WNz76BvyarGgwgV.thumbs\/tmpf1l7w106_000360.jpg","source":"derivative","format":"Thumbnail","original":"tmpf1l7w106.mov","mtime":"1709154426","size":"31263","md5":"8b12c53dbf56ab76e290245c6c45158d","crc32":"b267c1d4","sha1":"b06073b30ffc2aa6f1729a2ccd1daa5658550813"},{"name":"Iao5b1Z5uAptyk1WNz76BvyarGgwgV.thumbs\/tmpf1l7w106_000419.jpg","source":"derivative","format":"Thumbnail","original":"tmpf1l7w106.mov","mtime":"1709154432","size":"27469","md5":"3ec11b9221e9ed9c06775a832b09cd47","crc32":"4e2f91ce","sha1":"b558b6a76448408bb26d2b69d8e97b2ea4520966"},{"name":"Iao5b1Z5uAptyk1WNz76BvyarGgwgV.thumbs\/tmpf1l7w106_000482.jpg","source":"derivative","format":"Thumbnail","original":"tmpf1l7w106.mov","mtime":"1709154437","size":"30902","md5":"c57d8aaea33eeaacdabca2d5dc96051e","crc32":"a0cdf589","sha1":"f1e1da3167d3098c5c346aa4332adca301a6a49d"},{"name":"Iao5b1Z5uAptyk1WNz76BvyarGgwgV.thumbs\/tmpf1l7w106_000539.jpg","source":"derivative","format":"Thumbnail","original":"tmpf1l7w106.mov","mtime":"1709154443","size":"22953","md5":"2410447081daacaa23ef64d544ac19ab","crc32":"e1580d0c","sha1":"32a49b7df46c4e3cb38b11df9470d8dda0fa59e4"},{"name":"Iao5b1Z5uAptyk1WNz76BvyarGgwgV.thumbs\/tmpf1l7w106_000599.jpg","source":"derivative","format":"Thumbnail","original":"tmpf1l7w106.mov","mtime":"1709154448","size":"26954","md5":"474d3d8568c124bbee24246597d38646","crc32":"1ad29635","sha1":"39300bf360685c894e7f3d956a2f9d90f82fee41"},{"name":"Iao5b1Z5uAptyk1WNz76BvyarGgwgV.thumbs\/tmpf1l7w106_000656.jpg","source":"derivative","format":"Thumbnail","original":"tmpf1l7w106.mov","mtime":"1709154454","size":"45625","md5":"9befe54c9099e35407b9ca24a685ebde","crc32":"488bd687","sha1":"5d87cd4ae92369c91ec435f8e5ea95580cc250c4"},{"name":"Iao5b1Z5uAptyk1WNz76BvyarGgwgV.thumbs\/tmpf1l7w106_000716.jpg","source":"derivative","format":"Thumbnail","original":"tmpf1l7w106.mov","mtime":"1709154460","size":"24641","md5":"3f272f2bc2a54fd69c100724efc7335e","crc32":"3ab67a5e","sha1":"acfe9f26b04e58a287dc7cf5051d6acd506c77cb"},{"name":"Iao5b1Z5uAptyk1WNz76BvyarGgwgV.thumbs\/tmpf1l7w106_000775.jpg","source":"derivative","format":"Thumbnail","original":"tmpf1l7w106.mov","mtime":"1709154465","size":"24635","md5":"814c086c2392a7d030a012d6a2cea729","crc32":"68352ecb","sha1":"5ecd4dbf1e6f3f5ea50d9830f8e61589f7465cc0"},{"name":"Iao5b1Z5uAptyk1WNz76BvyarGgwgV.thumbs\/tmpf1l7w106_000839.jpg","source":"derivative","format":"Thumbnail","original":"tmpf1l7w106.mov","mtime":"1709154470","size":"41987","md5":"f09b8d11cb005e6ff0b11e9cc3494fe7","crc32":"5f0ab73a","sha1":"4cc174e5c211b82246585ed2c860e58ff9f84e4b"},{"name":"Iao5b1Z5uAptyk1WNz76BvyarGgwgV.thumbs\/tmpf1l7w106_000898.jpg","source":"derivative","format":"Thumbnail","original":"tmpf1l7w106.mov","mtime":"1709154476","size":"53027","md5":"a0a270950dc4e7c66f68b1af6e2a43d6","crc32":"d8705da6","sha1":"1b5c9c08cfc0a91e6ed3a13c2d95c3e8283bb32c"},{"name":"Iao5b1Z5uAptyk1WNz76BvyarGgwgV.thumbs\/tmpf1l7w106_000954.jpg","source":"derivative","format":"Thumbnail","original":"tmpf1l7w106.mov","mtime":"1709154482","size":"43676","md5":"9113cdc62495be227c8dd9ccd454ae66","crc32":"004d62b7","sha1":"d44474704540aef047ed2b73e858c22ccfa8cfde"},{"name":"Iao5b1Z5uAptyk1WNz76BvyarGgwgV.thumbs\/tmpf1l7w106_001017.jpg","source":"derivative","format":"Thumbnail","original":"tmpf1l7w106.mov","mtime":"1709154489","size":"47260","md5":"a5f4d11d9aa0b11896d58836435f7958","crc32":"1ed5e39b","sha1":"7a0f88ea817e0faf221aa4f55b72d32b6d68c1c2"},{"name":"Iao5b1Z5uAptyk1WNz76BvyarGgwgV.thumbs\/tmpf1l7w106_001077.jpg","source":"derivative","format":"Thumbnail","original":"tmpf1l7w106.mov","mtime":"1709154495","size":"41061","md5":"f74a3980c40185ddad27ef37d2d15b96","crc32":"8ad8089f","sha1":"fd0d15309846c48abf2044f320706926ad3e889a"},{"name":"Iao5b1Z5uAptyk1WNz76BvyarGgwgV.thumbs\/tmpf1l7w106_001134.jpg","source":"derivative","format":"Thumbnail","original":"tmpf1l7w106.mov","mtime":"1709154500","size":"33214","md5":"4b68fdf34be39d4af095d8d42d63ed0f","crc32":"b694b97a","sha1":"9be4ca5125f7f58332481bf55344be2140faef91"},{"name":"Iao5b1Z5uAptyk1WNz76BvyarGgwgV.thumbs\/tmpf1l7w106_001201.jpg","source":"derivative","format":"Thumbnail","original":"tmpf1l7w106.mov","mtime":"1709154508","size":"35374","md5":"b3c9b8d615660d5a630e286eec8b0f8a","crc32":"91018a51","sha1":"a9054345bb74662fcfa14cf8a5e496b5cdcf02ce"},{"name":"Iao5b1Z5uAptyk1WNz76BvyarGgwgV.thumbs\/tmpf1l7w106_001260.jpg","source":"derivative","format":"Thumbnail","original":"tmpf1l7w106.mov","mtime":"1709154514","size":"33222","md5":"e4056e55d6816328a0678d7c3711fbf2","crc32":"d908b698","sha1":"013ee40e406563e001b2a3c7762b54ab3d0f8fef"},{"name":"Iao5b1Z5uAptyk1WNz76BvyarGgwgV.thumbs\/tmpf1l7w106_001321.jpg","source":"derivative","format":"Thumbnail","original":"tmpf1l7w106.mov","mtime":"1709154521","size":"32457","md5":"67ec290692a8d5a859984332b2fa13e2","crc32":"53ccd634","sha1":"f465594f58bdd08b6516881b2b29eb70451129bf"},{"name":"Iao5b1Z5uAptyk1WNz76BvyarGgwgV.thumbs\/tmpf1l7w106_001374.jpg","source":"derivative","format":"Thumbnail","original":"tmpf1l7w106.mov","mtime":"1709154526","size":"16257","md5":"d5136182153c53826b2292f004a600d6","crc32":"968c2328","sha1":"5fb6f71700f22dea879227b63b4a01c7ff5d5e69"},{"name":"Iao5b1Z5uAptyk1WNz76BvyarGgwgV.thumbs\/tmpf1l7w106_001435.jpg","source":"derivative","format":"Thumbnail","original":"tmpf1l7w106.mov","mtime":"1709154532","size":"26220","md5":"54d79e84119382e3ccea6687c02bc93e","crc32":"62f22bbb","sha1":"8435e00cc7f3fe0b86895e98255a5dcd1ccfdb9b"},{"name":"Iao5b1Z5uAptyk1WNz76BvyarGgwgV.thumbs\/tmpf1l7w106_001498.jpg","source":"derivative","format":"Thumbnail","original":"tmpf1l7w106.mov","mtime":"1709154539","size":"38040","md5":"a4b4ae969a0362260f514799b20e94d3","crc32":"1b62932f","sha1":"65c76dda63e12ae10528cfa966cdc4f758f78834"},{"name":"Iao5b1Z5uAptyk1WNz76BvyarGgwgV.thumbs\/tmpf1l7w106_001558.jpg","source":"derivative","format":"Thumbnail","original":"tmpf1l7w106.mov","mtime":"1709154544","size":"37787","md5":"164b6b7b912f5a61539d3b0eb1333c35","crc32":"b0791625","sha1":"3f55488ca8018bba8c66f78310d70b387ff5adbd"},{"name":"Iao5b1Z5uAptyk1WNz76BvyarGgwgV.thumbs\/tmpf1l7w106_001617.jpg","source":"derivative","format":"Thumbnail","original":"tmpf1l7w106.mov","mtime":"1709154549","size":"29999","md5":"e28689d2b05718bc95b54fb81d078e65","crc32":"06b1f31e","sha1":"caf9202525012f41f4d6c8ea8cc2b555cbf42f0b"},{"name":"Iao5b1Z5uAptyk1WNz76BvyarGgwgV.thumbs\/tmpf1l7w106_001681.jpg","source":"derivative","format":"Thumbnail","original":"tmpf1l7w106.mov","mtime":"1709154554","size":"37524","md5":"c03e6f30c8d44140eef28e47c5a3002c","crc32":"43a34479","sha1":"4b893bb07fd33dac78521b00909cd7917376f140"},{"name":"Iao5b1Z5uAptyk1WNz76BvyarGgwgV.thumbs\/tmpf1l7w106_001730.jpg","source":"derivative","format":"Thumbnail","original":"tmpf1l7w106.mov","mtime":"1709154560","size":"43298","md5":"b51a63a4af83a56298ceeb3e8a23a0b8","crc32":"1064db34","sha1":"7edfd5d7b6056066695379b096ba24a4edb06851"},{"name":"Iao5b1Z5uAptyk1WNz76BvyarGgwgV_archive.torrent","source":"metadata","btih":"326e059f894b9611e3405dbd8173be852a92bc1e","mtime":"1710439581","size":"19518","md5":"f472b29587311e42b1abab25524a11f8","crc32":"14bfa9b2","sha1":"05cc5f61700975493ce532427e25e42c1567974e","format":"Archive
+        BitTorrent"},{"name":"Iao5b1Z5uAptyk1WNz76BvyarGgwgV_files.xml","source":"original","format":"Metadata","md5":"2bb09578344c9783ecca8c8c372e536e","summation":"md5"},{"name":"Iao5b1Z5uAptyk1WNz76BvyarGgwgV_meta.sqlite","source":"original","mtime":"1709153984","size":"28672","md5":"4e324d85f5b9d2fad3097882435a8250","crc32":"e67a1462","sha1":"10e112254cd5e7b920ffcbd08e76b5a31c6fc067","format":"Metadata"},{"name":"Iao5b1Z5uAptyk1WNz76BvyarGgwgV_meta.xml","source":"original","mtime":"1710439577","size":"4922","md5":"a8394445d17c3b149879ce534432277d","crc32":"1b57c106","sha1":"65c67785f003f44d08fd4ad8952373bcc1b3da6d","format":"Metadata"},{"name":"__ia_thumb.jpg","source":"original","mtime":"1709158446","size":"5835","md5":"3f1b4221e82badb1d8230779b771f362","crc32":"6489b79d","sha1":"9992435217fd37d62015533fbcfb5142a5f6a9ba","format":"Item
+        Tile"},{"name":"tmpf1l7w106.mov","source":"original","mtime":"1709153839","size":"286456120","md5":"4bcd68f6c625752099936e7d328121b6","crc32":"c8fdef09","sha1":"c52752503e2bfe602f798bd9a7ec788bdc69ecff","format":"QuickTime","length":"1736.74","width":"960","height":"540"},{"name":"tmpf1l7w106.mp4","source":"derivative","format":"h.264","original":"tmpf1l7w106.mov","mtime":"1709158427","size":"168897336","md5":"acf449b6ef41cf7fe038360bbad4b384","crc32":"d86bcfb1","sha1":"04cab5649a38857527b3a0b1e7dd50058f1716e8","length":"1736.75","width":"854","height":"480"}],"files_count":36,"item_last_updated":1710439581,"item_size":456394694,"metadata":{"identifier":"Iao5b1Z5uAptyk1WNz76BvyarGgwgV","collection":["PeriscopeFilm","ephemera"],"description":"Men
+        With Green Faces (MN 10585) is a Vietnam-era U.S. Navy documentary from 1969
+        that explains the intense mental and physical challenges endured by those
+        who want to become elite Navy SEALs. In addition to demonstrating the functions
+        of the Navy''s frogmen commandos, the film reflects the excitement of parachute
+        jump training to the quite of jungle patrols. The film opens with Navy SEALs
+        (of what appears to Underwater Demolition Team II) paddling a boat down a
+        river; the men leave the river and head into the jungle for a reconnaissance
+        mission. New SEALs listen to a commander during training (02:30). The men
+        exercise on a field, do pullups, and carry boats while singing. Later, the
+        frogmen put on masks and jump out of a raft moving along a body of water at
+        a fast pace (05:44). The boat comes back around to retrieve the men, who hook
+        their arms on a rope loop to move back into the boat. A member of Underwater
+        Demolition Team II explains an Emerson Scuba Rig to the new SEALs (06:58).
+        Underwater footage shows the SEALs moving just above the water\u2019s floor
+        (07:26), presumably with the Emerson rig. At Fort Benning, GA, the men train
+        by jumping out of a Chinook helicopter into water (08:00), repelling down
+        a line to simulate a parachute jump (08:32), and experience parachute openings
+        while training on a four-armed tower (09:42). The SEALs graduate to parachuting
+        out of a plane during an actual training jump (10:44). Several SEALs participate
+        in a HALO jump (High Altitude, Low Opening). The SEALs participate in a patrol
+        mission during a realistic training (12:20). \u201cEnemy\u201d targets (spring-loaded
+        targets) spring up and the SEALs quickly shoot them. Two men practice hand-to-hand
+        combat and fighting techniques (14:05). The men repel down a rocky face (14:48),
+        moving as quickly as possible. In the classroom, the SEALs learn basic Vietnamese
+        (15:50). An aerial view shows viewers Vietnam and what appears to be the Mekong
+        River (17:10). At a base in Vietnam, the SEALs\u2019 platoon leader briefs
+        his men on an upcoming patrol mission (17:40). They board a PBR in full gear
+        and camouflage. The SEALs quietly move through foliage and ford a river. The
+        men board a PBR after conducting the patrol. The film then shows the men meeting
+        for a debriefing after the mission. Armed Navy patrol boats move on a river
+        (23:46), and helicopters take to the air. The frogmen fire the boat\u2019s
+        machine guns at unseen targets on the riverbanks (24:49), while the helicopters
+        fire at enemy targets on the ground. SEALs attend an awards ceremony where
+        they receive various medals (25:55). A commander gives a widow the medals
+        earned by her late husband. The United States Navy Sea, Air, and Land Teams,
+        commonly abbreviated as Navy SEALs, are the U.S. Navy''s primary special operations
+        force and a component of the Naval Special Warfare Command. Among the SEALs''
+        main functions are conducting small-unit maritime military operations that
+        originate from, and return to, a river, ocean, swamp, delta, or coastline.
+        The SEALs are trained to operate in all environments (sea, air, and land)
+        for which they are named.\n\nMotion picture films don''t last forever; many
+        have already been lost or destroyed. For almost two decades, we''ve worked
+        to collect, scan and preserve the world as it was captured on 35mm, 16mm and
+        8mm movies -- including home movies, industrial films, and other non-fiction.
+        If you have endangered films you''d like to have scanned, or wish to donate
+        celluloid to Periscope Film so that we can share them with the world, we''d
+        love to hear from you. Contact us via the weblink below.\n\nThis film is part
+        of the Periscope Film LLC archive, one of the largest historic military, transportation,
+        and aviation stock footage collections in the USA. Entirely film backed, this
+        material is available for licensing in 24p HD, 2k and 4k. For more information
+        visit http://www.PeriscopeFilm.com","mediatype":"movies","scanner":"Internet
+        Archive Python library 3.6.0","subject":["Naval Special Warfare Command","Men
+        With Green Faces","Underwater Demolition Team","Emerson Scuba Rig","Fort Benning","High
+        Altitude","Low Opening","Mekong River","United States Navy Sea","Land Teams","Stock
+        Footage","Periscope Film"],"title":"\"MEN WITH GREEN FACES\"  1969 U.S. NAVY
+        SEALS DOCUMENTARY VIETNAM WAR   PRINT 2 4022","uploader":"contact@periscopefilm.com","publicdate":"2024-02-28
+        20:58:39","addeddate":"2024-02-28 20:58:39"},"server":"dn800302.us.archive.org","simplelists":{"solo_manifest":{"solo_manifest_dn800302":{"sys_changed_by":{"source":"task","task_id":"5454712409"},"sys_last_changed":"2026-06-20
+        21:17:37.016489"}}},"solo":true,"uniq":1243583826,"workable_servers":["dn800302.us.archive.org"]}'
+    headers:
+      Access-Control-Allow-Origin:
+      - '*'
+      Connection:
+      - keep-alive
+      Content-Encoding:
+      - gzip
+      Content-Security-Policy:
+      - 'report-uri https://archive.org/services/csp-report; default-src *; img-src
+        * data: blob:; object-src ''none''; media-src * blob:; connect-src * data:;
+        style-src ''unsafe-inline'' https://archive.org/ https://archive.org https://esm.archive.org/
+        https://esm.ext.archive.org/ https://offshoot.prod.archive.org/ https://av.archive.org/css/
+        https://av.dev.archive.org/css/ https://accounts.google.com/gsi/ https://synerg.adp.com/;
+        script-src ''nonce-d67cb5ccb7cb6c4f52e414ba9c0e6b7a'' https://archive.org/includes/
+        https://archive.org/includes/ https://archive.org/components/ https://archive.org/components/
+        https://archive.org/v/ https://archive.org/v/ https://archive.org/upload/app/
+        https://archive.org/offshoot_assets/ https://archive.org/offshoot_assets/
+        https://esm.archive.org/ https://esm.ext.archive.org/ https://polyfill.archive.org/v3/polyfill.min.js
+        https://offshoot.prod.archive.org/ https://av.archive.org/ https://av.dev.archive.org/
+        https://openlibrary.org/query.json https://emularity-engine.ux-b.archive.org/
+        https://emularity-config.ux-b.archive.org/ https://emularity-bios.ux-b.archive.org/
+        https://archive.org/services/emularity/ https://archive.org/services/emularity/
+        ''wasm-unsafe-eval'' ''sha256-CoX53XgCdkM1zegYEEpMUeYIZnv663inNm8bQv2VRbM=''
+        https://accounts.google.com/gsi/ https://www.google.com/recaptcha/ https://www.gstatic.com/recaptcha/
+        https://workforcenow.adp.com/ https://synerg.adp.com/ https://apollo.archive.org'
+      Content-Type:
+      - application/json
+      Date:
+      - Tue, 01 Sep 2026 10:36:23 GMT
+      Onion-Location:
+      - https://archivep75mbjunhxc6x4j5mwjmomyxb573v42baldlqu56ruil2oiad.onion/metadata/Iao5b1Z5uAptyk1WNz76BvyarGgwgV
+      Referrer-Policy:
+      - no-referrer-when-downgrade
+      Server:
+      - nginx/1.31.3
+      Strict-Transport-Security:
+      - max-age=15724800
+      Transfer-Encoding:
+      - chunked
+      Vary:
+      - Accept-Encoding
+    status:
+      code: 200
+      message: OK
+version: 1

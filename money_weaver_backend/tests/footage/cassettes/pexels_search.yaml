@@ -1,0 +1,71 @@
+interactions:
+- request:
+    body: null
+    headers:
+      Accept:
+      - '*/*'
+      Accept-Encoding:
+      - gzip, deflate
+      Connection:
+      - keep-alive
+      User-Agent:
+      - python-requests/2.32.5
+    method: GET
+    uri: https://api.pexels.com/videos/search?query=aerial+coastline&per_page=3
+  response:
+    body:
+      string: "{\"page\":1,\"per_page\":3,\"videos\":[{\"id\":36654153,\"width\":2160,\"height\":3840,\"duration\":26,\"full_res\":null,\"tags\":[],\"url\":\"https://www.pexels.com/video/aerial-view-of-rugged-coastline-and-crashing-waves-36654153/\",\"image\":\"https://images.pexels.com/videos/36654153/4k-dji-36654153.jpeg?auto=compress\\u0026cs=tinysrgb\\u0026fit=crop\\u0026h=1200\\u0026w=630\",\"avg_color\":null,\"user\":{\"id\":2159421235,\"name\":\"Mike
+        Art \U0001F3A5 Visual Creator | Photography and Video \U0001F4F8\",\"url\":\"https://www.pexels.com/@mike-art-visual-creator-photography-and-video-2159421235\"},\"video_files\":[{\"id\":15539411,\"quality\":null,\"file_type\":\"video/mp4\",\"width\":360,\"height\":640,\"fps\":59.94,\"link\":\"https://videos.pexels.com/video-files/36654153/15539411_360_640_60fps.mp4\",\"size\":6376836},{\"id\":15539412,\"quality\":null,\"file_type\":\"video/mp4\",\"width\":540,\"height\":960,\"fps\":59.94,\"link\":\"https://videos.pexels.com/video-files/36654153/15539412_540_960_60fps.mp4\",\"size\":14635652},{\"id\":15539413,\"quality\":null,\"file_type\":\"video/mp4\",\"width\":720,\"height\":1280,\"fps\":59.94,\"link\":\"https://videos.pexels.com/video-files/36654153/15539413_720_1280_60fps.mp4\",\"size\":24506902},{\"id\":15539414,\"quality\":null,\"file_type\":\"video/mp4\",\"width\":1080,\"height\":1920,\"fps\":59.94,\"link\":\"https://videos.pexels.com/video-files/36654153/15539414_1080_1920_60fps.mp4\",\"size\":49456249},{\"id\":15539415,\"quality\":null,\"file_type\":\"video/mp4\",\"width\":1440,\"height\":2560,\"fps\":59.94,\"link\":\"https://videos.pexels.com/video-files/36654153/15539415_1440_2560_60fps.mp4\",\"size\":77895391},{\"id\":15539416,\"quality\":null,\"file_type\":\"video/mp4\",\"width\":2160,\"height\":3840,\"fps\":59.94,\"link\":\"https://videos.pexels.com/video-files/36654153/15539416_2160_3840_60fps.mp4\",\"size\":148954427}],\"video_pictures\":[{\"id\":31178989,\"nr\":0,\"picture\":\"https://images.pexels.com/videos/36654153/pictures/preview-0.jpg\"},{\"id\":31178990,\"nr\":1,\"picture\":\"https://images.pexels.com/videos/36654153/pictures/preview-1.jpg\"},{\"id\":31178991,\"nr\":2,\"picture\":\"https://images.pexels.com/videos/36654153/pictures/preview-2.jpg\"},{\"id\":31178992,\"nr\":3,\"picture\":\"https://images.pexels.com/videos/36654153/pictures/preview-3.jpg\"},{\"id\":31178993,\"nr\":4,\"picture\":\"https://images.pexels.com/videos/36654153/pictures/preview-4.jpg\"},{\"id\":31178994,\"nr\":5,\"picture\":\"https://images.pexels.com/videos/36654153/pictures/preview-5.jpg\"},{\"id\":31178995,\"nr\":6,\"picture\":\"https://images.pexels.com/videos/36654153/pictures/preview-6.jpg\"},{\"id\":31178996,\"nr\":7,\"picture\":\"https://images.pexels.com/videos/36654153/pictures/preview-7.jpg\"},{\"id\":31178997,\"nr\":8,\"picture\":\"https://images.pexels.com/videos/36654153/pictures/preview-8.jpg\"},{\"id\":31178998,\"nr\":9,\"picture\":\"https://images.pexels.com/videos/36654153/pictures/preview-9.jpg\"},{\"id\":31178999,\"nr\":10,\"picture\":\"https://images.pexels.com/videos/36654153/pictures/preview-10.jpg\"},{\"id\":31179000,\"nr\":11,\"picture\":\"https://images.pexels.com/videos/36654153/pictures/preview-11.jpg\"},{\"id\":31179001,\"nr\":12,\"picture\":\"https://images.pexels.com/videos/36654153/pictures/preview-12.jpg\"},{\"id\":31179002,\"nr\":13,\"picture\":\"https://images.pexels.com/videos/36654153/pictures/preview-13.jpg\"},{\"id\":31179003,\"nr\":14,\"picture\":\"https://images.pexels.com/videos/36654153/pictures/preview-14.jpg\"}]},{\"id\":17801497,\"width\":3840,\"height\":2160,\"duration\":11,\"full_res\":null,\"tags\":[],\"url\":\"https://www.pexels.com/video/sardinia-flying-over-the-landscape-next-to-the-sea-17801497/\",\"image\":\"https://images.pexels.com/videos/17801497/drone-hills-ocean-shore-sardinia-17801497.jpeg?auto=compress\\u0026cs=tinysrgb\\u0026fit=crop\\u0026h=630\\u0026w=1200\",\"avg_color\":null,\"user\":{\"id\":2550885,\"name\":\"Adrien
+        JACTA\",\"url\":\"https://www.pexels.com/@adrien-jacta-2550885\"},\"video_files\":[{\"id\":7465418,\"quality\":\"hd\",\"file_type\":\"video/mp4\",\"width\":1280,\"height\":720,\"fps\":25.0,\"link\":\"https://videos.pexels.com/video-files/17801497/17801497-hd_1280_720_25fps.mp4\",\"size\":4124201},{\"id\":7465419,\"quality\":\"sd\",\"file_type\":\"video/mp4\",\"width\":960,\"height\":540,\"fps\":25.0,\"link\":\"https://videos.pexels.com/video-files/17801497/17801497-sd_960_540_25fps.mp4\",\"size\":2350223},{\"id\":7465420,\"quality\":\"hd\",\"file_type\":\"video/mp4\",\"width\":1920,\"height\":1080,\"fps\":25.0,\"link\":\"https://videos.pexels.com/video-files/17801497/17801497-hd_1920_1080_25fps.mp4\",\"size\":8298864},{\"id\":7465421,\"quality\":\"uhd\",\"file_type\":\"video/mp4\",\"width\":3840,\"height\":2160,\"fps\":25.0,\"link\":\"https://videos.pexels.com/video-files/17801497/17801497-uhd_3840_2160_25fps.mp4\",\"size\":36533943},{\"id\":7465422,\"quality\":\"sd\",\"file_type\":\"video/mp4\",\"width\":426,\"height\":240,\"fps\":25.0,\"link\":\"https://videos.pexels.com/video-files/17801497/17801497-sd_426_240_25fps.mp4\",\"size\":473158},{\"id\":7465423,\"quality\":\"uhd\",\"file_type\":\"video/mp4\",\"width\":2560,\"height\":1440,\"fps\":25.0,\"link\":\"https://videos.pexels.com/video-files/17801497/17801497-uhd_2560_1440_25fps.mp4\",\"size\":19652279},{\"id\":7465425,\"quality\":\"sd\",\"file_type\":\"video/mp4\",\"width\":640,\"height\":360,\"fps\":25.0,\"link\":\"https://videos.pexels.com/video-files/17801497/17801497-sd_640_360_25fps.mp4\",\"size\":1098530}],\"video_pictures\":[{\"id\":18617173,\"nr\":0,\"picture\":\"https://images.pexels.com/videos/17801497/pictures/preview-0.jpeg\"},{\"id\":18617192,\"nr\":1,\"picture\":\"https://images.pexels.com/videos/17801497/pictures/preview-1.jpeg\"},{\"id\":18617206,\"nr\":2,\"picture\":\"https://images.pexels.com/videos/17801497/pictures/preview-2.jpeg\"},{\"id\":18617229,\"nr\":3,\"picture\":\"https://images.pexels.com/videos/17801497/pictures/preview-3.jpeg\"},{\"id\":18617258,\"nr\":4,\"picture\":\"https://images.pexels.com/videos/17801497/pictures/preview-4.jpeg\"},{\"id\":18617277,\"nr\":5,\"picture\":\"https://images.pexels.com/videos/17801497/pictures/preview-5.jpeg\"},{\"id\":18617292,\"nr\":6,\"picture\":\"https://images.pexels.com/videos/17801497/pictures/preview-6.jpeg\"},{\"id\":18617301,\"nr\":7,\"picture\":\"https://images.pexels.com/videos/17801497/pictures/preview-7.jpeg\"},{\"id\":18617311,\"nr\":8,\"picture\":\"https://images.pexels.com/videos/17801497/pictures/preview-8.jpeg\"},{\"id\":18617322,\"nr\":9,\"picture\":\"https://images.pexels.com/videos/17801497/pictures/preview-9.jpeg\"},{\"id\":18617332,\"nr\":10,\"picture\":\"https://images.pexels.com/videos/17801497/pictures/preview-10.jpeg\"},{\"id\":18617339,\"nr\":11,\"picture\":\"https://images.pexels.com/videos/17801497/pictures/preview-11.jpeg\"},{\"id\":18617353,\"nr\":12,\"picture\":\"https://images.pexels.com/videos/17801497/pictures/preview-12.jpeg\"},{\"id\":18617365,\"nr\":13,\"picture\":\"https://images.pexels.com/videos/17801497/pictures/preview-13.jpeg\"},{\"id\":18617373,\"nr\":14,\"picture\":\"https://images.pexels.com/videos/17801497/pictures/preview-14.jpeg\"}]},{\"id\":38867802,\"width\":3840,\"height\":2160,\"duration\":13,\"full_res\":null,\"tags\":[],\"url\":\"https://www.pexels.com/video/scenic-aerial-view-of-coastal-city-at-sunset-38867802/\",\"image\":\"https://images.pexels.com/videos/38867802/pexels-photo-38867802.jpeg?auto=compress\\u0026cs=tinysrgb\\u0026fit=crop\\u0026h=630\\u0026w=1200\",\"avg_color\":null,\"user\":{\"id\":900672103,\"name\":\"Yunus
+        Terk\",\"url\":\"https://www.pexels.com/@yunusterk\"},\"video_files\":[{\"id\":16523222,\"quality\":null,\"file_type\":\"video/mp4\",\"width\":640,\"height\":360,\"fps\":59.94,\"link\":\"https://videos.pexels.com/video-files/38867802/16523222_640_360_60fps.mp4\",\"size\":2560140},{\"id\":16523223,\"quality\":null,\"file_type\":\"video/mp4\",\"width\":960,\"height\":540,\"fps\":59.94,\"link\":\"https://videos.pexels.com/video-files/38867802/16523223_960_540_60fps.mp4\",\"size\":5549449},{\"id\":16523224,\"quality\":null,\"file_type\":\"video/mp4\",\"width\":1280,\"height\":720,\"fps\":59.94,\"link\":\"https://videos.pexels.com/video-files/38867802/16523224_1280_720_60fps.mp4\",\"size\":10243683},{\"id\":16523225,\"quality\":null,\"file_type\":\"video/mp4\",\"width\":1920,\"height\":1080,\"fps\":59.94,\"link\":\"https://videos.pexels.com/video-files/38867802/16523225_1920_1080_60fps.mp4\",\"size\":22538431},{\"id\":16523226,\"quality\":null,\"file_type\":\"video/mp4\",\"width\":2560,\"height\":1440,\"fps\":59.94,\"link\":\"https://videos.pexels.com/video-files/38867802/16523226_2560_1440_60fps.mp4\",\"size\":35618051},{\"id\":16523227,\"quality\":null,\"file_type\":\"video/mp4\",\"width\":3840,\"height\":2160,\"fps\":59.94,\"link\":\"https://videos.pexels.com/video-files/38867802/16523227_3840_2160_60fps.mp4\",\"size\":70560498}],\"video_pictures\":[{\"id\":33726144,\"nr\":0,\"picture\":\"https://images.pexels.com/videos/38867802/pictures/preview-0.jpg\"},{\"id\":33726145,\"nr\":1,\"picture\":\"https://images.pexels.com/videos/38867802/pictures/preview-1.jpg\"},{\"id\":33726146,\"nr\":2,\"picture\":\"https://images.pexels.com/videos/38867802/pictures/preview-2.jpg\"},{\"id\":33726147,\"nr\":3,\"picture\":\"https://images.pexels.com/videos/38867802/pictures/preview-3.jpg\"},{\"id\":33726148,\"nr\":4,\"picture\":\"https://images.pexels.com/videos/38867802/pictures/preview-4.jpg\"},{\"id\":33726149,\"nr\":5,\"picture\":\"https://images.pexels.com/videos/38867802/pictures/preview-5.jpg\"},{\"id\":33726150,\"nr\":6,\"picture\":\"https://images.pexels.com/videos/38867802/pictures/preview-6.jpg\"},{\"id\":33726151,\"nr\":7,\"picture\":\"https://images.pexels.com/videos/38867802/pictures/preview-7.jpg\"},{\"id\":33726152,\"nr\":8,\"picture\":\"https://images.pexels.com/videos/38867802/pictures/preview-8.jpg\"},{\"id\":33726153,\"nr\":9,\"picture\":\"https://images.pexels.com/videos/38867802/pictures/preview-9.jpg\"},{\"id\":33726154,\"nr\":10,\"picture\":\"https://images.pexels.com/videos/38867802/pictures/preview-10.jpg\"},{\"id\":33726155,\"nr\":11,\"picture\":\"https://images.pexels.com/videos/38867802/pictures/preview-11.jpg\"}]}],\"total_results\":8000,\"next_page\":\"https://api.pexels.com/v1/v1/videos/search?page=2\\u0026per_page=3\\u0026query=aerial+coastline\",\"url\":\"https://api.pexels.com/search/videos/aerial%20coastline/\"}"
+    headers:
+      Age:
+      - '59'
+      CF-RAY:
+      - a3440375486198a2-LAX
+      Cache-Control:
+      - public, max-age=3600
+      Connection:
+      - keep-alive
+      Content-Encoding:
+      - gzip
+      Content-Type:
+      - application/json; charset=utf-8
+      Date:
+      - Tue, 01 Sep 2026 11:42:46 GMT
+      Server:
+      - cloudflare
+      Transfer-Encoding:
+      - chunked
+      alt-svc:
+      - h3=":443"; ma=86400
+      cf-cache-status:
+      - HIT
+      etag:
+      - W/"20ec01775e0c659ab6db97907907912f"
+      expires:
+      - Tue, 01 Sep 2026 12:42:46 GMT
+      set-cookie:
+      - __cf_bm=JO3HAOE..xr5XjosK9TBdW5bdRXtb8J3LPRqVjT0AoE-1788262966.6096587-1.0.1.1-adNTNGFa8HQnFGS0junO5fgYJbKncbJ7w1RiXy6Pq5IWowiqeMceYYKPPv6fEynk0MY0jbD_i1d2W1EJfqnkF2UOso20XZi5yzVVGv4h0gdB9mSvpnNVXz.LnID0AYMn;
+        HttpOnly; SameSite=None; Secure; Path=/; Domain=pexels.com; Expires=Tue, 01
+        Sep 2026 12:12:46 GMT
+      - _cfuvid=lkRVqbr2DyndnWl3kziHLsP2tUMYFX2ttntHuzbYXoU-1788262966.6096587-1.0.1.1-KGwe2TvOu42hwhmsPfd0tNmQYFWdScqL5rUn2ql4QqE;
+        HttpOnly; SameSite=None; Secure; Path=/; Domain=pexels.com
+      vary:
+      - Origin
+      x-frame-options:
+      - SAMEORIGIN
+      x-ratelimit-limit:
+      - '25000'
+      x-ratelimit-remaining:
+      - '24933'
+      x-ratelimit-reset:
+      - '1789156772'
+      x-request-id:
+      - 61ddee45-20db-42d7-a8b0-865223ac94eb
+      x-runtime:
+      - '0.102200'
+    status:
+      code: 200
+      message: OK
+version: 1

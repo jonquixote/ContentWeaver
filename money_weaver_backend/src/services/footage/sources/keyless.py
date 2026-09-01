@@ -94,6 +94,44 @@ class NasaImagesSource(_KeylessAPI):
     CREDIT_ATTRIBUTION = False
     strengths = ["space", "rockets", "earth from orbit", "science"]
 
+    def search(self, query: str, *, limit: int = 100, cursor: str | None = None) -> SearchPage:
+        import requests
+        params = {
+            "q": query,
+            "media_type": "video",
+            "page_size": min(limit, 100),
+        }
+        r = requests.get("https://images-api.nasa.gov/search", params=params, timeout=20)
+        r.raise_for_status()
+        items = r.json().get("collection", {}).get("items", [])
+        cands = []
+        for item in items:
+            data = (item.get("data") or [{}])[0]
+            nasa_id = data.get("nasa_id")
+            if not nasa_id:
+                continue
+            # NASA media guidelines: public domain, use-nasa-media-guidelines.
+            cands.append(CandidateVideo(
+                source=self.name,
+                source_id=nasa_id,
+                title=data.get("title") or nasa_id,
+                description=data.get("description"),
+                tags=data.get("keywords") or [],
+                subjects=[],
+                creator=None,
+                published_at=data.get("date_created"),
+                duration_s=None,  # NASA search metadata exposes no duration; follow-up populate
+                width=None,
+                height=None,
+                download_url=f"https://images-assets.nasa.gov/video/{nasa_id}/{nasa_id}~mobile.mp4",
+                page_url=f"https://images.nasa.gov/details/{nasa_id}",
+                license_spdx="nasa-media-guidelines",
+                license_raw="NASA media guidelines (public domain)",
+                attribution_text=None,
+                extras={},
+            ))
+        return SearchPage(candidates=cands, next_cursor=None)
+
 
 class LocSource(_KeylessAPI):
     name = "loc"
@@ -118,11 +156,85 @@ class PexelsSource(_KeylessAPI):
     CREDIT_ATTRIBUTION = False
     strengths = ["lifestyle", "people", "modern b-roll"]
 
+    def search(self, query: str, *, limit: int = 100, cursor: str | None = None) -> SearchPage:
+        import os
+        import requests
+        api_key = os.getenv("PEXELS_API_KEY", "")
+        if not api_key:
+            return SearchPage(candidates=[], next_cursor=None)
+        params = {"query": query, "per_page": min(limit, 80)}
+        r = requests.get(
+            "https://api.pexels.com/videos/search",
+            params=params,
+            headers={"Authorization": api_key},
+            timeout=20,
+        )
+        r.raise_for_status()
+        cands = []
+        for v in r.json().get("videos", []):
+            # prefer an HD vertical-capable file; fall back to the first file
+            files = v.get("video_files") or []
+            best = next((f for f in files if f.get("quality") == "hd" and f.get("width", 0) >= 1080), None) or (files[0] if files else {})
+            cands.append(CandidateVideo(
+                source=self.name,
+                source_id=str(v.get("id")),
+                title=v.get("url") or v.get("id"),
+                description=None,
+                tags=(v.get("tags") or "").split(",") if isinstance(v.get("tags"), str) else [],
+                subjects=[],
+                creator=None,
+                published_at=None,
+                duration_s=v.get("duration"),
+                width=v.get("width"),
+                height=v.get("height"),
+                download_url=best.get("link", ""),
+                page_url=v.get("url", ""),
+                license_spdx="LicenseRef-Pexels",
+                license_raw="Pexels API — free to use",
+                attribution_text=None,
+                extras={},
+            ))
+        return SearchPage(candidates=cands, next_cursor=None)
+
 
 class PixabaySource(_KeylessAPI):
     name = "pixabay"
     CREDIT_ATTRIBUTION = False
     strengths = ["wide variety", "nature", "abstract"]
+
+    def search(self, query: str, *, limit: int = 100, cursor: str | None = None) -> SearchPage:
+        import os
+        import requests
+        api_key = os.getenv("PIXABAY_API_KEY", "")
+        if not api_key:
+            return SearchPage(candidates=[], next_cursor=None)
+        params = {"key": api_key, "q": query, "per_page": max(3, min(limit, 200))}
+        r = requests.get("https://pixabay.com/api/videos/", params=params, timeout=20)
+        r.raise_for_status()
+        cands = []
+        for v in r.json().get("hits", []):
+            videos = v.get("videos") or {}
+            url = videos.get("large", {}).get("url") or videos.get("medium", {}).get("url") or ""
+            cands.append(CandidateVideo(
+                source=self.name,
+                source_id=str(v.get("id")),
+                title=v.get("tags", ""),
+                description=None,
+                tags=(v.get("tags") or "").split(", ") if isinstance(v.get("tags"), str) else [],
+                subjects=[],
+                creator=None,
+                published_at=None,
+                duration_s=v.get("duration"),
+                width=None,
+                height=None,
+                download_url=url,
+                page_url=v.get("pageURL", ""),
+                license_spdx="LicenseRef-Pixabay",
+                license_raw="Pixabay — free to use",
+                attribution_text=None,
+                extras={},
+            ))
+        return SearchPage(candidates=cands, next_cursor=None)
 
 
 class CoverrSource(_KeylessAPI):

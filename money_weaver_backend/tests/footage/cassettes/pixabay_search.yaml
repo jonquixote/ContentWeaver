@@ -1,0 +1,94 @@
+interactions:
+- request:
+    body: null
+    headers:
+      Accept:
+      - '*/*'
+      Accept-Encoding:
+      - gzip, deflate
+      Connection:
+      - keep-alive
+      User-Agent:
+      - python-requests/2.32.5
+    method: GET
+    uri: https://pixabay.com/api/videos/?key=24036325-e20fbaa25b18c47715967030a&q=aerial&per_page=3
+  response:
+    body:
+      string: '{"total":4489,"totalHits":500,"hits":[{"id":216058,"pageURL":"https://pixabay.com/videos/id-216058/","type":"film","tags":"drone,
+        drones, drone images, nature, forest, river, landscape, drone footage, aerial
+        view, aerial image, amazon, aerial images, cloud, sky","duration":33,"videos":{"large":{"url":"https://cdn.pixabay.com/video/2024/06/10/216058_large.mp4","width":3840,"height":2160,"size":138460882,"thumbnail":"https://cdn.pixabay.com/video/2024/06/10/216058_large.jpg"},"medium":{"url":"https://cdn.pixabay.com/video/2024/06/10/216058_medium.mp4","width":2560,"height":1440,"size":57360840,"thumbnail":"https://cdn.pixabay.com/video/2024/06/10/216058_medium.jpg"},"small":{"url":"https://cdn.pixabay.com/video/2024/06/10/216058_small.mp4","width":1920,"height":1080,"size":31829403,"thumbnail":"https://cdn.pixabay.com/video/2024/06/10/216058_small.jpg"},"tiny":{"url":"https://cdn.pixabay.com/video/2024/06/10/216058_tiny.mp4","width":1280,"height":720,"size":7771073,"thumbnail":"https://cdn.pixabay.com/video/2024/06/10/216058_tiny.jpg"}},"views":227586,"downloads":85416,"likes":1061,"comments":124,"user_id":29856243,"user":"Drone_Aventura","userImageURL":"https://cdn.pixabay.com/user/2025/04/02/23-23-21-238_250x250.jpg","noAiTraining":false,"isAiGenerated":false,"isGRated":true,"isLowQuality":false,"userURL":"https://pixabay.com/users/29856243/","name":"drone,
+        drones, drone images"},{"id":7328,"pageURL":"https://pixabay.com/videos/id-7328/","type":"film","tags":"snowy
+        trees, above, winter, landscape, forest, aerial, snow, revealing, nature,
+        sunset, cold, natural, trees, environment, frost, sky, weather, white, scene,
+        scenic, wilderness, outdoors, snowfall, aerial view","duration":28,"videos":{"large":{"url":"https://cdn.pixabay.com/video/2017/01/13/7328-199383367_large.mp4","width":1920,"height":1080,"size":16447056,"thumbnail":"https://cdn.pixabay.com/video/2017/01/13/7328-199383367_large.jpg"},"medium":{"url":"https://cdn.pixabay.com/video/2017/01/13/7328-199383367_medium.mp4","width":1280,"height":720,"size":9583779,"thumbnail":"https://cdn.pixabay.com/video/2017/01/13/7328-199383367_medium.jpg"},"small":{"url":"https://cdn.pixabay.com/video/2017/01/13/7328-199383367_small.mp4","width":960,"height":540,"size":6064845,"thumbnail":"https://cdn.pixabay.com/video/2017/01/13/7328-199383367_small.jpg"},"tiny":{"url":"https://cdn.pixabay.com/video/2017/01/13/7328-199383367_tiny.mp4","width":640,"height":360,"size":2256079,"thumbnail":"https://cdn.pixabay.com/video/2017/01/13/7328-199383367_tiny.jpg"}},"views":1079817,"downloads":492421,"likes":3685,"comments":906,"user_id":3810957,"user":"invisiblepower","userImageURL":"https://cdn.pixabay.com/user/2017/01/30/21-51-52-554_250x250.jpeg","noAiTraining":false,"isAiGenerated":false,"isGRated":true,"isLowQuality":false,"userURL":"https://pixabay.com/users/3810957/","name":"snowy
+        trees, above, winter"},{"id":91744,"pageURL":"https://pixabay.com/videos/id-91744/","type":"film","tags":"skyscrapers,
+        buildings, city, urban, aerial, architecture, live wallpaper, contemporary
+        architecture, modern architecture","duration":17,"videos":{"large":{"url":"https://cdn.pixabay.com/video/2021/10/12/91744-636709154_large.mp4","width":3840,"height":2160,"size":53525606,"thumbnail":"https://cdn.pixabay.com/video/2021/10/12/91744-636709154_large.jpg"},"medium":{"url":"https://cdn.pixabay.com/video/2021/10/12/91744-636709154_medium.mp4","width":2560,"height":1440,"size":26263817,"thumbnail":"https://cdn.pixabay.com/video/2021/10/12/91744-636709154_medium.jpg"},"small":{"url":"https://cdn.pixabay.com/video/2021/10/12/91744-636709154_small.mp4","width":1920,"height":1080,"size":12700007,"thumbnail":"https://cdn.pixabay.com/video/2021/10/12/91744-636709154_small.jpg"},"tiny":{"url":"https://cdn.pixabay.com/video/2021/10/12/91744-636709154_tiny.mp4","width":1280,"height":720,"size":6652788,"thumbnail":"https://cdn.pixabay.com/video/2021/10/12/91744-636709154_tiny.jpg"}},"views":487109,"downloads":246207,"likes":2267,"comments":396,"user_id":23606303,"user":"KM007_","userImageURL":"https://cdn.pixabay.com/user/2021/09/28/18-06-16-862_250x250.jpg","noAiTraining":false,"isAiGenerated":false,"isGRated":true,"isLowQuality":false,"userURL":"https://pixabay.com/users/23606303/","name":"skyscrapers,
+        buildings, city"}]}'
+    headers:
+      Access-Control-Allow-Methods:
+      - GET, POST, HEAD
+      Access-Control-Allow-Origin:
+      - '*'
+      Access-Control-Expose-Headers:
+      - X-RateLimit-Limit,X-RateLimit-Remaining,X-RateLimit-Reset
+      Access-Control-Max-Age:
+      - '86400'
+      Allow:
+      - POST, OPTIONS, GET
+      CF-Cache-Status:
+      - BYPASS
+      CF-Ray:
+      - a3440376bf37d7ac-LAX
+      Cache-Control:
+      - max-age=86400
+      Connection:
+      - keep-alive
+      Content-Encoding:
+      - gzip
+      Content-Language:
+      - en
+      Content-Security-Policy:
+      - frame-ancestors 'none'
+      Content-Security-Policy-Report-Only:
+      - frame-ancestors 'none'
+      Content-Type:
+      - application/json
+      Cross-Origin-Opener-Policy:
+      - same-origin-allow-popups
+      Date:
+      - Tue, 01 Sep 2026 11:42:47 GMT
+      Referrer-Policy:
+      - strict-origin-when-cross-origin
+      Server:
+      - cloudflare
+      Set-Cookie:
+      - anonymous_user_id=None; expires=Sun, 19 Sep 2094 14:56:53 GMT; Max-Age=2147483647;
+        Path=/
+      - __cf_bm=zo9uiKtu6mspf4MnETLjGLAdlEcBuwN0KCNfNqNBZBk-1788262966.832176-1.0.1.1-XoIPy4584ORxenf32GA1ak5sT6MjdC5wDcsjcMLmyaL2UASY.OAL6AzI.Rpz.tSbh8vbCyeo1sBxQ8BeVjy.oDwmLUDpkk49h4k5ltrfPAcndJGlc9JSJxHiik.OhILq;
+        HttpOnly; SameSite=None; Secure; Path=/; Domain=pixabay.com; Expires=Tue,
+        01 Sep 2026 12:12:47 GMT
+      Strict-Transport-Security:
+      - max-age=3600; includeSubDomains
+      Transfer-Encoding:
+      - chunked
+      Vary:
+      - Accept-Encoding, Accept, Accept-Language, Cookie
+      X-Content-Type-Options:
+      - nosniff
+      X-Frame-Options:
+      - DENY
+      X-RateLimit-Limit:
+      - '100'
+      X-RateLimit-Remaining:
+      - '99'
+      X-RateLimit-Reset:
+      - '60'
+      alt-svc:
+      - h3=":443"; ma=86400
+      x-skip-sentry:
+      - ''
+    status:
+      code: 200
+      message: OK
+version: 1
