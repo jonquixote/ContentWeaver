@@ -18,6 +18,7 @@ celery_app.conf.update(
     enable_utc=True,
     task_routes={
         'src.tasks.video_tasks.*': {'queue': 'video_generation'},
+        'src.services.footage.ingest.*': {'queue': 'footage'},
     },
     task_annotations={
         '*': {'rate_limit': '10/s'}
@@ -26,6 +27,10 @@ celery_app.conf.update(
 
 # Auto-discover tasks
 celery_app.autodiscover_tasks(['src.tasks'])
+try:
+    celery_app.autodiscover_tasks(['src.services.footage'])
+except Exception:
+    pass  # footage not yet importable (tests run with it absent)
 
 # Explicitly import tasks to ensure they're registered
 import src.tasks.video_tasks
