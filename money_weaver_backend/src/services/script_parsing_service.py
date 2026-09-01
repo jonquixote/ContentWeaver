@@ -135,6 +135,70 @@ class ScriptParsingService:
                 cur['blocks'].append({'type': 'action', 'text': line})
         return scenes
 
+    def parsed_blocks_to_shotspecs(self, scene: dict) -> list["ShotSpec"]:
+        """Turn a parsed scene (its 'blocks') into typed ShotSpec[].
+
+        Keeps camera/action blocks typed instead of flattening: a "camera"
+        block's text is parsed for scale + move; an "action" block supplies the
+        concrete subject. Falls back to deterministic director when blocks are
+        absent. This does NOT change parse_screenplay's contract — it adds a
+        typed view on top.
+        """
+        from src.services.cinema.director_service import deterministic_director, keyword_to_scale
+        from src.services.cinema.shot import ShotSpec
+        from src.services.cinema.types import CameraMove, ShotFunction, ShotScale
+
+        blocks = scene.get("blocks") or []
+        camera_text = ""
+        action_text = ""
+        for b in blocks:
+            if b.get("type") == "camera":
+                camera_text += " " + b.get("text", "")
+            elif b.get("type") == "action":
+                action_text += " " + b.get("text", "")
+        camera_text = camera_text.strip()
+        action_text = action_text.strip()
+
+        if not action_text and not camera_text:
+            # fall back so a scene is never empty
+            return deterministic_director(
+                scene.get("description", ""), scene.get("scene_number") or 1, shot_count_hint=3
+            )
+
+        scale = ShotScale.MS
+        low_cam = camera_text.lower()
+        if "close-up" in low_cam or "close up" in low_cam or "macro" in low_cam:
+            scale = ShotScale.CU
+        elif "wide" in low_cam or "establish" in low_cam or "aerial" in low_cam:
+            scale = ShotScale.ELS
+        else:
+            scale = keyword_to_scale(action_text)
+
+        move = CameraMove.STATIC
+        if "dolly in" in low_cam:
+            move = CameraMove.DOLLY_IN
+        elif "dolly out" in low_cam:
+            move = CameraMove.DOLLY_OUT
+        elif "pan" in low_cam:
+            move = CameraMove.PAN
+        elif "tilt" in low_cam:
+            move = CameraMove.TILT
+        elif "handheld" in low_cam:
+            move = CameraMove.HANDHELD
+
+        return [
+            ShotSpec(
+                scene_number=scene.get("scene_number") or 1,
+                shot_index=0,
+                narrative_beats=action_text,
+                subject_concrete=action_text if action_text else scene.get("description", ""),
+                scale=scale,
+                move=move,
+                function=ShotFunction.CONTEXT,
+                mood="dim",
+            )
+        ]
+
     def _parse_script_fallback(self, script_text: str) -> List[Dict]:
         """
         Fallback parsing method for when the strict pattern doesn't match.
