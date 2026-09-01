@@ -296,11 +296,17 @@ class VideoAssemblyService:
     
     def _distribute_clips_evenly(self, total_duration: float, num_clips: int) -> List[float]:
         """
-        Distribute clip durations evenly with 3-4 second average
+        Distribute clip durations evenly with 3-4 second average.
         """
         if num_clips <= 0:
             return []
-        
+        # Physical limit: 60s / 2.0s min clip = 30 clips. If we hand over many
+        # clips the 2.0s floor makes line 326 go NEGATIVE; the buggy result
+        # collapses to ~40s output. Trim the clip list to what actually fits at
+        # the 2.5s +- floor so the sum stays at total_duration.
+        max_fit = int(total_duration // 2.5)
+        if num_clips > max_fit:
+            num_clips = max_fit
         # Calculate base duration per clip (aim for 3-4 seconds)
         base_duration = total_duration / num_clips
         
