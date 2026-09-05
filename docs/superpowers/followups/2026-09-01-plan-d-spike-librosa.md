@@ -26,3 +26,16 @@
 GO for Tasks 1-5 (all implementable + testable without librosa). Beat-grid
 behavior is fully covered by the degrade-to-empty contract and the
 snap_to_grid unit tests (synthetic grids, no audio needed).
+
+## Follow-ups logged from Plan D review (2026-09-04)
+
+- **Pure-numpy spectral-flux beat tracker**: restore the beat clock without
+  librosa/LLVM. Implement onset-envelope + tempo estimation in numpy
+  (spectral flux on STFT magnitudes, autocorrelation tempo) behind the same
+  `USE_LIBROSA_BEATS` flag path (rename to a backend-agnostic flag when both
+  exist). Acceptance: same ±1-frame beat-grid test against a synthetic click
+  track. This unblocks the Metric-mode beat criterion in this env.
+- **Two-venv reality in env docs**: backend runs Python 3.13 (no torch, no
+  librosa wheels), ML work runs Python 3.12 (`/tmp/cw-test-venv`-style venv
+  with torch 2.2.2 + numpy<2). Record in env docs which venv owns which
+  capability so future spikes don't rediscover it.

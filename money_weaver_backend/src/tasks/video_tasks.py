@@ -10,6 +10,26 @@ from src.services.video.advanced_tts_service import advanced_tts_service
 from src.services.video.assembly_service import assembly_service, generate_thumbnail
 from src.services.script_parsing_service import script_parsing_service
 from src.services.storage import get_storage
+
+
+def _build_timing_plan_if_enabled(scenes, video_files, total_s):
+    """Build a Plan D timing plan when CINEMA_TIMING_ENABLED=true. Returns None
+    (legacy path) when the flag is off or on any failure — never blocks."""
+    import os
+    if os.getenv("CINEMA_TIMING_ENABLED", "false").lower() != "true":
+        return None
+    try:
+        from src.services.cinema.timing_service import build_timing_plan
+        from src.services.video.music_service import pick_music
+        try:
+            music_path = pick_music("general")
+        except Exception:
+            music_path = None
+        return build_timing_plan(scenes, video_files, music_path=music_path,
+                                 total_s=total_s)
+    except Exception as e:
+        print(f"cinema timing plan build failed, using legacy timing: {e}")
+        return None
 from src.services import comfy_client
 import asyncio
 import random
@@ -508,6 +528,9 @@ def generate_assembler_video_task(self, project_id, prompt, duration=30, orienta
                 width=width,
                 height=height,
                 niche=niche,
+                timing_plan=_build_timing_plan_if_enabled(
+                    parsed_script.get('scenes', []), video_data,
+                    duration),
             )
             
             if not final_video_path:

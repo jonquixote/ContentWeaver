@@ -61,8 +61,8 @@ def test_jl_cut_offset_reads_env(monkeypatch):
 
 def test_motion_energy_empty_without_file():
     from src.services.cinema.timing_service import motion_energy_series
-    assert motion_energy_series(None) == []
-    assert motion_energy_series("/nonexistent/x.mp4") == []
+    assert motion_energy_series(None) == ([], 5.0)
+    assert motion_energy_series("/nonexistent/x.mp4") == ([], 5.0)
 
 
 def test_cut_on_action_nudge_moves_to_energy_rise():
@@ -125,3 +125,52 @@ def test_apply_timing_sum_invariant_survives_all_nudges():
         assert (s.out_point_s - s.in_point_s) >= 0.5  # floor holds
     for s in out.shots:
         assert abs(round(s.out_point_s / 0.04) * 0.04 - s.out_point_s) < 0.011
+
+
+def test_apply_timing_phrase_nudge_moves_join():
+    from src.services.cinema.montage_service import TimelinePlan, TimelineShot
+    from src.services.cinema.timing_service import apply_timing
+    plan = TimelinePlan(mode=MontageMode.OVERTONAL, shots=[
+        TimelineShot(clip_id="a", in_point_s=0.0, out_point_s=2.5),
+        TimelineShot(clip_id="b", in_point_s=0.0, out_point_s=2.5),
+    ])
+    out = apply_timing(plan, beats=[], phrases=[2.3])
+    assert out.shots[0].out_point_s < 2.5  # join moved toward the phrase (2.3), then renormalized
+    assert abs(out.total_s - plan.total_s) < 0.05
+
+
+def test_apply_timing_cut_on_action_nudge_applies():
+    from src.services.cinema.montage_service import TimelinePlan, TimelineShot
+    from src.services.cinema.timing_service import apply_timing
+    plan = TimelinePlan(mode=MontageMode.OVERTONAL, shots=[
+        TimelineShot(clip_id="a", in_point_s=0.0, out_point_s=2.5),
+    ])
+    energy = [0.1] * 8 + [0.9] * 8  # rise at index 8 of 5fps series = 1.6s
+    out = apply_timing(plan, beats=[], phrases=[], energies=[(energy, 5.0)])
+    assert out.shots[0].out_point_s != 2.5  # nudged off the pacing end
+    assert abs(out.total_s - plan.total_s) < 0.05  # sum invariant still holds
+
+
+def test_build_timing_plan_from_task_inputs():
+    from src.services.cinema.timing_service import build_timing_plan
+    scenes = [
+        {"scene_number": 1, "visual_description": "a dim comedy club stage",
+         "voiceover": "Welcome to the show. Tonight we laugh.", "start_time": 0,
+         "end_time": 5, "duration": 5},
+        {"scene_number": 2, "visual_description": "close-up of a nervous comedian",
+         "voiceover": "He steps to the mic.", "start_time": 5,
+         "end_time": 10, "duration": 10},
+    ]
+    videos = [("/tmp/a.mp4", 8.0, {}), ("/tmp/b.mp4", 8.0, {})]
+    plan = build_timing_plan(scenes, videos, music_path=None,
+                             total_s=10.0)
+    assert plan is not None
+    assert len(plan.shots) == 6  # deterministic director: 3 shots x 2 scenes
+    assert abs(plan.total_s - 10.0) < 0.1
+
+
+def test_build_timing_plan_empty_inputs_returns_none():
+    from src.services.cinema.timing_service import build_timing_plan
+    assert build_timing_plan([], [], music_path=None, total_s=10.0) is None
+    assert build_timing_plan([], [("/tmp/a.mp4", 8.0, {})], music_path=None,
+                             total_s=10.0) is None

@@ -80,31 +80,33 @@ def jl_cut_offset() -> float:
         return 0.4
 
 
-def motion_energy_series(video_path: str | None) -> list[float]:
-    """Per-frame mean-abs-diff energy from the ACTUAL downloaded file.
-    Pure numpy/PIL path (no cv2 required); [] on any failure. Never raises."""
+def motion_energy_series(video_path: str | None) -> tuple[list[float], float]:
+    """Per-frame mean-abs-diff energy from the ACTUAL downloaded file, plus the
+    sample rate the series was extracted at (5fps) so the rate travels with the
+    data. Pure numpy/PIL path (no cv2 required); ([], 5.0) on any failure.
+    Never raises. Uses a TemporaryDirectory so nothing leaks."""
     if not video_path:
-        return []
+        return [], 5.0
     try:
         import numpy as np
         from PIL import Image
         import subprocess, tempfile, os, glob
-        tmp = tempfile.mkdtemp(prefix="coa-")
-        subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-i", video_path,
-                        "-vf", "fps=5,scale=64:64", os.path.join(tmp, "f%03d.png")],
-                       timeout=60, check=False)
-        frames = sorted(glob.glob(os.path.join(tmp, "*.png")))
-        if len(frames) < 2:
-            return []
-        energy, prev = [], None
-        for f in frames:
-            arr = np.asarray(Image.open(f).convert("L"), dtype=np.float32)
-            if prev is not None:
-                energy.append(float(np.abs(arr - prev).mean() / 255.0))
-            prev = arr
-        return energy
+        with tempfile.TemporaryDirectory(prefix="coa-") as tmp:
+            subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-i", video_path,
+                            "-vf", "fps=5,scale=64:64", os.path.join(tmp, "f%03d.png")],
+                           timeout=60, check=False)
+            frames = sorted(glob.glob(os.path.join(tmp, "*.png")))
+            if len(frames) < 2:
+                return [], 5.0
+            energy, prev = [], None
+            for f in frames:
+                arr = np.asarray(Image.open(f).convert("L"), dtype=np.float32)
+                if prev is not None:
+                    energy.append(float(np.abs(arr - prev).mean() / 255.0))
+                prev = arr
+            return energy, 5.0
     except Exception:
-        return []
+        return [], 5.0
 
 
 def cut_on_action_nudge(planned_cut_s: float, energy: list[float],
@@ -118,7 +120,6 @@ def cut_on_action_nudge(planned_cut_s: float, energy: list[float],
         window = float(os.getenv("CINEMA_CUT_WINDOW_S", str(window_s)))
     except (TypeError, ValueError):
         window = window_s
-    center = int(planned_cut_s * fps)
     lo, hi = max(0, int((planned_cut_s - window) * fps)), min(len(energy), int((planned_cut_s + window) * fps) + 1)
     if hi <= lo:
         return planned_cut_s
@@ -133,10 +134,13 @@ def cut_on_action_nudge(planned_cut_s: float, energy: list[float],
     return planned_cut_s
 
 
-def apply_timing(plan, *, beats: list[float], phrases: list[dict]):
+def apply_timing(plan, *, beats: list[float], phrases: list[float] | None = None,
+                 energies: list[tuple[list[float], float]] | None = None):
     """Snap each shot's out-point: metric mode snaps strictly to the beat grid;
-    other modes attract softly; phrase boundaries nudge scene joins. Empty
-    beats/phrases -> plan unchanged. Never produces empty or negative shots.
+    other modes attract softly; phrase boundaries nudge scene joins (J/L-cut
+    offsets); cut-on-action nudges each cut to a local motion-energy rise.
+    Empty beats/phrases/energies -> those passes are skipped. Never produces
+    empty or negative shots.
 
     Grid-conflict precedence (learned from 070bcad negative durations and
     60ed888 keyframe snap): pacing -> beat snap (strict Metric / soft else) ->
@@ -146,22 +150,37 @@ def apply_timing(plan, *, beats: list[float], phrases: list[dict]):
     misses (the 070bcad failure mode). Quantization keeps every cut on a
     0.04s boundary so the CFR-25 concat never holds or repeats a frame
     (the 60ed888 failure mode).
+
+    `phrases`: boundary times in seconds (from phrase_boundaries). `energies`:
+    per-shot (energy_series, sample_fps) aligned to plan.shots by index.
     """
     from src.services.cinema.montage_service import TimelinePlan, TimelineShot
     from src.services.cinema.types import MontageMode
     strict = plan.mode == MontageMode.METRIC
+    phrases = phrases or []
+    energies = energies or []
+    jl = jl_cut_offset()
     # Quantize the total itself first: every cut including the last then lands
     # on-grid, and the sum equals the (quantized) total exactly.
     total_s = round(round(plan.total_s / 0.04) * 0.04, 3)
-    # pass 1: pacing -> beat snap -> phrase nudge (raw ends, may drift the sum)
+    # pass 1: pacing -> beat snap -> phrase/J-L -> cut-on-action (raw ends drift)
     raws = []
     cursor = 0.0
-    for shot in plan.shots:
+    for i, shot in enumerate(plan.shots):
         dur = max(0.5, shot.out_point_s - shot.in_point_s)
         end = round(cursor + dur, 3)
         if beats:
             end = snap_to_grid(end, beats, strict=strict)
             end = max(cursor + 0.5, end)
+        if phrases:
+            near = min(phrases, key=lambda p: abs(p - end))
+            if abs(near - end) <= jl:
+                end = max(cursor + 0.5, round(near, 3))
+        if i < len(energies):
+            energy, sample_fps = energies[i]
+            if energy:
+                nudged = cut_on_action_nudge(end, energy, fps=sample_fps)
+                end = max(cursor + 0.5, min(end + 0.5, max(end - 0.5, nudged)))
         raws.append((shot, cursor, end))
         cursor = end
     # pass 2: renormalize durations so the sum equals total_s exactly
@@ -186,3 +205,82 @@ def apply_timing(plan, *, beats: list[float], phrases: list[dict]):
                                      out_point_s=round(total_s, 3),
                                      transition=last.transition, function=last.function)
     return out
+
+
+def build_timing_plan(scenes: list[dict], video_files: list[tuple],
+                      music_path: str | None = None,
+                      total_s: float = 60.0):
+    """Build a timed TimelinePlan from task-level inputs. Full chain:
+    director -> ShotSpecs -> montage plan -> beat_grid -> phrase_boundaries ->
+    per-shot motion_energy_series on the downloaded files -> apply_timing.
+    Returns None on any failure (caller falls back to the legacy path).
+    Never raises, never blocks a render."""
+    try:
+        from src.services.cinema.director_service import run_director
+        from src.services.cinema.montage_service import TimelinePlan, TimelineShot
+        from src.services.cinema.montage_service import plan as montage_plan
+        from src.services.cinema.clip import ClipRecord
+        if not scenes or not video_files:
+            return None
+        # 1. director -> ShotSpecs (deterministic unless the director flag is on)
+        specs = []
+        for i, scene in enumerate(scenes):
+            text = f"{scene.get('visual_description', '')} {scene.get('voiceover', '')}".strip()
+            got = run_director(text, scene.get("scene_number", i + 1),
+                               story_context=scene.get("voiceover", ""))
+            specs.extend(got)
+        if not specs:
+            return None
+        # 2. candidates -> ClipRecords (minimal; typed fields neutral)
+        candidates = []
+        for j, item in enumerate(video_files):
+            path = item[0] if len(item) > 0 else ""
+            dur = item[1] if len(item) > 1 else 0.0
+            try:
+                dur = float(dur)
+            except (TypeError, ValueError):
+                dur = 0.0
+            candidates.append(ClipRecord(
+                clip_id=f"local:{j}:{path}", provider="local", source_url=path,
+                duration_s=(dur if dur and dur > 0 else None)))
+        # 3. montage plan with pacing targets, rescaled to the render total
+        plan = montage_plan(specs, candidates)
+        if not plan.shots:
+            return None
+        plan_total = plan.total_s
+        if plan_total > 0 and abs(plan_total - total_s) > 0.01:
+            scale = total_s / plan_total
+            cursor = 0.0
+            rescaled = []
+            for shot in plan.shots:
+                dur = round((shot.out_point_s - shot.in_point_s) * scale, 3)
+                rescaled.append(TimelineShot(clip_id=shot.clip_id,
+                                            in_point_s=round(cursor, 3),
+                                            out_point_s=round(cursor + dur, 3),
+                                            transition=shot.transition,
+                                            function=shot.function))
+                cursor = round(cursor + dur, 3)
+            plan.shots = rescaled
+        # 4. clocks: beats (degrades []), phrases per scene with offsets
+        beats = beat_grid(music_path)
+        phrases: list[float] = []
+        for scene in scenes:
+            base = float(scene.get("start_time", 0) or 0)
+            for b in phrase_boundaries(scene.get("voiceover", "")):
+                phrases.append(round(base + b, 3))
+        # 5. per-shot motion energy from the downloaded files, aligned by index
+        energies: list[tuple[list[float], float]] = []
+        for shot in plan.shots:
+            match = next((c for c in candidates if c.clip_id == shot.clip_id), None)
+            if match and match.source_url and not match.source_url.startswith("http"):
+                import os as _os
+                if _os.path.exists(match.source_url):
+                    energies.append(motion_energy_series(match.source_url))
+                else:
+                    energies.append(([], 5.0))
+            else:
+                energies.append(([], 5.0))
+        # 6. apply the three clocks
+        return apply_timing(plan, beats=beats, phrases=phrases, energies=energies)
+    except Exception:
+        return None
