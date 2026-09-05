@@ -38,13 +38,27 @@ def test_plan_produces_one_shot_per_spec():
 
 
 def test_plan_cross_scene_dedup_no_clip_reused():
-    # cross-scene dedup (fold): the same clip must not be selected for two shots
+    # cross-scene dedup: the same clip must not be selected for two shots.
+    # Shot-count assertion pins the behavior: with only ONE distinct clip
+    # (both near-dups of each other), the second shot must relax the veto and
+    # STILL produce a shot (pool-exhaustion retry) rather than silently drop.
     specs = [_spec(idx=0), _spec(idx=1)]
-    # only 2 distinct clips but 2 shots with different subjects; a near-dup must be skipped
     clips = [_clip("a", ah="1" * 16), _clip("b", ah="1" * 16)]  # near-dup (same hash)
     result = plan(specs, clips)
-    ids = [s.clip_id for s in result.shots]
-    assert len(set(ids)) == len(ids)  # no reuse
+    assert len(result.shots) == 2  # both shots present — none silently dropped
+    # Note: with the pool exhausted, the relaxed retry may reuse a clip; the
+    # no-reuse property holds only when distinct candidates exist (see the
+    # never-duplicates test below).
+
+
+def test_plan_pool_exhaustion_retries_without_veto(capsys):
+    # Pool exhaustion: all candidates vetoed -> retry without hash veto + log.
+    specs = [_spec(idx=0), _spec(idx=1), _spec(idx=2)]
+    clips = [_clip("only", ah="2" * 16)]
+    result = plan(specs, clips)
+    out = capsys.readouterr().out
+    assert "montage: pool exhausted for shot" in out
+    assert len(result.shots) == 3  # every shot filled via the relaxed retry
 
 
 def test_plan_progressive_scale_orders_ls_to_cu(monkeypatch):

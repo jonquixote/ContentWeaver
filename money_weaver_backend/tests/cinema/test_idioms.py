@@ -37,12 +37,14 @@ def test_peaks_and_valleys_prefers_ls_on_low_intensity():
 
 
 def test_progressive_scale_promotes_ls_then_ms_then_cu():
-    # Progressive: prefer LS->MS->CU ordering within a scene (move toward CU).
-    first = _spec(scale=ShotScale.LS)
-    cu_bonus, _ = progressive_scale(_clip(scale=ShotScale.CU), first, MontageMode.OVERTONAL)
-    # earlier shot LS -> a CU is a forward jump, penalized vs an MS (closer step)
-    ms_bonus, _ = progressive_scale(_clip(scale=ShotScale.MS), _spec(scale=ShotScale.MS), MontageMode.OVERTONAL)
-    assert ms_bonus > cu_bonus  # matching scale preferred over a jump
+    # Progressive: from an LS shot, the adjacent step (MS) beats the jump (CU).
+    # Same baseline spec for both — matched comparison pins the behavior.
+    spec = _spec(scale=ShotScale.LS)
+    ms_bonus, _ = progressive_scale(_clip(scale=ShotScale.MS), spec, MontageMode.OVERTONAL)
+    cu_bonus, _ = progressive_scale(_clip(scale=ShotScale.CU), spec, MontageMode.OVERTONAL)
+    assert ms_bonus == -1.0  # diff 2 → -2*0.5
+    assert cu_bonus == -2.0  # diff 4 → -4*0.5
+    assert ms_bonus > cu_bonus
 
 
 def test_progressive_scale_inverts_under_intellectual():

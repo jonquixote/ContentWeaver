@@ -3,7 +3,7 @@ from __future__ import annotations
 from src.services.cinema.clip import ClipRecord
 from src.services.cinema.scorer import dedup_reject
 from src.services.cinema.shot import ShotSpec
-from src.services.cinema.types import CameraMove, MontageMode, ShotScale
+from src.services.cinema.types import CameraMove, MontageMode, ShotFunction, ShotScale
 
 
 def peaks_and_valleys(clip: ClipRecord, spec: ShotSpec) -> tuple[float, bool]:
@@ -19,13 +19,9 @@ def peaks_and_valleys(clip: ClipRecord, spec: ShotSpec) -> tuple[float, bool]:
     return -0.5, True  # far off the ideal
 
 
-def _shot_scale_index(s: ShotScale | None) -> int:
+def shot_scale_index(s: ShotScale | None) -> int:
     order = {"ecu": 0, "cu": 1, "mcu": 2, "ms": 3, "mls": 4, "ls": 5, "els": 6, "abstract": 7}
     return order.get(s.value if s else "ms", 3)
-
-
-def shot_scale_index(s: ShotScale) -> int:
-    return _shot_scale_index(s)
 
 
 def progressive_scale(clip: ClipRecord, spec: ShotSpec, mode: MontageMode) -> tuple[float, bool]:
@@ -68,7 +64,7 @@ def cut_on_action(_clip: ClipRecord, _spec: ShotSpec) -> tuple[float, bool]:
 def hold_reaction(clip: ClipRecord, spec: ShotSpec) -> tuple[float, bool]:
     """After a PAYOFF beat, hold 0.5-1.0s before the next cut. Rewarded at the
     payoff shot itself. Returns (bonus, applied)."""
-    if spec.function.value == "payoff":
+    if spec.function is ShotFunction.PAYOFF:
         return 1.0, True
     return 0.0, False
 
@@ -86,6 +82,6 @@ def establish_first(spec: ShotSpec, shot_index: int) -> tuple[float, bool]:
     or a cold-open. Rewarded only at the first shot of a scene."""
     if shot_index != 0:
         return 0.0, False
-    if spec.function.value == "establish" and spec.scale in (ShotScale.LS, ShotScale.ELS):
+    if spec.function is ShotFunction.ESTABLISH and spec.scale in (ShotScale.LS, ShotScale.ELS):
         return 1.0, True
     return -0.5, True
