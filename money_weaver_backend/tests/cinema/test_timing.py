@@ -57,3 +57,24 @@ def test_jl_cut_offset_reads_env(monkeypatch):
     assert jl_cut_offset() == 0.7
     monkeypatch.delenv("CINEMA_JL_CUT_S", raising=False)
     assert jl_cut_offset() == 0.4
+
+
+def test_motion_energy_empty_without_file():
+    from src.services.cinema.timing_service import motion_energy_series
+    assert motion_energy_series(None) == []
+    assert motion_energy_series("/nonexistent/x.mp4") == []
+
+
+def test_cut_on_action_nudge_moves_to_energy_rise():
+    from src.services.cinema.timing_service import cut_on_action_nudge
+    # energy rises at index 12 of a 25fps series -> nudge lands near 0.48s
+    energy = [0.1] * 10 + [0.9] * 10 + [0.2] * 10
+    nudged = cut_on_action_nudge(0.3, energy, fps=25.0, window_s=0.5)
+    assert nudged == 0.4  # rise onset at index 10
+    assert nudged != 0.3  # actually moved toward the rise
+
+
+def test_cut_on_action_nudge_never_moves_far():
+    from src.services.cinema.timing_service import cut_on_action_nudge
+    energy = [0.5] * 30
+    assert cut_on_action_nudge(1.0, energy) == 1.0  # flat -> stays

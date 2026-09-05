@@ -55,10 +55,13 @@ def screen_direction_continuity(clip: ClipRecord, prev: ClipRecord | None) -> tu
     return (1.0, True) if same else (-0.6, True)
 
 
-def cut_on_action(_clip: ClipRecord, _spec: ShotSpec) -> tuple[float, bool]:
-    """Cut lands where motion_energy is rising, never mid-peak (Plan D refines
-    timing; here the soft signal is neutral). Returns (0, False)."""
-    return 0.0, False
+def cut_on_action(_clip: ClipRecord, _spec: ShotSpec, energy: list[float] | None = None, fps: float = 25.0) -> tuple[float, bool]:
+    """Cut lands where motion_energy is rising, never mid-peak. Without an
+    energy series (no timing data) it stays neutral (0, False) as before."""
+    if not energy:
+        return 0.0, False
+    rising = sum(1 for a, b in zip(energy, energy[1:]) if b > a) / max(1, len(energy) - 1)
+    return (1.0 if rising > 0.55 else -0.3), True
 
 
 def hold_reaction(clip: ClipRecord, spec: ShotSpec) -> tuple[float, bool]:

@@ -78,3 +78,56 @@ def jl_cut_offset() -> float:
         return float(os.getenv("CINEMA_JL_CUT_S", "0.4"))
     except (TypeError, ValueError):
         return 0.4
+
+
+def motion_energy_series(video_path: str | None) -> list[float]:
+    """Per-frame mean-abs-diff energy from the ACTUAL downloaded file.
+    Pure numpy/PIL path (no cv2 required); [] on any failure. Never raises."""
+    if not video_path:
+        return []
+    try:
+        import numpy as np
+        from PIL import Image
+        import subprocess, tempfile, os, glob
+        tmp = tempfile.mkdtemp(prefix="coa-")
+        subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-i", video_path,
+                        "-vf", "fps=5,scale=64:64", os.path.join(tmp, "f%03d.png")],
+                       timeout=60, check=False)
+        frames = sorted(glob.glob(os.path.join(tmp, "*.png")))
+        if len(frames) < 2:
+            return []
+        energy, prev = [], None
+        for f in frames:
+            arr = np.asarray(Image.open(f).convert("L"), dtype=np.float32)
+            if prev is not None:
+                energy.append(float(np.abs(arr - prev).mean() / 255.0))
+            prev = arr
+        return energy
+    except Exception:
+        return []
+
+
+def cut_on_action_nudge(planned_cut_s: float, energy: list[float],
+                        fps: float = 25.0, window_s: float = 0.5) -> float:
+    """Within +/-window_s of the planned cut, nudge to the local motion-energy
+    rise; avoid gesture peaks (take the rise onset, not the max). Flat energy
+    -> planned cut unchanged. Never moves more than window_s."""
+    if not energy:
+        return planned_cut_s
+    try:
+        window = float(os.getenv("CINEMA_CUT_WINDOW_S", str(window_s)))
+    except (TypeError, ValueError):
+        window = window_s
+    center = int(planned_cut_s * fps)
+    lo, hi = max(0, int((planned_cut_s - window) * fps)), min(len(energy), int((planned_cut_s + window) * fps) + 1)
+    if hi <= lo:
+        return planned_cut_s
+    seg = energy[lo:hi]
+    if max(seg) - min(seg) < 0.05:
+        return planned_cut_s  # flat
+    # rise onset: first index where energy exceeds midpoint between min and 80% max
+    thresh = min(seg) + 0.8 * (max(seg) - min(seg))
+    for k, v in enumerate(seg):
+        if v >= thresh:
+            return round((lo + k) / fps, 3)
+    return planned_cut_s
