@@ -383,7 +383,8 @@ total_duration: int = 30,
                        orientation: str = "landscape",
                        width: int = 1920,
                        height: int = 1080,
-                       niche: Dict = None) -> Optional[str]:
+                       niche: Dict = None,
+                       timing_plan=None) -> Optional[str]:
         """
         Assemble video clips with audio using FFmpeg, cutting clips to match scene timings
         
@@ -426,7 +427,17 @@ total_duration: int = 30,
             # Calculate optimal clip durations (3-6 seconds average)
             # Match the number of clips to the number of available videos
             num_clips = len(normalized_video_files)
-            clip_durations = self._distribute_clips_evenly(total_duration, num_clips)
+            use_timing = (
+                os.getenv("CINEMA_TIMING_ENABLED", "false").lower() == "true"
+                and timing_plan is not None
+                and len(getattr(timing_plan, "shots", [])) == num_clips
+            )
+            if use_timing:
+                # Plan D: three-clock in/out points replace the flat 3-7s heuristic.
+                clip_durations = [round(s.out_point_s - s.in_point_s, 3)
+                                  for s in timing_plan.shots]
+            else:
+                clip_durations = self._distribute_clips_evenly(total_duration, num_clips)
             
             # Ensure we don't try to process more videos than we have durations for
             if len(normalized_video_files) > len(clip_durations):

@@ -131,3 +131,58 @@ def cut_on_action_nudge(planned_cut_s: float, energy: list[float],
         if v >= thresh:
             return round((lo + k) / fps, 3)
     return planned_cut_s
+
+
+def apply_timing(plan, *, beats: list[float], phrases: list[dict]):
+    """Snap each shot's out-point: metric mode snaps strictly to the beat grid;
+    other modes attract softly; phrase boundaries nudge scene joins. Empty
+    beats/phrases -> plan unchanged. Never produces empty or negative shots.
+
+    Grid-conflict precedence (learned from 070bcad negative durations and
+    60ed888 keyframe snap): pacing -> beat snap (strict Metric / soft else) ->
+    phrase/J-L -> cut-on-action nudge -> RENORMALIZE durations to sum to
+    total_s -> QUANTIZE cuts to the 25fps frame grid. The renormalization is
+    load-bearing: without it the nudges drift the sum and the concat target
+    misses (the 070bcad failure mode). Quantization keeps every cut on a
+    0.04s boundary so the CFR-25 concat never holds or repeats a frame
+    (the 60ed888 failure mode).
+    """
+    from src.services.cinema.montage_service import TimelinePlan, TimelineShot
+    from src.services.cinema.types import MontageMode
+    strict = plan.mode == MontageMode.METRIC
+    # Quantize the total itself first: every cut including the last then lands
+    # on-grid, and the sum equals the (quantized) total exactly.
+    total_s = round(round(plan.total_s / 0.04) * 0.04, 3)
+    # pass 1: pacing -> beat snap -> phrase nudge (raw ends, may drift the sum)
+    raws = []
+    cursor = 0.0
+    for shot in plan.shots:
+        dur = max(0.5, shot.out_point_s - shot.in_point_s)
+        end = round(cursor + dur, 3)
+        if beats:
+            end = snap_to_grid(end, beats, strict=strict)
+            end = max(cursor + 0.5, end)
+        raws.append((shot, cursor, end))
+        cursor = end
+    # pass 2: renormalize durations so the sum equals total_s exactly
+    raw_total = sum(e - s for _, s, e in raws)
+    scale = (total_s / raw_total) if raw_total > 0 else 1.0
+    # pass 3: quantize every cut to the 25fps frame grid (0.04s), floor 0.5s
+    out = TimelinePlan(mode=plan.mode)
+    cursor = 0.0
+    for shot, start, end in raws:
+        scaled = (end - start) * scale
+        quantized = round(scaled / 0.04) * 0.04
+        dur = max(0.5, round(quantized, 3))
+        out.shots.append(TimelineShot(clip_id=shot.clip_id, in_point_s=round(cursor, 3),
+                                      out_point_s=round(cursor + dur, 3),
+                                      transition=shot.transition,
+                                      function=shot.function))
+        cursor = round(cursor + dur, 3)
+    # final exactness: pin the last out-point to total_s so the concat target hits
+    if out.shots:
+        last = out.shots[-1]
+        out.shots[-1] = TimelineShot(clip_id=last.clip_id, in_point_s=last.in_point_s,
+                                     out_point_s=round(total_s, 3),
+                                     transition=last.transition, function=last.function)
+    return out

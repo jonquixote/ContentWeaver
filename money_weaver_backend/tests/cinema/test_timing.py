@@ -78,3 +78,50 @@ def test_cut_on_action_nudge_never_moves_far():
     from src.services.cinema.timing_service import cut_on_action_nudge
     energy = [0.5] * 30
     assert cut_on_action_nudge(1.0, energy) == 1.0  # flat -> stays
+
+
+def test_apply_timing_snaps_to_beats_in_metric():
+    from src.services.cinema.montage_service import TimelinePlan, TimelineShot
+    from src.services.cinema.timing_service import apply_timing
+    p = TimelinePlan(mode=MontageMode.METRIC, shots=[
+        TimelineShot(clip_id="a", in_point_s=0.0, out_point_s=2.5),
+        TimelineShot(clip_id="b", in_point_s=0.0, out_point_s=2.5),
+    ])
+    out = apply_timing(p, beats=[0.0, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0, 4.5, 5.0], phrases=[])
+    for s in out.shots:
+        assert s.out_point_s - s.in_point_s > 0
+
+
+def test_apply_timing_empty_beats_keeps_plan():
+    from src.services.cinema.montage_service import TimelinePlan, TimelineShot
+    from src.services.cinema.timing_service import apply_timing
+    p = TimelinePlan(mode=MontageMode.METRIC, shots=[
+        TimelineShot(clip_id="a", in_point_s=0.0, out_point_s=2.5),
+        TimelineShot(clip_id="b", in_point_s=0.0, out_point_s=2.5),
+    ])
+    out = apply_timing(p, beats=[], phrases=[])
+    assert [s.clip_id for s in out.shots] == ["a", "b"]
+
+
+def test_apply_timing_never_empty_or_negative():
+    from src.services.cinema.montage_service import TimelinePlan
+    from src.services.cinema.timing_service import apply_timing
+    out = apply_timing(TimelinePlan(), beats=[0.5], phrases=[])
+    assert out.shots == []
+
+
+def test_apply_timing_sum_invariant_survives_all_nudges():
+    from src.services.cinema.montage_service import TimelinePlan, TimelineShot
+    from src.services.cinema.timing_service import apply_timing
+    plan = TimelinePlan(mode=MontageMode.OVERTONAL, shots=[
+        TimelineShot(clip_id="a", in_point_s=0.0, out_point_s=2.5),
+        TimelineShot(clip_id="b", in_point_s=0.0, out_point_s=2.5),
+        TimelineShot(clip_id="c", in_point_s=0.0, out_point_s=2.5),
+    ])
+    beats = [0.0, 0.37, 0.91, 1.44, 2.02, 2.77, 3.31, 4.05, 4.66, 5.2, 5.83, 6.4, 7.0, 7.5]
+    out = apply_timing(plan, beats=beats, phrases=[])
+    assert abs(out.total_s - plan.total_s) < 0.05  # renormalized exactness
+    for s in out.shots:
+        assert (s.out_point_s - s.in_point_s) >= 0.5  # floor holds
+    for s in out.shots:
+        assert abs(round(s.out_point_s / 0.04) * 0.04 - s.out_point_s) < 0.011
