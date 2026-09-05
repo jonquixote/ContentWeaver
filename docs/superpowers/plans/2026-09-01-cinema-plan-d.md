@@ -485,6 +485,25 @@ def test_apply_timing_empty_beats_keeps_plan():
 def test_apply_timing_never_empty_or_negative():
     out = apply_timing(TimelinePlan(), beats=[0.5], phrases=[])
     assert out.shots == []
+
+
+def test_apply_timing_sum_invariant_survives_all_nudges():
+    # Grid-conflict precedence stress: off-grid beats + renormalization +
+    # quantization must still sum to total_s exactly (the 070bcad failure mode).
+    from src.services.cinema.montage_service import TimelinePlan, TimelineShot
+    plan = TimelinePlan(mode=MontageMode.OVERTONAL, shots=[
+        TimelineShot(clip_id="a", in_point_s=0.0, out_point_s=2.5),
+        TimelineShot(clip_id="b", in_point_s=0.0, out_point_s=2.5),
+        TimelineShot(clip_id="c", in_point_s=0.0, out_point_s=2.5),
+    ])
+    beats = [0.0, 0.37, 0.91, 1.44, 2.02, 2.77, 3.31, 4.05, 4.66, 5.2, 5.83, 6.4, 7.0, 7.5]
+    out = apply_timing(plan, beats=beats, phrases=[])
+    assert abs(out.total_s - plan.total_s) < 0.05  # renormalized exactness
+    for s in out.shots:
+        assert (s.out_point_s - s.in_point_s) >= 0.5  # floor holds
+    # every cut sits on the 25fps frame grid (the 60ed888 failure mode)
+    for s in out.shots:
+        assert abs(round(s.out_point_s / 0.04) * 0.04 - s.out_point_s) < 0.011
 ```
 
 - [ ] **Step 2: Run test to verify it fails**
@@ -498,21 +517,52 @@ Expected: FAIL with `ImportError: cannot import name 'apply_timing'`
 def apply_timing(plan: TimelinePlan, *, beats: list[float], phrases: list[dict]) -> TimelinePlan:
     """Snap each shot's out-point: metric mode snaps strictly to the beat grid;
     other modes attract softly; phrase boundaries nudge scene joins. Empty
-    beats/phrases -> plan unchanged. Never produces empty or negative shots."""
+    beats/phrases -> plan unchanged. Never produces empty or negative shots.
+
+    Grid-conflict precedence (learned from 070bcad negative durations and
+    60ed888 keyframe snap): pacing -> beat snap (strict Metric / soft else) ->
+    phrase/J-L -> cut-on-action nudge -> RENORMALIZE durations to sum to
+    total_s -> QUANTIZE cuts to the 25fps frame grid. The renormalization is
+    load-bearing: without it the nudges drift the sum and the concat target
+    misses (the 070bcad failure mode). Quantization keeps every cut on a
+    0.04s boundary so the CFR-25 concat never holds or repeats a frame
+    (the 60ed888 failure mode).
+    """
     from src.services.cinema.types import MontageMode
     strict = plan.mode == MontageMode.METRIC
+    total_s = plan.total_s
     out = TimelinePlan(mode=plan.mode)
     cursor = 0.0
+    raws = []
     for shot in plan.shots:
         dur = max(0.5, shot.out_point_s - shot.in_point_s)
         end = round(cursor + dur, 3)
         if beats:
             end = snap_to_grid(end, beats, strict=strict)
             end = max(cursor + 0.5, end)
-        out.shots.append(TimelineShot(clip_id=shot.clip_id, in_point_s=round(cursor, 3),
-                                      out_point_s=end, transition=shot.transition,
-                                      function=shot.function))
+        raws.append((shot, cursor, end))
         cursor = end
+    # pass 2: renormalize durations so the sum equals total_s exactly
+    raw_total = sum(e - s for _, s, e in raws)
+    scale = (total_s / raw_total) if raw_total > 0 else 1.0
+    # pass 3: quantize every cut to the 25fps frame grid (0.04s), floor 0.5s
+    out = TimelinePlan(mode=plan.mode)
+    cursor = 0.0
+    for shot, start, end in raws:
+        scaled = (end - start) * scale
+        quantized = round(scaled / 0.04) * 0.04
+        dur = max(0.5, round(quantized, 3))
+        out.shots.append(TimelineShot(clip_id=shot.clip_id, in_point_s=round(cursor, 3),
+                                      out_point_s=round(cursor + dur, 3),
+                                      transition=shot.transition,
+                                      function=shot.function))
+        cursor = round(cursor + dur, 3)
+    # final exactness: pin the last out-point to total_s so the concat target hits
+    if out.shots:
+        last = out.shots[-1]
+        out.shots[-1] = TimelineShot(clip_id=last.clip_id, in_point_s=last.in_point_s,
+                                     out_point_s=round(total_s, 3),
+                                     transition=last.transition, function=last.function)
     return out
 ```
 
@@ -568,6 +618,19 @@ git commit -m "feat(cinema): apply_timing + flag-gated assembly edit (legacy byt
 ```
 
 ---
+
+## Acceptance Ritual (same-script render, timing on vs off)
+
+After all tasks pass and the full suite is green:
+
+1. Render the project-1 script twice with the worker: once with
+   `CINEMA_TIMING_ENABLED=false` (legacy flat heuristic), once with
+   `CINEMA_TIMING_ENABLED=true` (three-clock plan). Same script, same niche.
+2. Pass criteria: in Metric mode, cuts land within ±1 frame of the beat grid;
+   otherwise ≥85% of cuts sit on narration phrase boundaries. Compare cut
+   timestamps (ffprobe frame PTS) between the two renders.
+3. Save artifacts for review: both videos, per-shot in/out tables, beat grid
+   used, phrase boundaries used. No render ships without the artifact set.
 
 ## Self-Review
 
