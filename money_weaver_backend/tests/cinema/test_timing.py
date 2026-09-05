@@ -1,4 +1,5 @@
-from src.services.cinema.timing_service import pacing_curve
+import numpy as np
+from src.services.cinema.timing_service import beat_grid, pacing_curve, snap_to_grid
 from src.services.cinema.types import MontageMode
 
 
@@ -16,3 +17,21 @@ def test_pacing_curve_accelerates_into_final_act():
 def test_pacing_curve_metric_mode_strict_cells():
     durs = pacing_curve(8, 32.0, MontageMode.METRIC)
     assert len(set(round(d, 3) for d in durs)) == 1  # identical cells
+
+
+def test_beat_grid_empty_without_librosa_or_track(monkeypatch):
+    monkeypatch.setenv("USE_LIBROSA_BEATS", "false")
+    assert beat_grid(None) == []
+    assert beat_grid("/nonexistent/track.mp3") == []
+
+
+def test_snap_to_grid_strict_metric():
+    grid = [0.0, 0.5, 1.0, 1.5, 2.0]
+    assert snap_to_grid(0.53, grid, strict=True) == 0.5
+    assert snap_to_grid(0.9, grid, strict=True) == 1.0
+
+
+def test_snap_to_grid_soft_attraction():
+    grid = [0.0, 0.5, 1.0]
+    assert snap_to_grid(0.4, grid, strict=False) == 0.4  # stays (soft)
+    assert snap_to_grid(0.49, grid, strict=False) == 0.5  # snaps when close
