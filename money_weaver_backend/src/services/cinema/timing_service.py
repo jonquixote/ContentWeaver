@@ -46,3 +46,35 @@ def snap_to_grid(t: float, grid: list[float], strict: bool) -> float:
     if strict:
         return nearest
     return nearest if abs(nearest - t) < 0.05 else t
+
+
+def phrase_boundaries(voiceover: str,
+                      word_timestamps: list[tuple[str, float, float]] | None = None) -> list[float]:
+    """Cut at narration phrase boundaries. Prefers Kokoro word timestamps
+    (gap > 0.3s marks a boundary); falls back to deterministic sentence splits
+    estimated at ~0.35s/word. Never raises."""
+    import re
+    try:
+        if word_timestamps:
+            bounds = []
+            for i in range(1, len(word_timestamps)):
+                if word_timestamps[i][1] - word_timestamps[i - 1][2] > 0.3:
+                    bounds.append(round(word_timestamps[i][1], 3))
+            if bounds:
+                return bounds
+        bounds, t = [], 0.0
+        for sent in re.split(r"[.!?]+", voiceover or ""):
+            words = len(sent.split())
+            if words:
+                t += words * 0.35
+                bounds.append(round(t, 3))
+        return bounds
+    except Exception:
+        return []
+
+
+def jl_cut_offset() -> float:
+    try:
+        return float(os.getenv("CINEMA_JL_CUT_S", "0.4"))
+    except (TypeError, ValueError):
+        return 0.4
