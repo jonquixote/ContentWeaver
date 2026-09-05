@@ -90,6 +90,7 @@ def score(
     mode: MontageMode,
     prev: ClipRecord | None,
     chosen: list[ClipRecord],
+    relax_dedup: bool = False,
 ) -> float:
     cfg = get_mode_config(mode)
     total = (
@@ -98,7 +99,7 @@ def score(
         + cfg.w3 * neighbor_term(clip, prev, mode)
         + cfg.w4 * quality(clip)
     )
-    if dedup_reject(clip, chosen):
+    if not relax_dedup and dedup_reject(clip, chosen):
         total -= 10.0  # strong penalty; MMR also drops these
     if clip.used_in_video_ids:
         total -= cfg.w6 * len(clip.used_in_video_ids)
@@ -112,12 +113,16 @@ def rank_candidates(
     mode: MontageMode = MontageMode.OVERTONAL,
     prev: ClipRecord | None = None,
     chosen: list[ClipRecord] | None = None,
+    relax_dedup: bool = False,
 ) -> list[ClipRecord]:
     """MMR-style ranking: pick highest-scoring, penalize proximity to chosen.
 
     `chosen` = clips already selected for EARLIER shots (cross-shot context).
     Dedup and MMR diversity evaluate against `picked + chosen`, so a near-dup
     of any previously-selected clip is excluded from this shot's ranking.
+
+    `relax_dedup=True` skips the hash veto (used by the planner's pool-
+    exhaustion retry so a shot is never silently dropped).
     """
     prior = chosen if chosen is not None else []
     remaining = list(clips)
@@ -127,9 +132,9 @@ def rank_candidates(
         best_c = float("-inf")
         selected_so_far = picked + prior
         for c in remaining:
-            if dedup_reject(c, selected_so_far):
+            if not relax_dedup and dedup_reject(c, selected_so_far):
                 continue
-            s = score(c, spec, mode=mode, prev=prev, chosen=selected_so_far)
+            s = score(c, spec, mode=mode, prev=prev, chosen=selected_so_far, relax_dedup=relax_dedup)
             # MMR diversity: subtract similarity to already-selected (hash proximity)
             for pc in selected_so_far:
                 if c.average_hash and pc.average_hash:

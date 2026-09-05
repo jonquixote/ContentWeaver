@@ -22,6 +22,7 @@ def vcr_record(monkeypatch):
         cassette_library_dir=CASSETTE_DIR,
         record_mode="once",
         filter_headers=["authorization", "key"],
+        filter_query_parameters=["key"],
         match_on=["method", "path", "query"],
     )
 
