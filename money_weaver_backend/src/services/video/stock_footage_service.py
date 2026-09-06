@@ -9,6 +9,65 @@ import re
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 from services.script_parsing_service import script_parsing_service
 
+
+def _serve_enabled() -> bool:
+    import os
+    return os.getenv("FOOTAGE_SERVE_ENABLED", "false").lower() == "true"
+
+
+def _index_clips_for_scene(query_text: str, limit: int = 4) -> list[tuple]:
+    """Index-first serve for one scene query. Returns [(local_path_or_url,
+    duration, metadata)] from the footage index. [] when the index is thin
+    (caller runs the live-provider fallback). Never raises.
+
+    SWAP CONTRACT: these hits are CANDIDATES, not selections. The caller feeds
+    them through rerank_with_cinema + chosen accumulation exactly like live
+    candidates — the swap changes sourcing, not judging. The index path must
+    not bypass the cinema layer."""
+    try:
+        from src.services.footage.acquire import ensure_master
+        from src.services.footage.retrieval import route_search
+        from src.services.footage.sources.base import CandidateVideo
+        hits, fell_back = route_search(query_text, limit=limit)
+        if fell_back or not hits:
+            return []
+        out = []
+        for h in hits:
+            c = CandidateVideo(
+                source=h.get("source", ""), source_id=h.get("source_id", ""),
+                title=h.get("title", ""), description=h.get("description"),
+                tags=[], subjects=[], creator=None, published_at=None,
+                duration_s=h.get("duration_s"), width=h.get("width"),
+                height=h.get("height"), download_url=h.get("download_url", ""),
+                page_url=h.get("page_url", ""),
+                license_spdx=h.get("license_spdx"),
+                license_raw=h.get("license_spdx"),
+                attribution_text=h.get("attribution_text"),
+                extras={"attribution_required": h.get("attribution_required", False)})
+            local, true_duration = ensure_master(c)
+            path = local or c.download_url  # master if stored, else hot-link URL
+            if not path:
+                continue
+            # No fabricated durations: probed-true, else candidate's, else None
+            # (genuinely unknown) with an explicit estimated flag downstream.
+            duration = true_duration
+            estimated = False
+            if duration is None:
+                duration = 5.0  # genuinely unknown: default fires ONLY here
+                estimated = True
+            out.append((path, duration, {
+                "source": c.source, "clip_id": h.get("id"),
+                "attribution_required": c.extras.get("attribution_required", False),
+                "attribution_text": c.attribution_text,
+                "from_index": True,
+                "duration_estimated": estimated,
+            }))
+        return out
+    except Exception as e:
+        print(f"cinema index serve failed, falling back live: {e}")
+        return []
+
+
 class StockFootageService:
     def __init__(self):
         self.pexels_api_key = os.getenv('PEXELS_API_KEY')
@@ -157,7 +216,7 @@ class StockFootageService:
         fallback when the provider id is absent. sha1 (not salted hash()) so
         the id is identical across processes/re-renders."""
         import hashlib
-        source = "pexels" if v.get("source") == "pexels" else "pixabay"
+        source = v.get("source") or "pixabay"
         cid = v.get("id") or v.get("pexels_id") or v.get("pixabay_id")
         if cid is not None:
             return f"{source}:{cid}"
@@ -208,11 +267,11 @@ class StockFootageService:
         """Turn provider result dicts into typed ClipRecords (Plan A: no
         embedding, but average_hash populated from preview thumbnails so
         dedup/MMR are live)."""
-        from src.services.cinema.clip import ClipRecord
+        from src.services.cinema.clip import ClipRecord as _CR
 
         recs = []
         for v in all_videos:
-            source = "pexels" if v.get("source") == "pexels" else "pixabay"
+            source = v.get("source") or ("pexels" if v.get("source") == "pexels" else "pixabay")
             label = self._candidate_text_label(v) or v.get("alt") or v.get("description") or ""
             duration = v.get("duration") or v.get("pexels_duration") or v.get("pixabay_duration") or 0.0
             try:
@@ -221,18 +280,32 @@ class StockFootageService:
                 duration = 0.0
             clip_id = self._clip_id(v)
             preview = self._preview_url(v)
-            recs.append(
-                ClipRecord(
+            try:
+                rec = _CR(
                     clip_id=clip_id,
                     provider=source,
                     source_url=preview or v.get("url") or v.get("link") or "",
-                    duration_s=float(duration) if duration > 0 else 5.0,
+                    duration_s=float(duration) if duration > 0 else None,
                     width=v.get("width"),
                     height=v.get("height"),
                     caption=label,
                     average_hash=self._preview_hash(clip_id, preview),
                 )
-            )
+            except Exception:
+                # Unknown source outside the Provider literal: fall back to
+                # "local" rather than dropping the candidate (judging intact,
+                # provider-rotation penalty neutral).
+                rec = _CR(
+                    clip_id=clip_id,
+                    provider="local",
+                    source_url=preview or v.get("url") or v.get("link") or "",
+                    duration_s=float(duration) if duration > 0 else None,
+                    width=v.get("width"),
+                    height=v.get("height"),
+                    caption=label,
+                    average_hash=self._preview_hash(clip_id, preview),
+                )
+            recs.append(rec)
         return recs
 
     def rerank_with_cinema(self, videos: list[dict], spec: "ShotSpec | None", prev: "ClipRecord | None" = None, chosen: list["ClipRecord"] | None = None) -> list[dict]:
@@ -851,6 +924,34 @@ class StockFootageService:
                 
                 all_videos.extend(scene_videos)
             
+            # Index-first serve seam (Phase 2): when FOOTAGE_SERVE_ENABLED=true,
+            # prepend index candidates for the scene's first query. They are
+            # adapted to provider-dict shape so the SAME rerank + download +
+            # chosen code below consumes them identically to live candidates
+            # (swap changes sourcing, not judging — never bypasses cinema).
+            if _serve_enabled():
+                try:
+                    first_query = (search_queries or [""])[0]
+                    for _path, _dur, _meta in _index_clips_for_scene(first_query, limit=4):
+                        all_videos.append({
+                            'source': _meta.get('source', ''),
+                            'id': _meta.get('clip_id', ''),
+                            'alt': _meta.get('clip_id', ''),
+                            'description': _meta.get('clip_id', ''),
+                            'duration': _dur,
+                            'url': _path,
+                            '_index_path': _path,
+                            '_index_meta': _meta,
+                            '_scene_context': {
+                                'query': first_query,
+                                'scene_index': i,
+                                'scene_description': shot_desc
+                            }
+                        })
+                    print(f"Index serve: merged index candidates for scene {i+1}")
+                except Exception as e:
+                    print(f"cinema index serve failed, falling back live: {e}")
+            
             # Rerank candidates: drop off-theme clips (e.g. an animal when
             # the scene needs a person on a stage) and order the rest by relevance.
             # Vision is used when a thumbnail is available; otherwise the
@@ -888,7 +989,42 @@ class StockFootageService:
                 video_url = None
                 video_metadata = {}
                 
-                if 'video_files' in video_data:  # Pexels format
+                if '_index_path' in video_data:  # Phase-2 index clip
+                    # Local master (PD/CC, lazy-acquired): use directly, no
+                    # download. Hot-link URL (Pexels/Pixabay): download below.
+                    _ipath = video_data.get('_index_path') or ''
+                    _imeta = video_data.get('_index_meta') or {}
+                    if _ipath and not _ipath.startswith('http') and os.path.exists(_ipath):
+                        video_url = None  # sentinel: use file directly
+                        video_metadata = {
+                            'width': video_data.get('width', 0),
+                            'height': video_data.get('height', 0),
+                            'file_type': 'video/mp4',
+                            'description': shot_desc,
+                            'source': video_data.get('source', ''),
+                            'clip_id': _imeta.get('clip_id', ''),
+                            'attribution_required': _imeta.get('attribution_required', False),
+                            'attribution_text': _imeta.get('attribution_text'),
+                            'from_index': True,
+                            'duration_estimated': _imeta.get('duration_estimated', False),
+                            'search_query': video_data.get('_scene_context', {}).get('query', ''),
+                            'scene_index': video_data.get('_scene_context', {}).get('scene_index', -1),
+                            'index_local_path': _ipath,
+                        }
+                    else:
+                        video_url = _ipath or None
+                        video_metadata = {
+                            'description': shot_desc,
+                            'source': video_data.get('source', ''),
+                            'clip_id': _imeta.get('clip_id', ''),
+                            'attribution_required': _imeta.get('attribution_required', False),
+                            'attribution_text': _imeta.get('attribution_text'),
+                            'from_index': True,
+                            'duration_estimated': _imeta.get('duration_estimated', False),
+                            'search_query': video_data.get('_scene_context', {}).get('query', ''),
+                            'scene_index': video_data.get('_scene_context', {}).get('scene_index', -1),
+                        }
+                if video_url is None and 'index_local_path' not in video_metadata and '_index_path' not in video_data and 'video_files' in video_data:  # Pexels format
                     # Choose the file closest to the target height, but never
                     # 4K+ — avoids huge downloads that can fill the disk.
                     target_h = min_height or 720
@@ -972,7 +1108,28 @@ class StockFootageService:
                             }
                 
                 # Check if we have a valid URL and it hasn't been used recently
-                if video_url and video_url not in used_video_urls:
+                if 'index_local_path' in video_metadata:  # Phase-2 local master: use directly
+                    filepath = video_metadata['index_local_path']
+                    print(f"Using index master directly: {filepath}")
+                    if not self._validate_downloaded_video(filepath, shot_desc, voiceover_text):
+                        print(f"Rejected off-theme clip, trying next candidate")
+                        continue
+                    duration = self.get_video_duration(filepath)
+                    print(f"Video duration: {duration} seconds")
+                    video_metadata['actual_duration'] = duration
+                    video_metadata['file_path'] = filepath
+                    video_files.append((filepath, duration, video_metadata))
+                    used_video_urls.add(filepath)  # Track this file
+                    downloaded_count += 1
+                    scene_downloads += 1
+                    if os.getenv("CINEMA_ENABLED", "false").lower() == "true":
+                        try:
+                            recs = self.build_clip_records([video_data])
+                            if recs:
+                                chosen_clips.append(recs[0])
+                        except Exception:
+                            pass
+                elif video_url and video_url not in used_video_urls:
                     print(f"Downloading video from: {video_url}")
                     filename = f"stock_{int(time.time())}_{downloaded_count}.mp4"
                     filepath = self.download_video(video_url, filename)
