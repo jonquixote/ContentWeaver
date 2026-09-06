@@ -46,9 +46,13 @@ def build_storyboard(shots, resolve, out_dir: str, image_size: int = 320) -> lis
     return rows
 
 
-def build_critic_prompt(specs, n_frames: int, agentic: bool = False) -> str:
+def build_critic_prompt(specs, n_frames: int, agentic: bool = False,
+                        frames: list[dict] | None = None) -> str:
     """Prompt text for the one-call critic. Static mode: N storyboard frames +
-    the ShotSpec list. Agentic mode: whole-video input, timestamped critique."""
+    the ShotSpec list. Agentic mode: whole-video input, timestamped critique.
+    When the scored frame rows are passed, each frame is labeled with its
+    shot_index and the spec list is filtered to scored shots only (frames and
+    specs stay aligned across skips/truncation)."""
     lines = [
         "You are a film-editing critic reviewing a rendered short against its shot plan.",
         "For EACH shot, verdict match/mismatch vs its spec (subject, scale, mood, function).",
@@ -60,6 +64,16 @@ def build_critic_prompt(specs, n_frames: int, agentic: bool = False) -> str:
     ]
     if agentic:
         lines.append("This is whole-video input: include timestamped observations (mm:ss) for each issue.")
+    elif frames is not None:
+        scored = {r["shot_index"] for r in frames}
+        lines.append(
+            f"You are given {len(frames)} storyboard frames, each labeled with its "
+            f"shot_index below (shot_index is the position in the shot plan). "
+            f"Score ONLY the labeled shots.")
+        for k, row in enumerate(frames):
+            lines.append(f"Frame {k + 1} of {len(frames)}: shot {row['shot_index']} "
+                         f"(clip {row.get('clip_id', '?')}).")
+        specs = [s for s in specs if s.shot_index in scored]
     else:
         lines.append(f"You are given {n_frames} storyboard frames in order.")
     for s in specs:
@@ -189,7 +203,8 @@ def run_critique(plan, specs, resolve, *, project_id: str, render_id: str,
             frames = build_storyboard(plan.shots[:max_frames], resolve,
                                       os.path.join(persist_dir or os.getenv("CRITIC_DIR", "/tmp/cw-critic"), "sb"),
                                       image_size=size)
-        prompt = build_critic_prompt(specs, n_frames=len(frames), agentic=use_agentic)
+        prompt = build_critic_prompt(specs, n_frames=len(frames), agentic=use_agentic,
+                                     frames=None if (use_agentic and video_path) else frames)
         client = GeminiCriticClient()
         critique = client.critique(frames, prompt, agentic=use_agentic, video_path=video_path)
         if critique is None:

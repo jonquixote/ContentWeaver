@@ -221,6 +221,35 @@ def test_maybe_critique_render_threads_video_path(monkeypatch):
     assert seen.get("video_path") == "/tmp/final.mp4"
 
 
+def _spec_named(i, subject):
+    return ShotSpec(scene_number=1, shot_index=i, narrative_beats="beats",
+                    subject_concrete=subject, scale=ShotScale.MS,
+                    move=CameraMove.STATIC, function=ShotFunction.CONTEXT, mood="dim")
+
+
+def test_prompt_filters_specs_to_scored_frames():
+    # Truncated frames → filtered specs: only shot 0 was scored.
+    specs = [_spec_named(0, "comedian-alpha"), _spec_named(1, "comedian-beta"),
+             _spec_named(2, "comedian-gamma")]
+    frames = [{"shot_index": 0, "clip_id": "c0", "frame_path": "a.jpg"}]
+    prompt = build_critic_prompt(specs, n_frames=1, frames=frames)
+    assert "comedian-alpha" in prompt
+    assert "comedian-beta" not in prompt
+    assert "comedian-gamma" not in prompt
+
+
+def test_prompt_labels_frames_with_shot_index():
+    # Skipped shot 1 keeps its index: frames labeled, spec 1 absent.
+    specs = [_spec_named(0, "comedian-alpha"), _spec_named(1, "comedian-beta"),
+             _spec_named(2, "comedian-gamma")]
+    frames = [{"shot_index": 0, "clip_id": "c0", "frame_path": "a.jpg"},
+              {"shot_index": 2, "clip_id": "c2", "frame_path": "c.jpg"}]
+    prompt = build_critic_prompt(specs, n_frames=2, frames=frames)
+    assert "shot 0" in prompt.lower()
+    assert "shot 2" in prompt.lower()
+    assert "comedian-beta" not in prompt
+
+
 def test_wiring_reuses_timing_plan_when_present():
     from src.services.cinema.montage_service import TimelinePlan, TimelineShot
     from src.services.cinema.types import MontageMode
