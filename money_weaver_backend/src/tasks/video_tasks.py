@@ -550,11 +550,16 @@ def generate_assembler_video_task(self, project_id, prompt, duration=30, orienta
                 from src.services.cinema.critic_service import (
                     critique_plan_for_render, maybe_critique_render)
                 clip_durations = []
+                clip_paths = []
                 for _v in video_data or []:
                     try:
                         clip_durations.append(float(_v[1]))
                     except (IndexError, TypeError, ValueError):
                         continue
+                    try:
+                        clip_paths.append(str(_v[0]))
+                    except (IndexError, TypeError, ValueError):
+                        clip_paths.append("")
 
                 def _resolve_critic_clip(clip_id):
                     if isinstance(clip_id, str) and clip_id.startswith("local:"):
@@ -564,7 +569,7 @@ def generate_assembler_video_task(self, project_id, prompt, duration=30, orienta
 
                 _specs = list(getattr(timing_plan, "specs", []) or [])
                 maybe_critique_render(
-                    critique_plan_for_render(timing_plan, clip_durations),
+                    critique_plan_for_render(timing_plan, clip_durations, clip_paths),
                     _specs, _resolve_critic_clip,
                     project_id=str(project_id),
                     render_id=task_id or output_filename,

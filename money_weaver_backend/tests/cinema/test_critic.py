@@ -282,3 +282,38 @@ def test_wiring_returns_none_when_disabled(monkeypatch):
     monkeypatch.setenv("CINEMA_CRITIC_ENABLED", "false")
     from src.services.cinema.critic_service import maybe_critique_render
     assert maybe_critique_render(None, [], lambda cid: None, "p", "r") is None
+
+
+def test_synthesized_ids_resolve_through_local_prefix(tmp_path):
+    # Timing-off static mode must score real frames: synthesized shots carry
+    # local:{i}:{path} ids that a local:-aware resolver (same contract as the
+    # call site's _resolve_critic_clip) turns into files. Stubbed at the
+    # resolver boundary — build_storyboard itself is real (needs ffmpeg).
+    import subprocess
+    from src.services.cinema.critic_service import build_storyboard, critique_plan_for_render
+    src = str(tmp_path / "src.mp4")
+    subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-f", "lavfi",
+                    "-i", "testsrc=duration=4:size=320x240:rate=10",
+                    "-pix_fmt", "yuv420p", src], check=True, timeout=60)
+    plan = critique_plan_for_render(None, [2.5], clip_paths=[src])
+    assert plan.shots[0].clip_id == f"local:0:{src}"
+
+    def resolve(cid):
+        if isinstance(cid, str) and cid.startswith("local:"):
+            p = cid.split(":", 2)[-1]
+            return p if p and os.path.exists(p) else None
+        return None
+
+    import os
+    rows = build_storyboard(plan.shots, resolve, str(tmp_path / "sb"), image_size=160)
+    assert len(rows) == 1
+    assert rows[0]["shot_index"] == 0
+    assert os.path.exists(rows[0]["frame_path"])
+
+
+def test_synthesized_ids_without_paths_stay_unresolvable():
+    # No paths -> clip_{i} ids -> resolver returns None -> zero frames.
+    # Documents the degraded (but honest) path; the call site always passes paths.
+    from src.services.cinema.critic_service import critique_plan_for_render
+    plan = critique_plan_for_render(None, [2.5, 2.5])
+    assert [s.clip_id for s in plan.shots] == ["clip_0", "clip_1"]
