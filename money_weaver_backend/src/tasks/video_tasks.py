@@ -520,32 +520,16 @@ def generate_assembler_video_task(self, project_id, prompt, duration=30, orienta
             timing_plan = _build_timing_plan_if_enabled(
                 parsed_script.get('scenes', []), video_data,
                 duration)
-            final_video_path = assembly_service.assemble_video(
-                video_files=video_data,  # Pass the full video data with metadata
-                audio_file=audio_file,
-                scene_timings=parsed_script.get('scenes', []),
-                output_filename=output_filename,
-                total_duration=duration,
-                orientation=orientation,
-                width=width,
-                height=height,
-                niche=niche,
-                timing_plan=timing_plan,
-            )
-            
-            if not final_video_path:
-                raise Exception("Failed to assemble final video")
-            
-            # Check if the video file actually exists
-            if not os.path.exists(final_video_path):
-                raise Exception(f"Video file was not created at {final_video_path}")
 
             # Plan E critic: advisory-only, flag-gated inside
             # maybe_critique_render (off = no-op), never blocks the render.
-            # Single source of truth: timing_plan is the SAME object passed to
-            # assemble_video above, and it carries the director's ShotSpecs, so
-            # the critic scores frames against real specs (not generic prompts).
-            # Timing off: specs fall back to [] (montage-level flags only).
+            # Runs BEFORE assemble_video because assembly deletes the downloaded
+            # stock_* source clips after concat — the storyboard resolver needs
+            # those files on disk. Single source of truth: timing_plan is the
+            # SAME object passed to assemble_video below, and it carries the
+            # director's ShotSpecs, so the critic scores frames against real
+            # specs (not generic prompts). Timing off: specs fall back to []
+            # (montage-level flags only).
             try:
                 from src.services.cinema.critic_service import (
                     critique_plan_for_render, maybe_critique_render)
@@ -572,10 +556,29 @@ def generate_assembler_video_task(self, project_id, prompt, duration=30, orienta
                     critique_plan_for_render(timing_plan, clip_durations, clip_paths),
                     _specs, _resolve_critic_clip,
                     project_id=str(project_id),
-                    render_id=task_id or output_filename,
-                    video_path=final_video_path)
+                    render_id=task_id or output_filename)
             except Exception as e:
                 print(f"cinema critic call-site failed, render proceeds: {e}")
+
+            final_video_path = assembly_service.assemble_video(
+                video_files=video_data,  # Pass the full video data with metadata
+                audio_file=audio_file,
+                scene_timings=parsed_script.get('scenes', []),
+                output_filename=output_filename,
+                total_duration=duration,
+                orientation=orientation,
+                width=width,
+                height=height,
+                niche=niche,
+                timing_plan=timing_plan,
+            )
+            
+            if not final_video_path:
+                raise Exception("Failed to assemble final video")
+            
+            # Check if the video file actually exists
+            if not os.path.exists(final_video_path):
+                raise Exception(f"Video file was not created at {final_video_path}")
 
             # Generate thumbnail from the assembled video
             self.update_state(state='PROGRESS', meta={'current': 90, 'total': 100, 'status': 'Generating thumbnail...'})
