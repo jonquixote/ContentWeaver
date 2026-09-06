@@ -39,3 +39,13 @@ snap_to_grid unit tests (synthetic grids, no audio needed).
   librosa wheels), ML work runs Python 3.12 (`/tmp/cw-test-venv`-style venv
   with torch 2.2.2 + numpy<2). Record in env docs which venv owns which
   capability so future spikes don't rediscover it.
+
+## Debt recorded at Plan D close (2026-09-04)
+
+- **Full-length acceptance render with real TTS audio once quota returns.**
+  The Plan D ritual ran with ~5s fallback audio (dead TTS credits) + `-shortest`
+  truncation, so the 15s timing plan was validated at the cut-duration level
+  (4.92/4.92/5.16 vs legacy 3.84/4.10/7.06) but never at full render length.
+  Re-run the same-script timing on/off ritual at full length when TTS quota
+  returns; pass criteria unchanged (pacing arc, phrase-aligned joins,
+  cut-on-action nudges, beat-snap if librosa available by then).
