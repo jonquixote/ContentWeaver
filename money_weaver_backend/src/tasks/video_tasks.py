@@ -580,6 +580,16 @@ def generate_assembler_video_task(self, project_id, prompt, duration=30, orienta
             if not os.path.exists(final_video_path):
                 raise Exception(f"Video file was not created at {final_video_path}")
 
+            # Phase-2 credits: append the attribution block when CC-BY index
+            # clips rendered. Never blocks the render (collect returns "").
+            try:
+                from src.services.footage.credits import collect_render_credits
+                _credits_block = collect_render_credits(video_files)
+                if _credits_block:
+                    print(f"Render credits:\n{_credits_block}")
+            except Exception as e:
+                print(f"cinema credits block failed, render proceeds: {e}")
+
             # Generate thumbnail from the assembled video
             self.update_state(state='PROGRESS', meta={'current': 90, 'total': 100, 'status': 'Generating thumbnail...'})
             thumbnail_path = generate_thumbnail(final_video_path)
