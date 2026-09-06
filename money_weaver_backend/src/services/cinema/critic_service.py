@@ -84,10 +84,10 @@ def build_critic_prompt(specs, n_frames: int, agentic: bool = False,
 
 
 def _gemini_keys() -> list[str]:
-    primary = os.getenv("GEMINI_API_KEY") or ""
-    fallbacks = [k.strip() for k in (os.getenv("GEMINI_API_KEY_FALLBACKS") or "").split(",") if k.strip()]
-    keys = list(dict.fromkeys([primary] + fallbacks))
-    return [k for k in keys if k]
+    # Shared rotator (per-key 429 cooldowns); kept as a thin wrapper so
+    # existing tests referencing this name keep passing.
+    from src.services.cinema.gemini_keys import live_keys
+    return live_keys()
 
 
 def parse_critique(raw: str | None) -> RenderCritique | None:
@@ -133,6 +133,7 @@ class GeminiCriticClient:
         if agentic:
             payload["generationConfig"]["media_processing"] = "AGENTIC"
         raw = None
+        from src.services.cinema.gemini_keys import mark_exhausted, mark_ok
         for key in keys:
             try:
                 r = requests.post(
@@ -141,13 +142,16 @@ class GeminiCriticClient:
             except Exception:
                 continue
             if r.status_code == 200:
+                mark_ok(key)
                 try:
                     raw = r.json()["candidates"][0]["content"]["parts"][0]["text"]
                 except Exception:
                     raw = None
                 break
-            if r.status_code != 429:
-                return None  # non-quota failure: bail, don't burn other keys
+            if r.status_code == 429:
+                mark_exhausted(key)  # skip briefly; next key may have budget
+                continue
+            return None  # non-quota failure: bail, don't burn other keys
         return parse_critique(raw)
 
 
