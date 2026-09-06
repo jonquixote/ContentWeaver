@@ -1,5 +1,10 @@
 import os
-from src.services.cinema.critic_service import build_critic_prompt, build_storyboard
+from src.services.cinema.critic_service import (
+    GeminiCriticClient,
+    build_critic_prompt,
+    build_storyboard,
+    parse_critique,
+)
 from src.services.cinema.montage_service import TimelineShot
 from src.services.cinema.shot import ShotSpec
 from src.services.cinema.types import CameraMove, ShotFunction, ShotScale
@@ -69,3 +74,31 @@ def test_prompt_demands_strict_json_shape():
 def test_agentic_prompt_requests_timestamps():
     prompt = build_critic_prompt([_spec(0)], n_frames=0, agentic=True)
     assert "timestamp" in prompt.lower()
+
+
+def test_parse_critique_accepts_valid_json():
+    raw = ('{"shots": [{"shot_index": 0, "verdict": "mismatch", "reason": "shows a duck, spec needs a comedian"}], '
+           '"overall_verdict": "review", "summary": "one off-theme pick"}')
+    c = parse_critique(raw)
+    assert c is not None
+    assert c.overall_verdict == "review"
+    assert c.shots[0].verdict == "mismatch"
+
+
+def test_parse_critique_rejects_garbage_silently():
+    assert parse_critique(None) is None
+    assert parse_critique("not json at all") is None
+    assert parse_critique('{"shots": "wrong-shape"}') is None
+
+
+def test_parse_critique_extracts_json_from_prose():
+    raw = 'Here is my review:\n{"shots": [], "overall_verdict": "pass", "summary": "clean"}'
+    c = parse_critique(raw)
+    assert c is not None and c.overall_verdict == "pass"
+
+
+def test_client_skips_without_keys(monkeypatch):
+    monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+    monkeypatch.setattr("src.services.cinema.critic_service._gemini_keys", lambda: [])
+    client = GeminiCriticClient()
+    assert client.critique([], "prompt") is None

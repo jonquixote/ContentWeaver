@@ -1,7 +1,14 @@
 from __future__ import annotations
 
+import base64 as _b64
+import json as _json
 import os
+import re
 import subprocess
+
+import requests
+
+from src.services.cinema.critique_schema import RenderCritique
 
 
 def build_storyboard(shots, resolve, out_dir: str, image_size: int = 320) -> list[dict]:
@@ -60,3 +67,76 @@ def build_critic_prompt(specs, n_frames: int, agentic: bool = False) -> str:
             f"Shot {s.shot_index} (scene {s.scene_number}, {s.function.value}, {s.scale.value}, "
             f"{s.move.value}, mood {s.mood}): subject={s.subject_concrete} | beats={s.narrative_beats}")
     return "\n".join(lines)
+
+
+def _gemini_keys() -> list[str]:
+    primary = os.getenv("GEMINI_API_KEY") or ""
+    fallbacks = [k.strip() for k in (os.getenv("GEMINI_API_KEY_FALLBACKS") or "").split(",") if k.strip()]
+    keys = list(dict.fromkeys([primary] + fallbacks))
+    return [k for k in keys if k]
+
+
+def parse_critique(raw: str | None) -> RenderCritique | None:
+    """Strict-parse model output. None on ANY failure — the critic is silently
+    off for that render (logged by the caller)."""
+    if not raw:
+        return None
+    try:
+        m = re.search(r"\{.*\}", raw, re.DOTALL)
+        if not m:
+            return None
+        data = _json.loads(m.group(0))
+        return RenderCritique(**data)
+    except Exception:
+        return None
+
+
+class GeminiCriticClient:
+    """One POST per render. Model + agentic/static knob from env. Key rotation:
+    429 → next key; non-429 failure → bail (None); all keys exhausted → None."""
+
+    def __init__(self, model: str | None = None, timeout_s: int = 60):
+        self.model = model or os.getenv("CRITIC_MODEL", "gemini-2.0-flash")
+        self.timeout_s = int(os.getenv("CRITIC_TIMEOUT_S", str(timeout_s)))
+
+    def critique(self, frames: list[dict], prompt: str, *,
+                 agentic: bool = False, video_path: str | None = None) -> RenderCritique | None:
+        keys = _gemini_keys()
+        if not keys:
+            return None
+        parts: list[dict] = [{"text": prompt}]
+        if agentic and video_path:
+            parts.append({"inline_data": {"mime_type": "video/mp4", "data": _read_b64(video_path)}})
+        else:
+            for row in frames:
+                try:
+                    parts.append({"inline_data": {"mime_type": "image/jpeg",
+                                                 "data": _read_b64(row["frame_path"])}})
+                except Exception:
+                    continue
+        payload: dict = {"contents": [{"parts": parts}],
+                         "generationConfig": {"maxOutputTokens": 2000, "temperature": 0.1}}
+        if agentic:
+            payload["generationConfig"]["media_processing"] = "AGENTIC"
+        raw = None
+        for key in keys:
+            try:
+                r = requests.post(
+                    f"https://generativelanguage.googleapis.com/v1beta/models/{self.model}:generateContent",
+                    params={"key": key}, json=payload, timeout=self.timeout_s)
+            except Exception:
+                continue
+            if r.status_code == 200:
+                try:
+                    raw = r.json()["candidates"][0]["content"]["parts"][0]["text"]
+                except Exception:
+                    raw = None
+                break
+            if r.status_code != 429:
+                return None  # non-quota failure: bail, don't burn other keys
+        return parse_critique(raw)
+
+
+def _read_b64(path: str) -> str:
+    with open(path, "rb") as f:
+        return _b64.b64encode(f.read()).decode()
