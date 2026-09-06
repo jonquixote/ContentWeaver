@@ -1,6 +1,8 @@
 import os
-from src.services.cinema.critic_service import build_storyboard
+from src.services.cinema.critic_service import build_critic_prompt, build_storyboard
 from src.services.cinema.montage_service import TimelineShot
+from src.services.cinema.shot import ShotSpec
+from src.services.cinema.types import CameraMove, ShotFunction, ShotScale
 
 
 def _shot(i, clip="c"):
@@ -42,3 +44,28 @@ def test_build_storyboard_index_survives_skips():
     out = build_storyboard(shots, resolve, os.path.join(tmp, "sb"), image_size=160)
     assert [r["shot_index"] for r in out] == [0, 2]
     assert [r["clip_id"] for r in out] == ["c0", "c2"]
+
+
+def _spec(i):
+    return ShotSpec(scene_number=1, shot_index=i, narrative_beats="jokes fly",
+                    subject_concrete="comedian with microphone on stage",
+                    scale=ShotScale.MS, move=CameraMove.STATIC,
+                    function=ShotFunction.CONTEXT, mood="dim")
+
+
+def test_prompt_lists_every_shot_spec():
+    prompt = build_critic_prompt([_spec(0), _spec(1)], n_frames=2)
+    assert "comedian with microphone on stage" in prompt
+    assert "shot_index" in prompt
+    assert "match" in prompt and "mismatch" in prompt
+
+
+def test_prompt_demands_strict_json_shape():
+    prompt = build_critic_prompt([_spec(0)], n_frames=1)
+    assert "overall_verdict" in prompt
+    assert "reason" in prompt
+
+
+def test_agentic_prompt_requests_timestamps():
+    prompt = build_critic_prompt([_spec(0)], n_frames=0, agentic=True)
+    assert "timestamp" in prompt.lower()

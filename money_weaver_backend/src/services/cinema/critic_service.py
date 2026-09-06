@@ -37,3 +37,26 @@ def build_storyboard(shots, resolve, out_dir: str, image_size: int = 320) -> lis
         except Exception:
             continue
     return rows
+
+
+def build_critic_prompt(specs, n_frames: int, agentic: bool = False) -> str:
+    """Prompt text for the one-call critic. Static mode: N storyboard frames +
+    the ShotSpec list. Agentic mode: whole-video input, timestamped critique."""
+    lines = [
+        "You are a film-editing critic reviewing a rendered short against its shot plan.",
+        "For EACH shot, verdict match/mismatch vs its spec (subject, scale, mood, function).",
+        "Flag off-theme picks, near-duplicates the hash missed, and montage-level issues "
+        "(scale monotony, missing establishing shot, abrupt joins).",
+        'Reply ONLY JSON: {"shots": [{"shot_index": 0, "verdict": "match", "reason": "..."}], '
+        '"overall_verdict": "pass", "summary": "..."}. '
+        'overall_verdict is "review" if any shot mismatches.',
+    ]
+    if agentic:
+        lines.append("This is whole-video input: include timestamped observations (mm:ss) for each issue.")
+    else:
+        lines.append(f"You are given {n_frames} storyboard frames in order.")
+    for s in specs:
+        lines.append(
+            f"Shot {s.shot_index} (scene {s.scene_number}, {s.function.value}, {s.scale.value}, "
+            f"{s.move.value}, mood {s.mood}): subject={s.subject_concrete} | beats={s.narrative_beats}")
+    return "\n".join(lines)
