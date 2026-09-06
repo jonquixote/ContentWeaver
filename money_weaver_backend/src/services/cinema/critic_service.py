@@ -156,35 +156,42 @@ def critique_plan_for_render(timing_plan, clip_durations: list[float]):
         for i, d in enumerate(clip_durations)])
 
 
-def maybe_critique_render(plan, specs, resolve, project_id: str, render_id: str):
+def maybe_critique_render(plan, specs, resolve, project_id: str, render_id: str,
+                          video_path: str | None = None):
     """Flag-gated call-site wrapper. Returns the critique or None. Never raises."""
     import os
     if os.getenv("CINEMA_CRITIC_ENABLED", "false").lower() != "true":
         return None
     try:
-        return run_critique(plan, specs, resolve, project_id=project_id, render_id=render_id)
+        return run_critique(plan, specs, resolve, project_id=project_id,
+                            render_id=render_id, video_path=video_path)
     except Exception as e:
         print(f"cinema critic call-site failed, render proceeds: {e}")
         return None
 
 
 def run_critique(plan, specs, resolve, *, project_id: str, render_id: str,
-                 persist_dir: str | None = None, agentic: bool | None = None) -> RenderCritique | None:
+                 persist_dir: str | None = None, agentic: bool | None = None,
+                 video_path: str | None = None) -> RenderCritique | None:
     """Advisory-only v1 entry point. CINEMA_CRITIC_ENABLED=false (or any failure) →
-    None. On success persists the critique JSON and returns it. Never raises."""
+    None. On success persists the critique JSON and returns it. Never raises.
+    Agentic + video_path: the video carries the visuals, storyboard skipped."""
     try:
         if os.getenv("CINEMA_CRITIC_ENABLED", "false").lower() != "true":
             return None
         use_agentic = agentic if agentic is not None else (
             os.getenv("CRITIC_MODE", "static").lower() == "agentic")
-        size = int(os.getenv("CRITIC_IMAGE_SIZE", "320"))
-        max_frames = int(os.getenv("CRITIC_MAX_FRAMES", "12"))
-        frames = build_storyboard(plan.shots[:max_frames], resolve,
-                                  os.path.join(persist_dir or os.getenv("CRITIC_DIR", "/tmp/cw-critic"), "sb"),
-                                  image_size=size)
+        if use_agentic and video_path:
+            frames: list[dict] = []
+        else:
+            size = int(os.getenv("CRITIC_IMAGE_SIZE", "320"))
+            max_frames = int(os.getenv("CRITIC_MAX_FRAMES", "12"))
+            frames = build_storyboard(plan.shots[:max_frames], resolve,
+                                      os.path.join(persist_dir or os.getenv("CRITIC_DIR", "/tmp/cw-critic"), "sb"),
+                                      image_size=size)
         prompt = build_critic_prompt(specs, n_frames=len(frames), agentic=use_agentic)
         client = GeminiCriticClient()
-        critique = client.critique(frames, prompt, agentic=use_agentic)
+        critique = client.critique(frames, prompt, agentic=use_agentic, video_path=video_path)
         if critique is None:
             print("cinema critic: skipped (no result)")
             return None

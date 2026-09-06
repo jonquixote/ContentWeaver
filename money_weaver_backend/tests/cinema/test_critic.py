@@ -183,6 +183,44 @@ def test_run_critique_works_with_synthesized_plan(monkeypatch, tmp_path):
     assert out is not None and out.overall_verdict == "pass"
 
 
+def test_run_critique_threads_video_path_and_skips_frames_when_agentic(monkeypatch, tmp_path):
+    # Agentic + final video: video carries the visuals, storyboard skipped,
+    # video_path reaches the client.
+    monkeypatch.setenv("CINEMA_CRITIC_ENABLED", "true")
+    monkeypatch.setenv("CRITIC_MODE", "agentic")
+    from src.services.cinema import critic_service as cs
+    def boom_sb(*a, **k):
+        raise AssertionError("storyboard must be skipped when agentic video present")
+    monkeypatch.setattr(cs, "build_storyboard", boom_sb)
+    seen = {}
+    fake = {"shots": [], "overall_verdict": "pass", "summary": "clean"}
+    def fake_critique(self, frames, prompt, **k):
+        seen["frames"] = frames
+        seen.update(k)
+        return cs.parse_critique(json.dumps(fake))
+    monkeypatch.setattr(cs.GeminiCriticClient, "critique", fake_critique)
+    out = run_critique(_plan(), _specs(), lambda cid: None,
+                       project_id="p", render_id="r", persist_dir=str(tmp_path),
+                       video_path="/tmp/final.mp4")
+    assert out is not None
+    assert seen.get("video_path") == "/tmp/final.mp4"
+    assert seen.get("frames") == []
+    assert seen.get("agentic") is True
+
+
+def test_maybe_critique_render_threads_video_path(monkeypatch):
+    monkeypatch.setenv("CINEMA_CRITIC_ENABLED", "true")
+    from src.services.cinema import critic_service as cs
+    seen = {}
+    def fake_run(plan, specs, resolve, **k):
+        seen.update(k)
+        return None
+    monkeypatch.setattr(cs, "run_critique", fake_run)
+    cs.maybe_critique_render(_plan(), _specs(), lambda cid: None, "p", "r",
+                             video_path="/tmp/final.mp4")
+    assert seen.get("video_path") == "/tmp/final.mp4"
+
+
 def test_wiring_reuses_timing_plan_when_present():
     from src.services.cinema.montage_service import TimelinePlan, TimelineShot
     from src.services.cinema.types import MontageMode

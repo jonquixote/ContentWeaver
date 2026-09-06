@@ -567,7 +567,8 @@ def generate_assembler_video_task(self, project_id, prompt, duration=30, orienta
                     critique_plan_for_render(timing_plan, clip_durations),
                     _specs, _resolve_critic_clip,
                     project_id=str(project_id),
-                    render_id=task_id or output_filename)
+                    render_id=task_id or output_filename,
+                    video_path=final_video_path)
             except Exception as e:
                 print(f"cinema critic call-site failed, render proceeds: {e}")
 
