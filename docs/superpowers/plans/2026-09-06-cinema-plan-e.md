@@ -599,7 +599,7 @@ Append to `money_weaver_backend/.env.example`:
 ```
 CINEMA_CRITIC_ENABLED=false
 ```
-Add `CRITIC_BACKEND=gemini`, `CRITIC_MODE=static`, `CRITIC_IMAGE_SIZE=320`, `CRITIC_MAX_FRAMES=12`, `CRITIC_TIMEOUT_S=60`, `CRITIC_DIR=/tmp/cw-critic`.
+Add `CRITIC_MODEL=gemini-2.0-flash`, `CRITIC_MODE=static`, `CRITIC_IMAGE_SIZE=320`, `CRITIC_MAX_FRAMES=12`, `CRITIC_TIMEOUT_S=60`, `CRITIC_DIR=/tmp/cw-critic`.
 
 ```bash
 git add src/services/cinema/critic_service.py money_weaver_backend/.env.example tests/cinema/test_critic.py
@@ -637,11 +637,13 @@ from src.services.cinema.critic_service import critique_plan_for_render
 from src.services.cinema.montage_service import TimelinePlan, TimelineShot
 
 
-def test_wiring_synthesizes_shots_when_no_timing_plan():
-    # Timing off: minimal shots synthesized from clip durations.
-    shots = critique_plan_for_render(None, [2.5, 2.5])
-    assert len(shots) == 2
-    assert all(isinstance(s, TimelineShot) for s in shots)
+def test_wiring_synthesizes_plan_wrapper_when_no_timing_plan():
+    # Timing off: a TimelinePlan wrapper (not a bare list) so run_critique's
+    # plan.shots works in both paths.
+    plan = critique_plan_for_render(None, [2.5, 2.5])
+    assert isinstance(plan, TimelinePlan)
+    assert len(plan.shots) == 2
+    assert all(isinstance(s, TimelineShot) for s in plan.shots)
 
 
 def test_wiring_reuses_timing_plan_when_present():
@@ -669,21 +671,26 @@ Expected: FAIL with `ImportError: cannot import name 'critique_plan_for_render'`
 ```python
 def critique_plan_for_render(timing_plan, clip_durations: list[float]):
     """Single source of truth for the plan the critic scores: reuse the timing
-    plan when present, else synthesize minimal shots from clip durations."""
+    plan when present, else synthesize a minimal TimelinePlan wrapper from clip
+    durations (wrapper, not a bare list, so run_critique's plan.shots works)."""
     if timing_plan is not None:
         return timing_plan
-    from src.services.cinema.montage_service import TimelineShot
-    return [TimelineShot(clip_id=f"clip_{i}", in_point_s=0.0, out_point_s=float(d))
-            for i, d in enumerate(clip_durations)]
+    from src.services.cinema.montage_service import TimelinePlan, TimelineShot
+    from src.services.cinema.types import MontageMode
+    return TimelinePlan(mode=MontageMode.OVERTONAL, shots=[
+        TimelineShot(clip_id=f"clip_{i}", in_point_s=0.0, out_point_s=float(d))
+        for i, d in enumerate(clip_durations)])
 
 
-def maybe_critique_render(plan, specs, resolve, project_id: str, render_id: str):
+def maybe_critique_render(plan, specs, resolve, project_id: str, render_id: str,
+                          video_path: str | None = None):
     """Flag-gated call-site wrapper. Returns the critique or None. Never raises."""
     import os
     if os.getenv("CINEMA_CRITIC_ENABLED", "false").lower() != "true":
         return None
     try:
-        return run_critique(plan, specs, resolve, project_id=project_id, render_id=render_id)
+        return run_critique(plan, specs, resolve, project_id=project_id,
+                            render_id=render_id, video_path=video_path)
     except Exception as e:
         print(f"cinema critic call-site failed, render proceeds: {e}")
         return None
@@ -698,7 +705,8 @@ timing_plan = ...  # the same object passed to assemble_video (or None)
 specs = ...        # ShotSpecs used for the render
 critique_plan = critique_plan_for_render(timing_plan, clip_durations_used)
 maybe_critique_render(critique_plan, specs, resolve_clip_path,
-                      project_id=str(project_id), render_id=task_id)
+                      project_id=str(project_id), render_id=task_id,
+                      video_path=final_video_path)  # agentic path scores the video
 ```
 
 - [ ] **Step 4: Run test to verify it passes**
@@ -736,7 +744,7 @@ git commit -m "feat(cinema): wire critic call site (reuse timing plan, flag-gate
 
 **Placeholder scan:** no TBD/TODO; all code complete for the flagged-off path. `test_client_skips_without_keys` exercises the no-key path without network.
 
-**Type consistency:** `ShotVerdict`/`RenderCritique`, `build_storyboard(shots, resolve, out_dir, image_size)`, `build_critic_prompt(specs, n_frames, agentic)`, `parse_critique(raw)`, `GeminiCriticClient().critique(frames, prompt, agentic, video_path)`, `run_critique(plan, specs, resolve, project_id, render_id, persist_dir, agentic)`, `critique_plan_for_render(timing_plan, clip_durations)`, `maybe_critique_render(plan, specs, resolve, project_id, render_id)` — consistent across tasks. `shot_index` is the position in `plan.shots` (Task 2 pins it, including across skips).
+**Type consistency:** `ShotVerdict`/`RenderCritique`, `build_storyboard(shots, resolve, out_dir, image_size)`, `build_critic_prompt(specs, n_frames, agentic, frames)`, `parse_critique(raw)`, `GeminiCriticClient().critique(frames, prompt, agentic, video_path)`, `run_critique(plan, specs, resolve, project_id, render_id, persist_dir, agentic, video_path)`, `critique_plan_for_render(timing_plan, clip_durations) -> TimelinePlan`, `maybe_critique_render(plan, specs, resolve, project_id, render_id, video_path)` — consistent across tasks. `shot_index` is the position in `plan.shots` (Task 2 pins it, including across skips). Review fixes: timing-off path returns a `TimelinePlan` wrapper; prompt takes scored frame rows (labels + spec filtering); zero frames with no video short-circuits before the Gemini call; flags use `CRITIC_MODEL` (no `CRITIC_BACKEND`).
 
 ## Standing plan checklist (applies to this and all future plans)
 
