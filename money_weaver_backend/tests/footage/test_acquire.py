@@ -27,3 +27,43 @@ def test_evict_lru_oldest_first_under_budget(tmp_path):
     evicted = evict_lru(str(tmp_path), 120)
     assert evicted == ["s/a"]  # oldest first, stops once under budget
     assert os.path.exists(tmp_path / "s" / "b" / "master.mp4")
+
+
+def test_ensure_master_refuses_pexels_pixabay_storage(tmp_path, monkeypatch):
+    # License posture: Pexels/Pixabay are NEVER written to the master store.
+    monkeypatch.setenv("FOOTAGE_MASTER_DIR", str(tmp_path))
+    from src.services.footage.acquire import ensure_master
+    from src.services.footage.sources.base import CandidateVideo
+    for source in ("pexels", "pixabay"):
+        c = CandidateVideo(source=source, source_id="1", title="t", description=None,
+                           tags=[], subjects=[], creator=None, published_at=None,
+                           duration_s=10, width=1920, height=1080,
+                           download_url="https://example.com/x.mp4", page_url="p",
+                           license_spdx="CC0-1.0", license_raw=None, attribution_text=None)
+        path, duration = ensure_master(c, root=str(tmp_path))
+        assert path is None
+        # duration passes through even when the path is refused (hot-link serve
+        # uses the candidate's own duration downstream)
+        assert duration == 10
+    assert list(tmp_path.rglob("master.*")) == []
+
+
+def test_ensure_master_idempotent_resume_safe(tmp_path, monkeypatch):
+    # Second call for the same asset is a no-op returning the same path.
+    monkeypatch.setenv("FOOTAGE_MASTER_DIR", str(tmp_path))
+    from src.services.footage.acquire import ensure_master
+    from src.services.footage.sources.base import CandidateVideo
+    c = CandidateVideo(source="archive_org", source_id="abc", title="t", description=None,
+                       tags=[], subjects=[], creator=None, published_at=None,
+                       duration_s=10, width=640, height=480,
+                       download_url="https://example.com/a.mp4", page_url="p",
+                       license_spdx="public-domain", license_raw=None, attribution_text=None)
+    import src.services.footage.acquire as acq
+    monkeypatch.setattr(acq, "_fetch_to_temp", lambda url, tmp, have=0: open(tmp, "wb").write(b"0" * 10) or tmp)
+    p1, d1 = ensure_master(c, root=str(tmp_path))
+    p2, d2 = ensure_master(c, root=str(tmp_path))
+    assert p1 == p2 and p1 is not None
+    assert open(p1, "rb").read() == b"0" * 10  # not re-downloaded/corrupted
+    # stub fetch wrote 10 zero bytes (not a real video): probe fails -> falls
+    # back to the candidate's own duration, never fabricated
+    assert d1 == 10 and d2 == 10
