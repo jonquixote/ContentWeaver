@@ -18,3 +18,11 @@
   unchanged and the vision critic is not yet built. Plan B (index/pool) + Plan E
   (VLM critic) are the real fixes. Classic clip dedup (URL/file) works; content
   correctness does not.
+
+## Phase-2 follow-up (logged 2026-09-06, not built)
+- Hot-link URL refresh by provider API on stored-URL 404: Pexels/Pixabay masters
+  are never stored (license posture) — renders hot-link their stored
+  `download_url`. Provider CDN URLs can rot; on a 404 at render time, re-query
+  the provider API for a fresh URL for the same clip id and update the index
+  row, rather than failing the scene to live fallback. Bound the refresh to one
+  retry per clip per render.
