@@ -112,7 +112,6 @@ def ensure_master(candidate, root: str | None = None) -> tuple[str | None, float
     duration) — hot-link per render, never stored. Duration is the ffprobe-
     probed value when probed, else the candidate's, else None (genuinely
     unknown — never fabricated). Probes backfill footage_assets.duration_s."""
-    import sqlite3
     if candidate.source in NEVER_STORE_SOURCES:
         return None, candidate.duration_s
     base = root or os.getenv("FOOTAGE_MASTER_DIR", "/tmp/cw-footage-masters")
@@ -131,11 +130,21 @@ def ensure_master(candidate, root: str | None = None) -> tuple[str | None, float
         return None, candidate.duration_s
     ext = ".mp4"  # masters normalized to mp4 containers downstream
     final = os.path.join(asset_dir, "master.mp4")
+    # Gate the rename on the probe: existence != validity (archive.org serves
+    # 200-OK HTML). An unprobed file is deleted, never promoted — otherwise an
+    # invalid master heals never under the idempotent path above.
+    dur = _probe_duration(tmp)
+    if dur is None:
+        try:
+            os.remove(tmp)
+        except OSError:
+            pass
+        print(f"cinema acquire rejected for {candidate.source}:{candidate.source_id}: unprobable download")
+        return None, candidate.duration_s
     try:
         os.replace(tmp, final)
     except OSError:
         return None, candidate.duration_s
-    dur = _probe_duration(final)
     true_duration = dur or candidate.duration_s  # None only if genuinely unknown
     if dur and not candidate.duration_s:
         _backfill_duration(candidate.source, candidate.source_id, dur)
