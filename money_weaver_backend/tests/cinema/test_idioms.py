@@ -81,3 +81,16 @@ def test_hold_reaction_adds_duration_after_payoff():
     bonus, held = hold_reaction(_clip(), payoff)
     assert held is True
     assert bonus > 0
+
+
+def test_cut_on_action_wired_with_energy():
+    from src.services.cinema.idioms import cut_on_action
+    from src.services.cinema.shot import ShotSpec
+    spec = ShotSpec(scene_number=1, shot_index=0, narrative_beats="b",
+                    subject_concrete="s", scale="ms", move="static",
+                    function="context", mood="dim")
+    bonus, applied = cut_on_action(None, spec, energy=[0.1, 0.3, 0.6, 0.9])
+    assert applied is True
+    assert bonus == 1.0  # strongly rising
+    bonus2, applied2 = cut_on_action(None, spec)
+    assert (bonus2, applied2) == (0.0, False)  # neutral without data (unchanged)

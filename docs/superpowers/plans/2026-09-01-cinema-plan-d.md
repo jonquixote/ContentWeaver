@@ -331,7 +331,7 @@ git commit -m "feat(cinema): phrase boundaries (Kokoro timestamps or determinist
 
 **Interfaces:**
 - Produces: `motion_energy_series(video_path: str | None) -> list[float]` (frame-diff mean abs diff per frame; [] when file missing/cv2 absent — no new dep required), `cut_on_action_nudge(planned_cut_s: float, energy: list[float], fps: float = 25.0, window_s: float = 0.5) -> float`.
-- Wires Plan C's `cut_on_action` idiom out of neutral: new signature `cut_on_action(clip, spec, energy: list[float] | None = None, fps: float = 25.0)`.
+- Wires Plan C's `cut_on_action` idiom out of neutral: new signature `cut_on_action(clip, spec, energy: list[float] | None = None)`.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -638,4 +638,4 @@ After all tasks pass and the full suite is green:
 
 **Placeholder scan:** no TBD/TODO; all code complete for the flagged-off path. `motion_energy_series` shells to ffmpeg (present in this repo's pipeline); timeout + check=False + try/except keeps it never-blocking.
 
-**Type consistency:** `pacing_curve`, `beat_grid`, `snap_to_grid`, `phrase_boundaries`, `jl_cut_offset`, `motion_energy_series`, `cut_on_action_nudge`, `apply_timing`, `cut_on_action(clip, spec, energy, fps)` signatures match across tasks. `TimelinePlan`/`TimelineShot`/`MontageMode` reused verbatim.
+**Type consistency:** `pacing_curve`, `beat_grid`, `snap_to_grid`, `phrase_boundaries`, `jl_cut_offset`, `motion_energy_series`, `cut_on_action_nudge`, `apply_timing`, `cut_on_action(clip, spec, energy)` signatures match across tasks. `TimelinePlan`/`TimelineShot`/`MontageMode` reused verbatim.
