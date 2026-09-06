@@ -87,9 +87,13 @@ def test_apply_timing_snaps_to_beats_in_metric():
         TimelineShot(clip_id="a", in_point_s=0.0, out_point_s=2.5),
         TimelineShot(clip_id="b", in_point_s=0.0, out_point_s=2.5),
     ])
-    out = apply_timing(p, beats=[0.0, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0, 4.5, 5.0], phrases=[])
+    grid = [0.0, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0, 4.5, 5.0]
+    out = apply_timing(p, beats=grid, phrases=[])
     for s in out.shots:
         assert s.out_point_s - s.in_point_s > 0
+        # every cut sits on the grid within frame-quantization tolerance
+        # (quantize to 0.04 can shift a 0.5-grid cut by <=0.02)
+        assert min(abs(s.out_point_s - g) for g in grid) <= 0.021
 
 
 def test_apply_timing_empty_beats_keeps_plan():
@@ -101,13 +105,27 @@ def test_apply_timing_empty_beats_keeps_plan():
     ])
     out = apply_timing(p, beats=[], phrases=[])
     assert [s.clip_id for s in out.shots] == ["a", "b"]
+    # durations preserved within frame-quantization tolerance (no beats/
+    # phrases/energies -> pacing only, renormed; 2.5 quantizes to 2.48/2.52)
+    for s in out.shots:
+        assert abs((s.out_point_s - s.in_point_s) - 2.5) <= 0.021
+    assert abs(out.total_s - 5.0) < 0.05
 
 
 def test_apply_timing_never_empty_or_negative():
-    from src.services.cinema.montage_service import TimelinePlan
+    from src.services.cinema.montage_service import TimelinePlan, TimelineShot
     from src.services.cinema.timing_service import apply_timing
     out = apply_timing(TimelinePlan(), beats=[0.5], phrases=[])
     assert out.shots == []
+    # adversarial: a beat grid that would crush a shot below the floor —
+    # the 0.5s floor must hold on every shot
+    p = TimelinePlan(mode=MontageMode.METRIC, shots=[
+        TimelineShot(clip_id="a", in_point_s=0.0, out_point_s=2.5),
+        TimelineShot(clip_id="b", in_point_s=0.0, out_point_s=2.5),
+    ])
+    out = apply_timing(p, beats=[0.0, 0.1, 0.2, 0.3], phrases=[])
+    for s in out.shots:
+        assert (s.out_point_s - s.in_point_s) >= 0.5
 
 
 def test_apply_timing_sum_invariant_survives_all_nudges():

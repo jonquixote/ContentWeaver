@@ -55,7 +55,7 @@ def screen_direction_continuity(clip: ClipRecord, prev: ClipRecord | None) -> tu
     return (1.0, True) if same else (-0.6, True)
 
 
-def cut_on_action(_clip: ClipRecord, _spec: ShotSpec, energy: list[float] | None = None, fps: float = 25.0) -> tuple[float, bool]:
+def cut_on_action(_clip: ClipRecord, _spec: ShotSpec, energy: list[float] | None = None) -> tuple[float, bool]:
     """Cut lands where motion_energy is rising, never mid-peak. Without an
     energy series (no timing data) it stays neutral (0, False) as before."""
     if not energy:

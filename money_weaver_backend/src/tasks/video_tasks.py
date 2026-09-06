@@ -16,9 +16,7 @@ def _build_timing_plan_if_enabled(scenes, video_files, total_s):
     """Build a Plan D timing plan when CINEMA_TIMING_ENABLED=true. Returns None
     (legacy path) when the flag is off or on any failure — never blocks a render."""
     import os
-    flag = os.getenv("CINEMA_TIMING_ENABLED", "false").lower()
-    print(f"cinema timing flag: {flag}")
-    if flag != "true":
+    if os.getenv("CINEMA_TIMING_ENABLED", "false").lower() != "true":
         return None
     try:
         from src.services.cinema.timing_service import build_timing_plan

@@ -35,7 +35,8 @@ def beat_grid(track_path: str | None) -> list[float]:
         y, sr = librosa.load(track_path, sr=22050, mono=True)
         _, beats = librosa.beat.beat_track(y=y, sr=sr)
         return [round(float(b) * 512 / sr, 3) for b in beats]
-    except Exception:
+    except Exception as e:
+        print(f"cinema beat_grid failed for {track_path}: {e}")
         return []
 
 
@@ -69,7 +70,8 @@ def phrase_boundaries(voiceover: str,
                 t += words * 0.35
                 bounds.append(round(t, 3))
         return bounds
-    except Exception:
+    except Exception as e:
+        print(f"cinema phrase_boundaries failed: {e}")
         return []
 
 
@@ -105,7 +107,8 @@ def motion_energy_series(video_path: str | None) -> tuple[list[float], float]:
                     energy.append(float(np.abs(arr - prev).mean() / 255.0))
                 prev = arr
             return energy, 5.0
-    except Exception:
+    except Exception as e:
+        print(f"cinema motion_energy_series failed for {video_path}: {e}")
         return [], 5.0
 
 
@@ -198,11 +201,16 @@ def apply_timing(plan, *, beats: list[float], phrases: list[float] | None = None
                                       transition=shot.transition,
                                       function=shot.function))
         cursor = round(cursor + dur, 3)
-    # final exactness: pin the last out-point to total_s so the concat target hits
+    # final exactness: pin the last out-point to total_s so the concat target hits.
+    # If quantization drift would crush the last shot below the 0.5s floor,
+    # clamp it (tiny sum overshoot is absorbed downstream by -t/-shortest).
     if out.shots:
         last = out.shots[-1]
+        pinned = round(total_s, 3)
+        if pinned - last.in_point_s < 0.5:
+            pinned = round(last.in_point_s + 0.5, 3)
         out.shots[-1] = TimelineShot(clip_id=last.clip_id, in_point_s=last.in_point_s,
-                                     out_point_s=round(total_s, 3),
+                                     out_point_s=pinned,
                                      transition=last.transition, function=last.function)
     return out
 
@@ -282,5 +290,6 @@ def build_timing_plan(scenes: list[dict], video_files: list[tuple],
                 energies.append(([], 5.0))
         # 6. apply the three clocks
         return apply_timing(plan, beats=beats, phrases=phrases, energies=energies)
-    except Exception:
+    except Exception as e:
+        print(f"cinema timing plan build failed, using legacy timing: {e}")
         return None
