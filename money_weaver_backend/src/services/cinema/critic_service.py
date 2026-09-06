@@ -110,7 +110,7 @@ class GeminiCriticClient:
     429 → next key; non-429 failure → bail (None); all keys exhausted → None."""
 
     def __init__(self, model: str | None = None, timeout_s: int = 60):
-        self.model = model or os.getenv("CRITIC_MODEL", "gemini-2.0-flash")
+        self.model = model or os.getenv("CRITIC_MODEL", "gemini-2.5-flash-lite")
         self.timeout_s = int(os.getenv("CRITIC_TIMEOUT_S", str(timeout_s)))
 
     def critique(self, frames: list[dict], prompt: str, *,

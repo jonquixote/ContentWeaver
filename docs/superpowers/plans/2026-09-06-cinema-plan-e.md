@@ -425,7 +425,7 @@ class GeminiCriticClient:
     429 → next key; non-429 failure → bail (None); all keys exhausted → None."""
 
     def __init__(self, model: str | None = None, timeout_s: int = 60):
-        self.model = model or os.getenv("CRITIC_MODEL", "gemini-2.0-flash")
+        self.model = model or os.getenv("CRITIC_MODEL", "gemini-2.5-flash-lite")
         self.timeout_s = int(os.getenv("CRITIC_TIMEOUT_S", str(timeout_s)))
 
     def critique(self, frames: list[dict], prompt: str, *,
@@ -471,7 +471,7 @@ def _read_b64(path: str) -> str:
         return _b64.b64encode(f.read()).decode()
 ```
 
-> Note for the implementer: `CRITIC_MODEL` default is `"gemini-2.0-flash"` as a safe static default; the brief's agentic models (3.7/3.6/3.5 Flash family) are selected via env. `media_processing="AGENTIC"` is sent only in agentic mode per the brief. Max 10 videos / ~45-min limits from the brief do not bind a ≤60s short — no chunking logic needed in v1. **Agentic mode requires an agentic-capable model string** — if `CRITIC_MODE=agentic` is set while `CRITIC_MODEL` names a static-only model, log a warning and proceed static (never fail the render over a model mismatch).
+> Note for the implementer: `CRITIC_MODEL` default is `"gemini-2.5-flash-lite"` (2.0-flash retired; verified live 2026-09-06); the brief's agentic models (3.7/3.6/3.5 Flash family) are selected via env. `media_processing="AGENTIC"` is sent only in agentic mode per the brief. Max 10 videos / ~45-min limits from the brief do not bind a ≤60s short — no chunking logic needed in v1. **Agentic mode requires an agentic-capable model string** — if `CRITIC_MODE=agentic` is set while `CRITIC_MODEL` names a static-only model, log a warning and proceed static (never fail the render over a model mismatch).
 
 - [ ] **Step 4: Record the VCR cassette (once, redacted key) and run tests**
 
@@ -599,7 +599,7 @@ Append to `money_weaver_backend/.env.example`:
 ```
 CINEMA_CRITIC_ENABLED=false
 ```
-Add `CRITIC_MODEL=gemini-2.0-flash`, `CRITIC_MODE=static`, `CRITIC_IMAGE_SIZE=320`, `CRITIC_MAX_FRAMES=12`, `CRITIC_TIMEOUT_S=60`, `CRITIC_DIR=/tmp/cw-critic`.
+Add `CRITIC_MODEL=gemini-2.5-flash-lite`, `CRITIC_MODE=static`, `CRITIC_IMAGE_SIZE=320`, `CRITIC_MAX_FRAMES=12`, `CRITIC_TIMEOUT_S=60`, `CRITIC_DIR=/tmp/cw-critic`.
 
 ```bash
 git add src/services/cinema/critic_service.py money_weaver_backend/.env.example tests/cinema/test_critic.py
