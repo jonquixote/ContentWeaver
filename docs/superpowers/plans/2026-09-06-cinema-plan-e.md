@@ -13,7 +13,7 @@
 - One Gemini call per render. No bulk enrichment, no multi-call loops, no stitching clips to save calls.
 - Strict-JSON output, schema-validated; parse/validation failure means the critic is silently off for that render (log + return None).
 - Advisory-only in v1: log critiques, persist per project/render id; NO re-render loop, NO automatic re-selection.
-- `CRITIC_ENABLED=false` default. Suite passes with no network and no SDK (stub the client; VCR-record one golden cassette).
+- `CINEMA_CRITIC_ENABLED=false` default. Suite passes with no network and no SDK (stub the client; VCR-record one golden cassette).
 - 429/402 (or any transport failure) means skip the critique, never fail the render. Key rotation via `GEMINI_API_KEY` + comma-separated fallbacks (same discipline as `stock_footage_service._gemini_keys`).
 - Agentic vs static is a config knob (`CRITIC_MODE=static|agentic`): static sends storyboard frames; agentic sends the final rendered video with `media_processing="AGENTIC"` for timestamped observations.
 - Reuse canon types verbatim: `ShotSpec` (scene_number, shot_index, narrative_beats, subject_concrete, scale, move, function, mood, screen_direction, intensity, target_duration_s, avoid_clip_ids), `TimelineShot` (clip_id, in_point_s, out_point_s, transition, function), `MontageMode`. No renames.
@@ -23,17 +23,11 @@
 
 ## File Structure
 
-- Create `src/services/cinema/critic_service.py` — `build_storyboard()`, `build_critic_prompt()`, `parse_critique()`, `run_critique()` (+ `GeminiCriticClient`).
-- Create `src/services/cinema/critique_schema.py` — `ShotVerdict` + `RenderCritique` pydantic models (strict).
-- Modify `money_weaver_backend/.env.example` — `CRITIC_ENABLED=false`, `CRITIC_BACKEND=gemini`, `CRITIC_MODEL` (default per brief: 3.5 Flash-Lite static / 3.7 Flash agentic — exact strings in Task 3), `CRITIC_MODE=static`, `CRITIC_IMAGE_SIZE=320`, `CRITIC_MAX_FRAMES=12`, `CRITIC_TIMEOUT_S=60`, `CRITIC_DIR` (persist dir).
-- Test: `tests/cinema/test_critique_schema.py`, `tests/cinema/test_critic.py` (+ one VCR cassette `tests/cinema/cassettes/critic_static.yaml`, recorded once with a redacted key).
-
-## File Structure
-
 - Create `src/services/cinema/critique_schema.py` — strict `ShotVerdict`/`RenderCritique` (Task 1).
 - Create `src/services/cinema/critic_service.py` — storyboard, prompt, parse, client, entry point (Tasks 2–5, grown incrementally).
 - Modify `money_weaver_backend/.env.example` — critic flags (Task 5).
 - Test: `tests/cinema/test_critique_schema.py`, `tests/cinema/test_critic.py` (+ VCR cassette `tests/cinema/cassettes/critic_static.yaml`).
+
 
 > Design note (key rotation): `_gemini_keys()` is deliberately duplicated (6 lines)
 > in `critic_service.py` rather than imported from `stock_footage_service`, to
@@ -167,6 +161,24 @@ def test_build_storyboard_extracts_middle_frame(tmp_path):
     assert len(out) == 1
     assert out[0]["shot_index"] == 0
     assert os.path.exists(out[0]["frame_path"])
+
+
+def test_build_storyboard_index_survives_skips():
+    # A skipped (unresolvable) shot must NOT shift alignment: shot_index is the
+    # position in plan.shots, so frames stay aligned with specs.
+    import subprocess
+    import tempfile
+    tmp = tempfile.mkdtemp()
+    src = os.path.join(tmp, "src.mp4")
+    subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-f", "lavfi",
+                    "-i", "testsrc=duration=4:size=320x240:rate=10",
+                    "-pix_fmt", "yuv420p", src], check=True, timeout=60)
+    shots = [_shot(0), _shot(1), _shot(2)]
+    def resolve(cid):
+        return src if cid in ("c0", "c2") else None
+    out = build_storyboard(shots, resolve, os.path.join(tmp, "sb"), image_size=160)
+    assert [r["shot_index"] for r in out] == [0, 2]
+    assert [r["clip_id"] for r in out] == ["c0", "c2"]
 ```
 
 - [ ] **Step 2: Run test to verify it fails**
@@ -184,34 +196,43 @@ import subprocess
 
 
 def build_storyboard(shots, resolve, out_dir: str, image_size: int = 320) -> list[dict]:
-    """Extract the middle frame of each shot's clip via ffmpeg. Skips shots
-    whose clip cannot be resolved. Never raises — returns what succeeded."""
+    """Extract the middle frame of each shot's SEGMENT via ffmpeg. TimelineShot
+    in/out points are TIMELINE positions, not clip-local: the rendered segment
+    for shot i is [in_point_s, out_point_s) of the assembled timeline, which
+    corresponds to clip-local [0, out-in) of the cut clip (assembly cuts each
+    clip to exactly its shot duration). So the storyboard frame is extracted at
+    clip-local (out-in)/2 of the resolved clip file.
+
+    shot_index is the POSITION in plan.shots (enumerate) — skips must not shift
+    alignment between frames and specs. Never raises; returns what succeeded."""
     rows: list[dict] = []
     try:
         os.makedirs(out_dir, exist_ok=True)
     except Exception:
         return []
-    for shot in shots:
+    for i, shot in enumerate(shots):
         try:
             path = resolve(shot.clip_id)
             if not path or not os.path.exists(path):
                 continue
             dur = max(0.1, (shot.out_point_s or 2.5) - (shot.in_point_s or 0.0))
-            mid = round((shot.in_point_s or 0.0) + dur / 2.0, 3)
-            frame_path = os.path.join(out_dir, f"shot_{shot.shot_index if hasattr(shot, 'shot_index') else 0:02d}.jpg")
+            mid = round(dur / 2.0, 3)  # clip-local middle of the rendered segment
+            frame_path = os.path.join(out_dir, f"shot_{i:02d}.jpg")
             r = subprocess.run(
                 ["ffmpeg", "-y", "-loglevel", "error", "-ss", str(mid), "-i", path,
                  "-frames:v", "1", "-vf", f"scale={image_size}:-1", frame_path],
                 timeout=60, check=False)
             if r.returncode == 0 and os.path.exists(frame_path):
-                rows.append({"shot_index": getattr(shot, "shot_index", len(rows)),
+                rows.append({"shot_index": i,
                              "clip_id": shot.clip_id, "frame_path": frame_path})
         except Exception:
             continue
     return rows
 ```
 
-> Note: `TimelineShot` has no `shot_index` field (clip_id, in_point_s, out_point_s, transition, function) — the builder falls back to enumeration order. If the implementer prefers, add an optional `shot_index` later; the test pins enumeration-order behavior either way.
+> `shot_index` is the position in `plan.shots`, pinned by test (a skipped shot
+> keeps its index — frames and specs stay aligned). Timeline in/out points are
+> converted to clip-local `[0, dur)` before extraction, pinned by test.
 
 - [ ] **Step 4: Run test to verify it passes**
 
@@ -450,7 +471,7 @@ def _read_b64(path: str) -> str:
         return _b64.b64encode(f.read()).decode()
 ```
 
-> Note for the implementer: `CRITIC_MODEL` default is `"gemini-2.0-flash"` as a safe static default; the brief's agentic models (3.7/3.6/3.5 Flash family) are selected via env. `media_processing="AGENTIC"` is sent only in agentic mode per the brief. Max 10 videos / ~45-min limits from the brief do not bind a ≤60s short — no chunking logic needed in v1.
+> Note for the implementer: `CRITIC_MODEL` default is `"gemini-2.0-flash"` as a safe static default; the brief's agentic models (3.7/3.6/3.5 Flash family) are selected via env. `media_processing="AGENTIC"` is sent only in agentic mode per the brief. Max 10 videos / ~45-min limits from the brief do not bind a ≤60s short — no chunking logic needed in v1. **Agentic mode requires an agentic-capable model string** — if `CRITIC_MODE=agentic` is set while `CRITIC_MODEL` names a static-only model, log a warning and proceed static (never fail the render over a model mismatch).
 
 - [ ] **Step 4: Record the VCR cassette (once, redacted key) and run tests**
 
@@ -473,7 +494,7 @@ git commit -m "feat(cinema): strict-JSON parse + Gemini critic client (one call,
 
 **Interfaces:**
 - Consumes: `TimelinePlan`, `list[ShotSpec]`, clip resolver, project/render id.
-- Produces: `run_critique(plan, specs, resolve, *, project_id, render_id, agentic=None) -> RenderCritique | None` — builds storyboard, prompts, calls client once, persists JSON to `CRITIC_DIR`, returns critique or None. `CRITIC_ENABLED=false` (or any failure) → None, never raises.
+- Produces: `run_critique(plan, specs, resolve, *, project_id, render_id, agentic=None) -> RenderCritique | None` — builds storyboard, prompts, calls client once, persists JSON to `CRITIC_DIR`, returns critique or None. `CINEMA_CRITIC_ENABLED=false` (or any failure) → None, never raises.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -499,14 +520,14 @@ def _specs():
 
 
 def test_run_critique_disabled_returns_none(monkeypatch, tmp_path):
-    monkeypatch.setenv("CRITIC_ENABLED", "false")
+    monkeypatch.setenv("CINEMA_CRITIC_ENABLED", "false")
     assert run_critique(_plan(), _specs(), lambda cid: None,
                         project_id="p", render_id="r",
                         persist_dir=str(tmp_path)) is None
 
 
 def test_run_critique_persists_valid_critique(monkeypatch, tmp_path):
-    monkeypatch.setenv("CRITIC_ENABLED", "true")
+    monkeypatch.setenv("CINEMA_CRITIC_ENABLED", "true")
     from src.services.cinema import critic_service as cs
     fake = {"shots": [], "overall_verdict": "pass", "summary": "clean"}
     monkeypatch.setattr(cs.GeminiCriticClient, "critique", lambda self, f, p, **k: cs.parse_critique(__import__("json").dumps(fake)))
@@ -519,7 +540,7 @@ def test_run_critique_persists_valid_critique(monkeypatch, tmp_path):
 
 
 def test_run_critique_never_raises_on_client_failure(monkeypatch, tmp_path):
-    monkeypatch.setenv("CRITIC_ENABLED", "true")
+    monkeypatch.setenv("CINEMA_CRITIC_ENABLED", "true")
     from src.services.cinema import critic_service as cs
     def boom(self, f, p, **k):
         raise RuntimeError("network down")
@@ -538,10 +559,10 @@ Expected: FAIL with `ImportError: cannot import name 'run_critique'`
 ```python
 def run_critique(plan, specs, resolve, *, project_id: str, render_id: str,
                  persist_dir: str | None = None, agentic: bool | None = None) -> RenderCritique | None:
-    """Advisory-only v1 entry point. CRITIC_ENABLED=false (or any failure) →
+    """Advisory-only v1 entry point. CINEMA_CRITIC_ENABLED=false (or any failure) →
     None. On success persists the critique JSON and returns it. Never raises."""
     try:
-        if os.getenv("CRITIC_ENABLED", "false").lower() != "true":
+        if os.getenv("CINEMA_CRITIC_ENABLED", "false").lower() != "true":
             return None
         use_agentic = agentic if agentic is not None else (
             os.getenv("CRITIC_MODE", "static").lower() == "agentic")
@@ -578,12 +599,126 @@ Append to `money_weaver_backend/.env.example`:
 ```
 CINEMA_CRITIC_ENABLED=false
 ```
-> Note: the operative flag is `CRITIC_ENABLED` (code reads `CRITIC_ENABLED`); also add `CRITIC_BACKEND=gemini`, `CRITIC_MODE=static`, `CRITIC_IMAGE_SIZE=320`, `CRITIC_MAX_FRAMES=12`, `CRITIC_TIMEOUT_S=60`, `CRITIC_DIR=/tmp/cw-critic`. Keep both names documented with `CRITIC_ENABLED` canonical.
+Add `CRITIC_BACKEND=gemini`, `CRITIC_MODE=static`, `CRITIC_IMAGE_SIZE=320`, `CRITIC_MAX_FRAMES=12`, `CRITIC_TIMEOUT_S=60`, `CRITIC_DIR=/tmp/cw-critic`.
 
 ```bash
 git add src/services/cinema/critic_service.py money_weaver_backend/.env.example tests/cinema/test_critic.py
 git commit -m "feat(cinema): run_critique entry (advisory-only, persists per render) + flags"
 ```
+
+> Storyboard dir retention: storyboard frames live under `CRITIC_DIR/sb/` next to
+> the persisted critique JSON. They are evidence for sign-off — do NOT delete
+> them in the render path. Disk cleanup (`FOOTAGE_DISK_RETENTION_H` purge) must
+> exclude `CRITIC_DIR`. Covered by the retention test in Task 6.
+
+---
+
+## Task 6: Wire the call site + closing ritual (live render, flag on)
+
+**Files:**
+- Modify: `src/tasks/video_tasks.py` (call `run_critique` after assembly, flag-gated)
+- Test: `tests/cinema/test_critic.py` (wiring contract) + live ritual (non-CI)
+
+**Interfaces:**
+- Consumes: `TimelinePlan` used for the render, `list[ShotSpec]`, clip resolver, project/render ids.
+- Produces: one persisted critique JSON per render when `CINEMA_CRITIC_ENABLED=true`; nothing when off.
+
+**TimelinePlan source decision (explicit):** when `CINEMA_TIMING_ENABLED=true`, reuse the
+timing plan's underlying `TimelinePlan` (the same object passed to assembly — single
+source of truth, no parallel structure). When timing is off, synthesize minimal
+shots from `clip_durations` (one `TimelineShot` per clip, `in_point_s=0`,
+`out_point_s=duration`) so the critic still has a plan to score. Both paths are
+tested below.
+
+- [ ] **Step 1: Write the failing test**
+
+```python
+from src.services.cinema.critic_service import critique_plan_for_render
+from src.services.cinema.montage_service import TimelinePlan, TimelineShot
+
+
+def test_wiring_synthesizes_shots_when_no_timing_plan():
+    # Timing off: minimal shots synthesized from clip durations.
+    shots = critique_plan_for_render(None, [2.5, 2.5])
+    assert len(shots) == 2
+    assert all(isinstance(s, TimelineShot) for s in shots)
+
+
+def test_wiring_reuses_timing_plan_when_present():
+    from src.services.cinema.montage_service import TimelinePlan, TimelineShot
+    from src.services.cinema.types import MontageMode
+    plan = TimelinePlan(mode=MontageMode.OVERTONAL, shots=[
+        TimelineShot(clip_id="a", in_point_s=0.0, out_point_s=2.5),
+    ])
+    assert critique_plan_for_render(plan, []) is plan  # same object, no parallel structure
+
+
+def test_wiring_returns_none_when_disabled(monkeypatch):
+    monkeypatch.setenv("CINEMA_CRITIC_ENABLED", "false")
+    from src.services.cinema.critic_service import maybe_critique_render
+    assert maybe_critique_render(None, [], lambda cid: None, "p", "r") is None
+```
+
+- [ ] **Step 2: Run test to verify it fails**
+
+Run: `pytest tests/cinema/test_critic.py -v -k "wiring or critique_plan"`
+Expected: FAIL with `ImportError: cannot import name 'critique_plan_for_render'`
+
+- [ ] **Step 3: Write minimal implementation**
+
+```python
+def critique_plan_for_render(timing_plan, clip_durations: list[float]):
+    """Single source of truth for the plan the critic scores: reuse the timing
+    plan when present, else synthesize minimal shots from clip durations."""
+    if timing_plan is not None:
+        return timing_plan
+    from src.services.cinema.montage_service import TimelineShot
+    return [TimelineShot(clip_id=f"clip_{i}", in_point_s=0.0, out_point_s=float(d))
+            for i, d in enumerate(clip_durations)]
+
+
+def maybe_critique_render(plan, specs, resolve, project_id: str, render_id: str):
+    """Flag-gated call-site wrapper. Returns the critique or None. Never raises."""
+    import os
+    if os.getenv("CINEMA_CRITIC_ENABLED", "false").lower() != "true":
+        return None
+    try:
+        return run_critique(plan, specs, resolve, project_id=project_id, render_id=render_id)
+    except Exception as e:
+        print(f"cinema critic call-site failed, render proceeds: {e}")
+        return None
+```
+
+Call site (`src/tasks/video_tasks.py`, after assembly succeeds, flag-gated inside
+`maybe_critique_render` — the call itself is unconditional placement, behavior
+gated):
+
+```python
+timing_plan = ...  # the same object passed to assemble_video (or None)
+specs = ...        # ShotSpecs used for the render
+critique_plan = critique_plan_for_render(timing_plan, clip_durations_used)
+maybe_critique_render(critique_plan, specs, resolve_clip_path,
+                      project_id=str(project_id), render_id=task_id)
+```
+
+- [ ] **Step 4: Run test to verify it passes**
+
+Run: `pytest tests/cinema/test_critic.py -v`
+Expected: PASS
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add src/services/cinema/critic_service.py src/tasks/video_tasks.py tests/cinema/test_critic.py
+git commit -m "feat(cinema): wire critic call site (reuse timing plan, flag-gated, never-blocks)"
+```
+
+- [ ] **Step 6: Closing ritual (non-CI, live render)**
+
+1. One live render with `CINEMA_CRITIC_ENABLED=true` (deterministic director; quotas as available).
+2. Confirm one persisted critique JSON under `CRITIC_DIR` (`{project_id}_{render_id}.json`), storyboard frames beside it.
+3. Human sign-off on critique quality (verdicts match/mismatch the visible frames; reasons specific, not generic).
+4. Record sign-off + artifact paths in the followups log. Plan E closes on sign-off, not on the render alone.
 
 ---
 
@@ -593,7 +728,7 @@ git commit -m "feat(cinema): run_critique entry (advisory-only, persists per ren
 - One call per render → `GeminiCriticClient.critique` single POST (Task 4).
 - Strict-JSON schema-validated output → `critique_schema.py` strict models + `parse_critique` None-on-failure (Tasks 1, 4).
 - Advisory-only v1, no re-render loop → `run_critique` logs + persists only (Task 5). No re-plan code anywhere.
-- `CRITIC_ENABLED=false` default → checked first in `run_critique`; flags in `.env.example` (Task 5).
+- `CINEMA_CRITIC_ENABLED=false` default → checked first in `run_critique`; flags in `.env.example` (Task 5).
 - Key rotation via existing stack → `_gemini_keys` discipline (primary + `GEMINI_API_KEY_FALLBACKS`, 429 → next, else bail), same shape as `stock_footage_service` (Task 4).
 - Suite hermetic → stub/VCR only, no network, no SDK (all tasks; cassette redacted).
 - Storyboard frames vs ShotSpecs → Task 2 + Task 3 prompt shape.
@@ -601,4 +736,8 @@ git commit -m "feat(cinema): run_critique entry (advisory-only, persists per ren
 
 **Placeholder scan:** no TBD/TODO; all code complete for the flagged-off path. `test_client_skips_without_keys` exercises the no-key path without network.
 
-**Type consistency:** `ShotVerdict`/`RenderCritique`, `build_storyboard(shots, resolve, out_dir, image_size)`, `build_critic_prompt(specs, n_frames, agentic)`, `parse_critique(raw)`, `GeminiCriticClient().critique(frames, prompt, agentic, video_path)`, `run_critique(plan, specs, resolve, project_id, render_id, persist_dir, agentic)` — consistent across tasks. `TimelineShot` has no `shot_index` — Task 2 handles via enumeration fallback (documented in the task).
+**Type consistency:** `ShotVerdict`/`RenderCritique`, `build_storyboard(shots, resolve, out_dir, image_size)`, `build_critic_prompt(specs, n_frames, agentic)`, `parse_critique(raw)`, `GeminiCriticClient().critique(frames, prompt, agentic, video_path)`, `run_critique(plan, specs, resolve, project_id, render_id, persist_dir, agentic)`, `critique_plan_for_render(timing_plan, clip_durations)`, `maybe_critique_render(plan, specs, resolve, project_id, render_id)` — consistent across tasks. `shot_index` is the position in `plan.shots` (Task 2 pins it, including across skips).
+
+## Standing plan checklist (applies to this and all future plans)
+
+- [ ] **Every entry point has a wired caller.** `run_critique`/`maybe_critique_render` is called from the render path (Task 6). No `CINEMA_*_ENABLED=true` code path may exist without a call site exercised by test or ritual — the Plan A (pre-PR#2) and Plan D placebos must not recur. Verified by grep for the entry name outside its defining module + tests.
