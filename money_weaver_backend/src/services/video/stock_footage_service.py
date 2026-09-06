@@ -268,16 +268,10 @@ class StockFootageService:
 
     @staticmethod
     def _gemini_keys():
-        """Ordered list of Gemini API keys to try (primary + comma-separated
-        fallbacks). Free tier caps each PROJECT at 20 req/day, so multiple keys
-        = multiple 20/day buckets. The first 429 is a quota signal, not an
-        error - rotate to the next key before falling back entirely."""
-        primary = os.getenv('GEMINI_API_KEY') or ''
-        fallbacks = [k.strip() for k in
-                     (os.getenv('GEMINI_API_KEY_FALLBACKS') or '').split(',')
-                     if k.strip()]
-        keys = list(dict.fromkeys([primary] + fallbacks))
-        return [k for k in keys if k]
+        """Shared rotator (per-key 429 cooldowns); thin wrapper so existing
+        callers keep working. See src/services/cinema/gemini_keys.py."""
+        from src.services.cinema.gemini_keys import live_keys
+        return live_keys()
 
     @staticmethod
     def _openrouter_keys():
@@ -351,17 +345,21 @@ class StockFootageService:
             }
             model = os.getenv('VISION_MODEL_GEMINI') or 'gemini-2.5-flash'
             r = None
+            from src.services.cinema.gemini_keys import mark_exhausted, mark_ok
             for key in keys:
                 r = requests.post(
                     f'https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent',
                     params={'key': key}, json=payload, timeout=40)
                 if r.status_code == 200:
+                    mark_ok(key)
                     break
                 print(f"gemini vision status: {r.status_code} {r.text[:150]}")
-                # 429 = this key's 20/day quota exhausted; next key may still
-                # have budget. Non-429 (400/500) is not a quota issue - bail.
-                if r.status_code != 429:
-                    return None
+                # 429 = this key's quota exhausted; cooldown it, next key may
+                # still have budget. Non-429 (400/500) is not quota - bail.
+                if r.status_code == 429:
+                    mark_exhausted(key)
+                    continue
+                return None
             if r is None or r.status_code != 200:
                 return None
             cand = r.json()['candidates'][0]
@@ -400,13 +398,17 @@ class StockFootageService:
             payload = {'contents': [{'parts': [{'text': prompt}]}],
                        'generationConfig': {'maxOutputTokens': max_tokens, 'temperature': 0.1}}
             r = None
+            from src.services.cinema.gemini_keys import mark_exhausted as _mark_exhausted, mark_ok as _mark_ok
             for key in keys:
                 r = requests.post(url, params={'key': key}, json=payload, timeout=45)
                 if r.status_code == 200:
+                    _mark_ok(key)
                     break
                 print(f"gemini text status: {r.status_code} {r.text[:150]}")
-                if r.status_code != 429:
-                    return None
+                if r.status_code == 429:
+                    _mark_exhausted(key)
+                    continue
+                return None
             if r is None or r.status_code != 200:
                 return None
             parts = r.json()['candidates'][0]['content']['parts']

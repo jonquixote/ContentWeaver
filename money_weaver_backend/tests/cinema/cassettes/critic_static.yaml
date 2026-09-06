@@ -1,0 +1,41 @@
+# Golden request-shape cassette for the static (storyboard-frame) critic call.
+# Recorded WITHOUT a live key: no GEMINI_API_KEY exists in this environment, so the
+# request body below was captured from the real GeminiCriticClient code path
+# (requests.post stubbed at the transport) and the response body is a synthetic
+# representative example. Record with filter_query_parameters=["key"] (same
+# convention as the Pixabay cassette fix) — the live key travels as ?key= and
+# must never be committed. Re-record against the live API when a key is
+# available; the stub-path test (test_client_skips_without_keys) is hermetic
+# and does not touch this cassette.
+interactions:
+- request:
+    body: '{"contents": [{"parts": [{"text": "<critic prompt text>"}, {"inline_data":
+      {"mime_type": "image/jpeg", "data": "<base64 storyboard frame>"}}]}],
+      "generationConfig": {"maxOutputTokens": 2000, "temperature": 0.1}}'
+    headers:
+      Accept:
+      - '*/*'
+      Accept-Encoding:
+      - gzip, deflate
+      Connection:
+      - keep-alive
+      Content-Length:
+      - '256'
+      Content-Type:
+      - application/json
+      User-Agent:
+      - python-requests/2.32.5
+    method: POST
+    uri: https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=FILTERED
+  response:
+    body:
+      string: '{"candidates": [{"content": {"parts": [{"text": "{\"shots\": [],
+        \"overall_verdict\": \"pass\", \"summary\": \"clean\"}"}], "role": "model"},
+        "finishReason": "STOP"}]}'
+    headers:
+      Content-Type:
+      - application/json; charset=UTF-8
+    status:
+      code: 200
+      message: OK
+version: 1

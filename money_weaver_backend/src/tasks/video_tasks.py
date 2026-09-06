@@ -517,6 +517,49 @@ def generate_assembler_video_task(self, project_id, prompt, duration=30, orienta
                 except (FileNotFoundError, ValueError):
                     niche = None
 
+            timing_plan = _build_timing_plan_if_enabled(
+                parsed_script.get('scenes', []), video_data,
+                duration)
+
+            # Plan E critic: advisory-only, flag-gated inside
+            # maybe_critique_render (off = no-op), never blocks the render.
+            # Runs BEFORE assemble_video because assembly deletes the downloaded
+            # stock_* source clips after concat — the storyboard resolver needs
+            # those files on disk. Single source of truth: timing_plan is the
+            # SAME object passed to assemble_video below, and it carries the
+            # director's ShotSpecs, so the critic scores frames against real
+            # specs (not generic prompts). Timing off: specs fall back to []
+            # (montage-level flags only).
+            try:
+                from src.services.cinema.critic_service import (
+                    critique_plan_for_render, maybe_critique_render)
+                clip_durations = []
+                clip_paths = []
+                for _v in video_data or []:
+                    try:
+                        clip_durations.append(float(_v[1]))
+                    except (IndexError, TypeError, ValueError):
+                        continue
+                    try:
+                        clip_paths.append(str(_v[0]))
+                    except (IndexError, TypeError, ValueError):
+                        clip_paths.append("")
+
+                def _resolve_critic_clip(clip_id):
+                    if isinstance(clip_id, str) and clip_id.startswith("local:"):
+                        _p = clip_id.split(":", 2)[-1]
+                        return _p if _p and os.path.exists(_p) else None
+                    return None
+
+                _specs = list(getattr(timing_plan, "specs", []) or [])
+                maybe_critique_render(
+                    critique_plan_for_render(timing_plan, clip_durations, clip_paths),
+                    _specs, _resolve_critic_clip,
+                    project_id=str(project_id),
+                    render_id=task_id or output_filename)
+            except Exception as e:
+                print(f"cinema critic call-site failed, render proceeds: {e}")
+
             final_video_path = assembly_service.assemble_video(
                 video_files=video_data,  # Pass the full video data with metadata
                 audio_file=audio_file,
@@ -527,9 +570,7 @@ def generate_assembler_video_task(self, project_id, prompt, duration=30, orienta
                 width=width,
                 height=height,
                 niche=niche,
-                timing_plan=_build_timing_plan_if_enabled(
-                    parsed_script.get('scenes', []), video_data,
-                    duration),
+                timing_plan=timing_plan,
             )
             
             if not final_video_path:

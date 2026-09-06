@@ -192,3 +192,23 @@ def test_build_timing_plan_empty_inputs_returns_none():
     assert build_timing_plan([], [], music_path=None, total_s=10.0) is None
     assert build_timing_plan([], [("/tmp/a.mp4", 8.0, {})], music_path=None,
                              total_s=10.0) is None
+
+
+def test_build_timing_plan_exposes_specs():
+    from src.services.cinema.timing_service import build_timing_plan
+    scenes = [{"scene_number": 1, "visual_description": "a stage",
+               "voiceover": "hi.", "start_time": 0, "end_time": 5, "duration": 5}]
+    videos = [("/tmp/a.mp4", 8.0, {}), ("/tmp/b.mp4", 8.0, {})]
+    plan = build_timing_plan(scenes, videos, music_path=None, total_s=10.0)
+    assert plan is not None
+    assert plan.specs  # director ShotSpecs ride along for the critic
+    assert all(hasattr(s, "subject_concrete") for s in plan.specs)
+
+
+def test_apply_timing_preserves_specs():
+    from src.services.cinema.montage_service import TimelinePlan, TimelineShot
+    from src.services.cinema.timing_service import apply_timing
+    plan = TimelinePlan(shots=[TimelineShot(clip_id="a", in_point_s=0.0, out_point_s=2.5)])
+    plan.specs = ["spec-a"]
+    out = apply_timing(plan, beats=[], phrases=[])
+    assert out.specs == ["spec-a"]
