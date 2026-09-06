@@ -38,6 +38,7 @@ class TimelineShot:
 class TimelinePlan:
     shots: list[TimelineShot] = field(default_factory=list)
     mode: MontageMode = MontageMode.OVERTONAL
+    specs: list = field(default_factory=list)  # ShotSpecs behind the shots (optional; e.g. for the critic)
 
     @property
     def total_s(self) -> float:

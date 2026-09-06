@@ -190,7 +190,7 @@ def apply_timing(plan, *, beats: list[float], phrases: list[float] | None = None
     raw_total = sum(e - s for _, s, e in raws)
     scale = (total_s / raw_total) if raw_total > 0 else 1.0
     # pass 3: quantize every cut to the 25fps frame grid (0.04s), floor 0.5s
-    out = TimelinePlan(mode=plan.mode)
+    out = TimelinePlan(mode=plan.mode, specs=list(getattr(plan, "specs", []) or []))
     cursor = 0.0
     for shot, start, end in raws:
         scaled = (end - start) * scale
@@ -255,6 +255,7 @@ def build_timing_plan(scenes: list[dict], video_files: list[tuple],
         plan = montage_plan(specs, candidates)
         if not plan.shots:
             return None
+        plan.specs = specs  # carried through apply_timing for the critic
         plan_total = plan.total_s
         if plan_total > 0 and abs(plan_total - total_s) > 0.01:
             scale = total_s / plan_total

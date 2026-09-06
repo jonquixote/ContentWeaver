@@ -543,9 +543,9 @@ def generate_assembler_video_task(self, project_id, prompt, duration=30, orienta
             # Plan E critic: advisory-only, flag-gated inside
             # maybe_critique_render (off = no-op), never blocks the render.
             # Single source of truth: timing_plan is the SAME object passed to
-            # assemble_video above. The assembler path has no ShotSpecs, so
-            # specs=[] (generic prompt); timing-plan clip ids look like
-            # "local:{index}:{path}" and resolve to the downloaded source file.
+            # assemble_video above, and it carries the director's ShotSpecs, so
+            # the critic scores frames against real specs (not generic prompts).
+            # Timing off: specs fall back to [] (montage-level flags only).
             try:
                 from src.services.cinema.critic_service import (
                     critique_plan_for_render, maybe_critique_render)
@@ -562,9 +562,10 @@ def generate_assembler_video_task(self, project_id, prompt, duration=30, orienta
                         return _p if _p and os.path.exists(_p) else None
                     return None
 
+                _specs = list(getattr(timing_plan, "specs", []) or [])
                 maybe_critique_render(
                     critique_plan_for_render(timing_plan, clip_durations),
-                    [], _resolve_critic_clip,
+                    _specs, _resolve_critic_clip,
                     project_id=str(project_id),
                     render_id=task_id or output_filename)
             except Exception as e:
