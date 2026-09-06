@@ -4,6 +4,7 @@ from src.services.cinema.critic_service import (
     GeminiCriticClient,
     build_critic_prompt,
     build_storyboard,
+    critique_plan_for_render,
     parse_critique,
     run_critique,
 )
@@ -148,3 +149,25 @@ def test_run_critique_never_raises_on_client_failure(monkeypatch, tmp_path):
     monkeypatch.setattr(cs.GeminiCriticClient, "critique", boom)
     assert run_critique(_plan(), _specs(), lambda cid: None,
                         project_id="p", render_id="r", persist_dir=str(tmp_path)) is None
+
+
+def test_wiring_synthesizes_shots_when_no_timing_plan():
+    # Timing off: minimal shots synthesized from clip durations.
+    shots = critique_plan_for_render(None, [2.5, 2.5])
+    assert len(shots) == 2
+    assert all(isinstance(s, TimelineShot) for s in shots)
+
+
+def test_wiring_reuses_timing_plan_when_present():
+    from src.services.cinema.montage_service import TimelinePlan, TimelineShot
+    from src.services.cinema.types import MontageMode
+    plan = TimelinePlan(mode=MontageMode.OVERTONAL, shots=[
+        TimelineShot(clip_id="a", in_point_s=0.0, out_point_s=2.5),
+    ])
+    assert critique_plan_for_render(plan, []) is plan  # same object, no parallel structure
+
+
+def test_wiring_returns_none_when_disabled(monkeypatch):
+    monkeypatch.setenv("CINEMA_CRITIC_ENABLED", "false")
+    from src.services.cinema.critic_service import maybe_critique_render
+    assert maybe_critique_render(None, [], lambda cid: None, "p", "r") is None

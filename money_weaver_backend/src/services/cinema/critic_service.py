@@ -142,6 +142,28 @@ def _read_b64(path: str) -> str:
         return _b64.b64encode(f.read()).decode()
 
 
+def critique_plan_for_render(timing_plan, clip_durations: list[float]):
+    """Single source of truth for the plan the critic scores: reuse the timing
+    plan when present, else synthesize minimal shots from clip durations."""
+    if timing_plan is not None:
+        return timing_plan
+    from src.services.cinema.montage_service import TimelineShot
+    return [TimelineShot(clip_id=f"clip_{i}", in_point_s=0.0, out_point_s=float(d))
+            for i, d in enumerate(clip_durations)]
+
+
+def maybe_critique_render(plan, specs, resolve, project_id: str, render_id: str):
+    """Flag-gated call-site wrapper. Returns the critique or None. Never raises."""
+    import os
+    if os.getenv("CINEMA_CRITIC_ENABLED", "false").lower() != "true":
+        return None
+    try:
+        return run_critique(plan, specs, resolve, project_id=project_id, render_id=render_id)
+    except Exception as e:
+        print(f"cinema critic call-site failed, render proceeds: {e}")
+        return None
+
+
 def run_critique(plan, specs, resolve, *, project_id: str, render_id: str,
                  persist_dir: str | None = None, agentic: bool | None = None) -> RenderCritique | None:
     """Advisory-only v1 entry point. CINEMA_CRITIC_ENABLED=false (or any failure) →

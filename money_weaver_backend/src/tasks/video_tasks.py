@@ -517,6 +517,9 @@ def generate_assembler_video_task(self, project_id, prompt, duration=30, orienta
                 except (FileNotFoundError, ValueError):
                     niche = None
 
+            timing_plan = _build_timing_plan_if_enabled(
+                parsed_script.get('scenes', []), video_data,
+                duration)
             final_video_path = assembly_service.assemble_video(
                 video_files=video_data,  # Pass the full video data with metadata
                 audio_file=audio_file,
@@ -527,9 +530,7 @@ def generate_assembler_video_task(self, project_id, prompt, duration=30, orienta
                 width=width,
                 height=height,
                 niche=niche,
-                timing_plan=_build_timing_plan_if_enabled(
-                    parsed_script.get('scenes', []), video_data,
-                    duration),
+                timing_plan=timing_plan,
             )
             
             if not final_video_path:
@@ -538,6 +539,36 @@ def generate_assembler_video_task(self, project_id, prompt, duration=30, orienta
             # Check if the video file actually exists
             if not os.path.exists(final_video_path):
                 raise Exception(f"Video file was not created at {final_video_path}")
+
+            # Plan E critic: advisory-only, flag-gated inside
+            # maybe_critique_render (off = no-op), never blocks the render.
+            # Single source of truth: timing_plan is the SAME object passed to
+            # assemble_video above. The assembler path has no ShotSpecs, so
+            # specs=[] (generic prompt); timing-plan clip ids look like
+            # "local:{index}:{path}" and resolve to the downloaded source file.
+            try:
+                from src.services.cinema.critic_service import (
+                    critique_plan_for_render, maybe_critique_render)
+                clip_durations = []
+                for _v in video_data or []:
+                    try:
+                        clip_durations.append(float(_v[1]))
+                    except (IndexError, TypeError, ValueError):
+                        continue
+
+                def _resolve_critic_clip(clip_id):
+                    if isinstance(clip_id, str) and clip_id.startswith("local:"):
+                        _p = clip_id.split(":", 2)[-1]
+                        return _p if _p and os.path.exists(_p) else None
+                    return None
+
+                maybe_critique_render(
+                    critique_plan_for_render(timing_plan, clip_durations),
+                    [], _resolve_critic_clip,
+                    project_id=str(project_id),
+                    render_id=task_id or output_filename)
+            except Exception as e:
+                print(f"cinema critic call-site failed, render proceeds: {e}")
 
             # Generate thumbnail from the assembled video
             self.update_state(state='PROGRESS', meta={'current': 90, 'total': 100, 'status': 'Generating thumbnail...'})
