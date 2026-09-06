@@ -1,11 +1,13 @@
+import json
 import os
 from src.services.cinema.critic_service import (
     GeminiCriticClient,
     build_critic_prompt,
     build_storyboard,
     parse_critique,
+    run_critique,
 )
-from src.services.cinema.montage_service import TimelineShot
+from src.services.cinema.montage_service import TimelinePlan, TimelineShot
 from src.services.cinema.shot import ShotSpec
 from src.services.cinema.types import CameraMove, ShotFunction, ShotScale
 
@@ -102,3 +104,47 @@ def test_client_skips_without_keys(monkeypatch):
     monkeypatch.setattr("src.services.cinema.critic_service._gemini_keys", lambda: [])
     client = GeminiCriticClient()
     assert client.critique([], "prompt") is None
+
+
+def _plan():
+    from src.services.cinema.types import MontageMode
+    return TimelinePlan(mode=MontageMode.OVERTONAL, shots=[
+        TimelineShot(clip_id="c0", in_point_s=0.0, out_point_s=2.5),
+    ])
+
+
+def _specs():
+    from src.services.cinema.types import MontageMode  # noqa: F401 (keep parity with brief)
+    return [ShotSpec(scene_number=1, shot_index=0, narrative_beats="jokes",
+                     subject_concrete="comedian", scale=ShotScale.MS,
+                     move=CameraMove.STATIC, function=ShotFunction.CONTEXT, mood="dim")]
+
+
+def test_run_critique_disabled_returns_none(monkeypatch, tmp_path):
+    monkeypatch.setenv("CINEMA_CRITIC_ENABLED", "false")
+    assert run_critique(_plan(), _specs(), lambda cid: None,
+                        project_id="p", render_id="r",
+                        persist_dir=str(tmp_path)) is None
+
+
+def test_run_critique_persists_valid_critique(monkeypatch, tmp_path):
+    monkeypatch.setenv("CINEMA_CRITIC_ENABLED", "true")
+    from src.services.cinema import critic_service as cs
+    fake = {"shots": [], "overall_verdict": "pass", "summary": "clean"}
+    monkeypatch.setattr(cs.GeminiCriticClient, "critique", lambda self, f, p, **k: cs.parse_critique(__import__("json").dumps(fake)))
+    out = run_critique(_plan(), _specs(), lambda cid: None,
+                       project_id="p1", render_id="r1", persist_dir=str(tmp_path))
+    assert out is not None and out.overall_verdict == "pass"
+    saved = list(tmp_path.glob("*.json"))
+    assert len(saved) == 1
+    assert json.loads(saved[0].read_text())["overall_verdict"] == "pass"
+
+
+def test_run_critique_never_raises_on_client_failure(monkeypatch, tmp_path):
+    monkeypatch.setenv("CINEMA_CRITIC_ENABLED", "true")
+    from src.services.cinema import critic_service as cs
+    def boom(self, f, p, **k):
+        raise RuntimeError("network down")
+    monkeypatch.setattr(cs.GeminiCriticClient, "critique", boom)
+    assert run_critique(_plan(), _specs(), lambda cid: None,
+                        project_id="p", render_id="r", persist_dir=str(tmp_path)) is None

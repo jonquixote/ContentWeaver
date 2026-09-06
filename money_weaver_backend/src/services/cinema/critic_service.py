@@ -140,3 +140,34 @@ class GeminiCriticClient:
 def _read_b64(path: str) -> str:
     with open(path, "rb") as f:
         return _b64.b64encode(f.read()).decode()
+
+
+def run_critique(plan, specs, resolve, *, project_id: str, render_id: str,
+                 persist_dir: str | None = None, agentic: bool | None = None) -> RenderCritique | None:
+    """Advisory-only v1 entry point. CINEMA_CRITIC_ENABLED=false (or any failure) →
+    None. On success persists the critique JSON and returns it. Never raises."""
+    try:
+        if os.getenv("CINEMA_CRITIC_ENABLED", "false").lower() != "true":
+            return None
+        use_agentic = agentic if agentic is not None else (
+            os.getenv("CRITIC_MODE", "static").lower() == "agentic")
+        size = int(os.getenv("CRITIC_IMAGE_SIZE", "320"))
+        max_frames = int(os.getenv("CRITIC_MAX_FRAMES", "12"))
+        frames = build_storyboard(plan.shots[:max_frames], resolve,
+                                  os.path.join(persist_dir or os.getenv("CRITIC_DIR", "/tmp/cw-critic"), "sb"),
+                                  image_size=size)
+        prompt = build_critic_prompt(specs, n_frames=len(frames), agentic=use_agentic)
+        client = GeminiCriticClient()
+        critique = client.critique(frames, prompt, agentic=use_agentic)
+        if critique is None:
+            print("cinema critic: skipped (no result)")
+            return None
+        out_dir = persist_dir or os.getenv("CRITIC_DIR", "/tmp/cw-critic")
+        os.makedirs(out_dir, exist_ok=True)
+        with open(os.path.join(out_dir, f"{project_id}_{render_id}.json"), "w") as f:
+            f.write(critique.model_dump_json())
+        print(f"cinema critic: {critique.overall_verdict} ({len(critique.shots)} shots)")
+        return critique
+    except Exception as e:
+        print(f"cinema critic failed, render proceeds: {e}")
+        return None
