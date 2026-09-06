@@ -151,11 +151,36 @@ def test_run_critique_never_raises_on_client_failure(monkeypatch, tmp_path):
                         project_id="p", render_id="r", persist_dir=str(tmp_path)) is None
 
 
-def test_wiring_synthesizes_shots_when_no_timing_plan():
-    # Timing off: minimal shots synthesized from clip durations.
-    shots = critique_plan_for_render(None, [2.5, 2.5])
-    assert len(shots) == 2
-    assert all(isinstance(s, TimelineShot) for s in shots)
+def _one_row(monkeypatch):
+    # One scored storyboard row so tests exercise the client path
+    # (zero real frames short-circuits before the client).
+    from src.services.cinema import critic_service as cs
+    monkeypatch.setattr(cs, "build_storyboard",
+                        lambda shots, resolve, out_dir, **k:
+                        [{"shot_index": 0, "clip_id": "c0", "frame_path": "sb.jpg"}])
+
+
+def test_wiring_synthesizes_plan_wrapper_when_no_timing_plan():
+    # Timing off: a TimelinePlan wrapper (not a bare list) so run_critique's
+    # plan.shots works in both paths.
+    plan = critique_plan_for_render(None, [2.5, 2.5])
+    assert isinstance(plan, TimelinePlan)
+    assert len(plan.shots) == 2
+    assert all(isinstance(s, TimelineShot) for s in plan.shots)
+
+
+def test_run_critique_works_with_synthesized_plan(monkeypatch, tmp_path):
+    # The timing-off wrapper must flow through run_critique without
+    # AttributeError (previously: bare list had no .shots).
+    monkeypatch.setenv("CINEMA_CRITIC_ENABLED", "true")
+    from src.services.cinema import critic_service as cs
+    _one_row(monkeypatch)
+    fake = {"shots": [], "overall_verdict": "pass", "summary": "clean"}
+    monkeypatch.setattr(cs.GeminiCriticClient, "critique", lambda self, f, p, **k: cs.parse_critique(json.dumps(fake)))
+    plan = critique_plan_for_render(None, [2.5])
+    out = run_critique(plan, _specs(), lambda cid: None,
+                       project_id="p", render_id="r", persist_dir=str(tmp_path))
+    assert out is not None and out.overall_verdict == "pass"
 
 
 def test_wiring_reuses_timing_plan_when_present():

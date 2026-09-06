@@ -144,12 +144,16 @@ def _read_b64(path: str) -> str:
 
 def critique_plan_for_render(timing_plan, clip_durations: list[float]):
     """Single source of truth for the plan the critic scores: reuse the timing
-    plan when present, else synthesize minimal shots from clip durations."""
+    plan when present, else synthesize a minimal TimelinePlan wrapper from clip
+    durations (wrapper, not a bare list, so run_critique's plan.shots works in
+    both paths)."""
     if timing_plan is not None:
         return timing_plan
-    from src.services.cinema.montage_service import TimelineShot
-    return [TimelineShot(clip_id=f"clip_{i}", in_point_s=0.0, out_point_s=float(d))
-            for i, d in enumerate(clip_durations)]
+    from src.services.cinema.montage_service import TimelinePlan, TimelineShot
+    from src.services.cinema.types import MontageMode
+    return TimelinePlan(mode=MontageMode.OVERTONAL, shots=[
+        TimelineShot(clip_id=f"clip_{i}", in_point_s=0.0, out_point_s=float(d))
+        for i, d in enumerate(clip_durations)])
 
 
 def maybe_critique_render(plan, specs, resolve, project_id: str, render_id: str):
