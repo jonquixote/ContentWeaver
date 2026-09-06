@@ -131,6 +131,7 @@ def test_run_critique_disabled_returns_none(monkeypatch, tmp_path):
 def test_run_critique_persists_valid_critique(monkeypatch, tmp_path):
     monkeypatch.setenv("CINEMA_CRITIC_ENABLED", "true")
     from src.services.cinema import critic_service as cs
+    _one_row(monkeypatch)
     fake = {"shots": [], "overall_verdict": "pass", "summary": "clean"}
     monkeypatch.setattr(cs.GeminiCriticClient, "critique", lambda self, f, p, **k: cs.parse_critique(__import__("json").dumps(fake)))
     out = run_critique(_plan(), _specs(), lambda cid: None,
@@ -144,6 +145,7 @@ def test_run_critique_persists_valid_critique(monkeypatch, tmp_path):
 def test_run_critique_never_raises_on_client_failure(monkeypatch, tmp_path):
     monkeypatch.setenv("CINEMA_CRITIC_ENABLED", "true")
     from src.services.cinema import critic_service as cs
+    _one_row(monkeypatch)
     def boom(self, f, p, **k):
         raise RuntimeError("network down")
     monkeypatch.setattr(cs.GeminiCriticClient, "critique", boom)
@@ -248,6 +250,23 @@ def test_prompt_labels_frames_with_shot_index():
     assert "shot 0" in prompt.lower()
     assert "shot 2" in prompt.lower()
     assert "comedian-beta" not in prompt
+
+
+def test_run_critique_zero_frames_returns_none_without_call(monkeypatch, tmp_path):
+    # Static mode, nothing scored: no Gemini call, no persisted verdict.
+    monkeypatch.setenv("CINEMA_CRITIC_ENABLED", "true")
+    monkeypatch.setenv("CRITIC_MODE", "static")
+    from src.services.cinema import critic_service as cs
+    called = []
+    def record(self, f, p, **k):
+        called.append((f, p))
+        return None
+    monkeypatch.setattr(cs.GeminiCriticClient, "critique", record)
+    out = run_critique(_plan(), _specs(), lambda cid: None,
+                       project_id="p", render_id="r", persist_dir=str(tmp_path))
+    assert out is None
+    assert called == []
+    assert list(tmp_path.glob("*.json")) == []
 
 
 def test_wiring_reuses_timing_plan_when_present():

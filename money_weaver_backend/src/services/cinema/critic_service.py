@@ -189,7 +189,8 @@ def run_critique(plan, specs, resolve, *, project_id: str, render_id: str,
                  video_path: str | None = None) -> RenderCritique | None:
     """Advisory-only v1 entry point. CINEMA_CRITIC_ENABLED=false (or any failure) →
     None. On success persists the critique JSON and returns it. Never raises.
-    Agentic + video_path: the video carries the visuals, storyboard skipped."""
+    Agentic + video_path: the video carries the visuals, storyboard skipped.
+    Zero frames and no video: nothing to score → None (no Gemini call)."""
     try:
         if os.getenv("CINEMA_CRITIC_ENABLED", "false").lower() != "true":
             return None
@@ -203,6 +204,9 @@ def run_critique(plan, specs, resolve, *, project_id: str, render_id: str,
             frames = build_storyboard(plan.shots[:max_frames], resolve,
                                       os.path.join(persist_dir or os.getenv("CRITIC_DIR", "/tmp/cw-critic"), "sb"),
                                       image_size=size)
+        if not frames and not (use_agentic and video_path):
+            print("cinema critic: skipped (no frames, no video — nothing to score)")
+            return None
         prompt = build_critic_prompt(specs, n_frames=len(frames), agentic=use_agentic,
                                      frames=None if (use_agentic and video_path) else frames)
         client = GeminiCriticClient()
